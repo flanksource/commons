@@ -25,7 +25,12 @@ func SafeExec(sh string, args ...interface{}) (string, bool) {
 }
 
 //Exec runs the sh script and forwards stderr/stdout to the console
-func Exec(sh string, args ...interface{}) error {
+func Exec(sh string) error {
+	return Execf(sh)
+}
+
+//Execf runs the sh script and forwards stderr/stdout to the console
+func Execf(sh string, args ...interface{}) error {
 	log.Debugf("exec: "+sh, args...)
 	cmd := exec.Command("bash", "-c", fmt.Sprintf(sh, args...))
 	cmd.Stderr = os.Stderr
