@@ -3,6 +3,7 @@ package is
 import (
 	"os"
 	"reflect"
+	"strings"
 )
 
 //Slice returns true if the argument is a slice
@@ -18,4 +19,10 @@ func TTY() bool {
 func File(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+func Archive(filename string) bool {
+	return strings.HasSuffix(filename, ".zip") ||
+		strings.HasSuffix(filename, ".tar.gz") ||
+		strings.HasSuffix(filename, ".gz")
 }

@@ -3,11 +3,14 @@ package deps
 import (
 	"fmt"
 	"github.com/moshloop/commons/exec"
+	"github.com/moshloop/commons/files"
 	"github.com/moshloop/commons/is"
 	"github.com/moshloop/commons/net"
 	"github.com/moshloop/commons/utils"
 	"github.com/pkg/errors"
+	"io/ioutil"
 	"os"
+	"path"
 	"runtime"
 
 	log "github.com/sirupsen/logrus"
@@ -86,7 +89,7 @@ var dependencies = map[string]Dependency{
 		Linux:   "https://storage.googleapis.com/kubernetes-release/release/{{.version}}/bin/linux/amd64/kubectl",
 	},
 	"terraform": Dependency{
-		Version: "0.12.7",
+		Version: "0.12.",
 		Linux:   "https://releases.hashicorp.com/terraform/{{.version}}/terraform_{{.version}}_linux_amd64.zip",
 		Macosx:  "https://releases.hashicorp.com/terraform/{{.version}}/terraform_{{.version}}_darwin_amd64.zip",
 	},
@@ -94,7 +97,6 @@ var dependencies = map[string]Dependency{
 
 func InstallDependencies(deps map[string]string, binDir string) error {
 	os.Mkdir(binDir, 0755)
-
 	for name, ver := range deps {
 		bin := fmt.Sprintf("%s/%s", binDir, name)
 		if is.File(bin) {
@@ -114,7 +116,7 @@ func InstallDependencies(deps map[string]string, binDir string) error {
 		if path != "" {
 			url := utils.Interpolate(path, map[string]string{"version": ver})
 			log.Infof("Installing %s (%s) -> %s", name, ver, url)
-			err := net.Download(url, bin)
+			err := download(url, bin)
 			if err != nil {
 				return fmt.Errorf("failed to download %s: %+v", name, err)
 			}
@@ -124,13 +126,26 @@ func InstallDependencies(deps map[string]string, binDir string) error {
 		} else if dependency.Go != "" {
 			url := utils.Interpolate(dependency.Go, map[string]string{"version": ver})
 			log.Infof("Installing via go get %s (%s) -> %s", name, ver, url)
-			if err := exec.Exec("GOPATH=$PWD/.go go get %s", url); err != nil {
+			if err := exec.Execf("GOPATH=$PWD/.go go get %s", url); err != nil {
 				return err
 			}
 			if err := os.Rename(".go/bin/"+name, bin); err != nil {
 				return err
 			}
 		}
+	}
+	return nil
+}
+
+func download(url, bin string) error {
+	if is.Archive(url) {
+		tmp, _ := ioutil.TempDir("", "")
+		file := path.Join(tmp, path.Base(url))
+		net.Download(url, file)
+		files.Unzip(file, path.Dir(bin))
+		os.Remove(file)
+	} else {
+		net.Download(url, bin)
 	}
 	return nil
 }
