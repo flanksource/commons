@@ -74,15 +74,10 @@ var dependencies = map[string]Dependency{
 		Macosx:  "https://github.com/roboll/helmfile/releases/download/{{.version}}/helmfile_darwin_amd64",
 		Linux:   "https://github.com/roboll/helmfile/releases/download/{{.version}}/helmfile_linux_amd64",
 	},
-	"aws-iam-authenticatpr": Dependency{
+	"aws-iam-authenticator": Dependency{
 		Version: "1.13.7/2019-06-11",
 		Linux:   "https://amazon-eks.s3-us-west-2.amazonaws.com/{{.version}}/bin/linux/amd64/aws-iam-authenticator",
 		Macosx:  "https://amazon-eks.s3-us-west-2.amazonaws.com/{{.version}}/bin/darwin/amd64/aws-iam-authenticator",
-	},
-	"eksctl": Dependency{
-		Version: "0.4.2",
-		Macosx:  "https://github.com/weaveworks/eksctl/releases/download/{{.version}}/eksctl_Darwin_amd64.tar.gz",
-		Linux:   "https://github.com/weaveworks/eksctl/releases/download/{{.version}}/eksctl_Linux_amd64.tar.gz",
 	},
 	"kubectl": Dependency{
 		Version: "v1.15.3",
@@ -92,6 +87,11 @@ var dependencies = map[string]Dependency{
 		Version: "0.12.",
 		Linux:   "https://releases.hashicorp.com/terraform/{{.version}}/terraform_{{.version}}_linux_amd64.zip",
 		Macosx:  "https://releases.hashicorp.com/terraform/{{.version}}/terraform_{{.version}}_darwin_amd64.zip",
+	},
+	"eksctl": Dependency{
+		Version: "0.4.3",
+		Linux:   "https://github.com/weaveworks/eksctl/releases/download/{{.version}}/eksctl_Linux_amd64.tar.gz",
+		Macosx:  "https://github.com/weaveworks/eksctl/releases/download/{{.version}}/eksctl_Darwin_amd64.tar.gz",
 	},
 }
 
@@ -142,10 +142,8 @@ func download(url, bin string) error {
 		tmp, _ := ioutil.TempDir("", "")
 		file := path.Join(tmp, path.Base(url))
 		net.Download(url, file)
-		files.Unzip(file, path.Dir(bin))
-		os.Remove(file)
-	} else {
-		net.Download(url, bin)
+		defer os.Remove(file)
+		return files.UnarchiveExecutables(file, path.Dir(bin))
 	}
-	return nil
+	return net.Download(url, bin)
 }

@@ -1,17 +1,19 @@
 package files
 
 import (
+	"archive/tar"
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
+
+	log "github.com/sirupsen/logrus"
 )
 
 //GzipFile takes the path to a file and returns a Gzip comppressed byte slice
@@ -38,11 +40,55 @@ func GzipFile(path string) ([]byte, error) {
 }
 
 func Unarchive(src, dest string) error {
+	log.Debugf("Unarchiving %s to %s", src, dest)
 	if strings.HasSuffix(src, ".zip") {
 		return Unzip(src, dest)
+	} else if strings.HasSuffix(src, ".tar") || strings.HasSuffix(src, ".tgz") || strings.HasSuffix(src, ".tar.gz") {
+		return Untar(src, dest)
 	}
 	return fmt.Errorf("Unknown format type %s", src)
 }
+
+func UnarchiveExecutables(src, dest string) error {
+	log.Debugf("Unarchiving %s to %s", src, dest)
+	if strings.HasSuffix(src, ".zip") {
+		return Unzip(src, dest)
+	} else if strings.HasSuffix(src, ".tar") || strings.HasSuffix(src, ".tgz") || strings.HasSuffix(src, ".tar.gz") {
+		return UntarWithFilter(src, dest, func(header os.FileInfo) string {
+			if fmt.Sprintf("%v", header.Mode()&0100) != "---x------" {
+				return ""
+			}
+			return path.Base(header.Name())
+		})
+	}
+	return fmt.Errorf("Unknown format type %s", src)
+}
+
+func Ungzip(source, target string) error {
+	reader, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	archive, err := gzip.NewReader(reader)
+	if err != nil {
+		return err
+	}
+	defer archive.Close()
+
+	target = filepath.Join(target, archive.Name)
+	writer, err := os.Create(target)
+	if err != nil {
+		return err
+	}
+	defer writer.Close()
+
+	_, err = io.Copy(writer, archive)
+	return err
+}
+
+type FileFilter func(header os.FileInfo) string
 
 func Unzip(src, dest string) error {
 	r, err := zip.OpenReader(src)
@@ -87,6 +133,63 @@ func Unzip(src, dest string) error {
 	}
 	return nil
 
+}
+
+func Untar(tarball, target string) error {
+	return UntarWithFilter(tarball, target, nil)
+}
+
+func UntarWithFilter(tarball, target string, filter FileFilter) error {
+	var reader io.Reader
+	file, err := os.Open(tarball)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	reader = file
+	if strings.HasSuffix(tarball, ".tar.gz") || strings.HasSuffix(tarball, ".tgz") {
+		reader, err = gzip.NewReader(reader)
+		if err != nil {
+			return err
+		}
+	}
+	tarReader := tar.NewReader(reader)
+
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return err
+		}
+
+		info := header.FileInfo()
+		path := filepath.Join(target, header.Name)
+		if filter != nil {
+			path = filter(info)
+			if path == "" {
+				continue
+			}
+			path = filepath.Join(target, path)
+		}
+		if info.IsDir() {
+			if err = os.MkdirAll(path, info.Mode()); err != nil {
+				return err
+			}
+			continue
+		}
+
+		file, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode())
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+		_, err = io.Copy(file, tarReader)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 //SafeRead reads a path and returns the text contents or nil

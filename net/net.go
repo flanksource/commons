@@ -26,7 +26,7 @@ func Download(url, path string) error {
 	if err != nil {
 		return nil
 	}
-	log.Debugf("GET %s -> %d\n", url, resp.StatusCode)
+	log.Debugf("Download %s [%d]-> %s\n", url, resp.StatusCode, path)
 
 	if resp.StatusCode != 200 {
 		return fmt.Errorf(resp.Status)
