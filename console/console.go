@@ -21,6 +21,7 @@ var (
 	boldOff      = "\x1b[22m"
 )
 
+// Redf prints and formats msg as red text
 func Redf(msg string, args ...interface{}) string {
 	if is.TTY() {
 		return red + fmt.Sprintf(msg, args...) + reset
@@ -28,6 +29,7 @@ func Redf(msg string, args ...interface{}) string {
 	return fmt.Sprintf(msg, args...)
 }
 
+// Greenf prints and formats msg as green text
 func Greenf(msg string, args ...interface{}) string {
 	if is.TTY() {
 		return green + fmt.Sprintf(msg, args...) + reset
@@ -35,6 +37,7 @@ func Greenf(msg string, args ...interface{}) string {
 	return fmt.Sprintf(msg, args...)
 }
 
+// LightGreenf prints and formats msg as light green text
 func LightGreenf(msg string, args ...interface{}) string {
 	if is.TTY() {
 		return lightGreen + fmt.Sprintf(msg, args...) + reset
@@ -42,6 +45,7 @@ func LightGreenf(msg string, args ...interface{}) string {
 	return fmt.Sprintf(msg, args...)
 }
 
+// LightCyanf prints and formats msg as light cyan text
 func LightCyanf(msg string, args ...interface{}) string {
 	if is.TTY() {
 		return lightCyan + fmt.Sprintf(msg, args...) + reset

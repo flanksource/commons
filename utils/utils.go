@@ -32,7 +32,7 @@ func ShortTimestamp() string {
 // randomChars defines the alphanumeric characters that can be part of a random string
 const randomChars = "0123456789abcdefghijklmnopqrstuvwxyz"
 
-// RandString returns a random string consisting of the characters in
+// RandomString returns a random string consisting of the characters in
 // randomChars, with the length customized by the parameter
 func RandomString(length int) string {
 	// len("0123456789abcdefghijklmnopqrstuvwxyz") = 36 which doesn't evenly divide
@@ -63,6 +63,7 @@ func RandomString(length int) string {
 	return string(token)
 }
 
+// Interpolate templatises the string using the vars as the context
 func Interpolate(arg string, vars interface{}) string {
 	tmpl, err := template.New("test").Parse(arg)
 	if err != nil {
@@ -79,6 +80,8 @@ func Interpolate(arg string, vars interface{}) string {
 	return buf.String()
 
 }
+
+// InterpolateStrings templatises each string in the slice using the vars as the context
 func InterpolateStrings(arg []string, vars interface{}) []string {
 	out := make([]string, len(arg))
 	for i, e := range arg {

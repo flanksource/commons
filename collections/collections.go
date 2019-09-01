@@ -21,7 +21,7 @@ func takeSliceArg(arg interface{}) (out []interface{}, ok bool) {
 	return out, true
 }
 
-//ToString takes an object and tries to convert it to a string
+// ToString takes an object and tries to convert it to a string
 func ToString(i interface{}) string {
 	if slice, ok := takeSliceArg(i); ok {
 		s := ""
@@ -55,7 +55,7 @@ func ToString(i interface{}) string {
 	return ""
 }
 
-//StructToMap takes an object and returns all it's field in a map
+// StructToMap takes an object and returns all it's field in a map
 func StructToMap(s interface{}) map[string]interface{} {
 	values := make(map[string]interface{})
 	value := reflect.ValueOf(s)
@@ -72,7 +72,7 @@ func StructToMap(s interface{}) map[string]interface{} {
 	return values
 }
 
-//StructToIni takes an object and serializes it's fields in INI format
+// StructToIni takes an object and serializes it's fields in INI format
 func StructToIni(s interface{}) string {
 	str := ""
 	for k, v := range StructToMap(s) {
@@ -81,7 +81,7 @@ func StructToIni(s interface{}) string {
 	return str
 }
 
-//MapToIni takes a map and converts it into an INI formatted string
+// MapToIni takes a map and converts it into an INI formatted string
 func MapToIni(Map map[string]string) string {
 	str := ""
 	for k, v := range Map {
@@ -90,7 +90,7 @@ func MapToIni(Map map[string]string) string {
 	return str
 }
 
-//IniToMap takes the path to an INI formatted file and transforms it into a map
+// IniToMap takes the path to an INI formatted file and transforms it into a map
 func IniToMap(path string) map[string]string {
 	result := make(map[string]string)
 	ini := files.SafeRead(path)
@@ -103,7 +103,7 @@ func IniToMap(path string) map[string]string {
 	return result
 }
 
-//ReplaceAllInSlice runs strings.Replace on all elements in a slice and returns the result
+// ReplaceAllInSlice runs strings.Replace on all elements in a slice and returns the result
 func ReplaceAllInSlice(a []string, find string, replacement string) (replaced []string) {
 	for _, s := range a {
 		replaced = append(replaced, strings.Replace(s, find, replacement, -1))
@@ -111,7 +111,7 @@ func ReplaceAllInSlice(a []string, find string, replacement string) (replaced []
 	return
 }
 
-//SplitAllInSlice runs strings.Split on all elements in a slice and returns the results at the given index
+// SplitAllInSlice runs strings.Split on all elements in a slice and returns the results at the given index
 func SplitAllInSlice(a []string, split string, index int) (replaced []string) {
 	for _, s := range a {
 		replaced = append(replaced, strings.Split(s, split)[index])
@@ -119,6 +119,7 @@ func SplitAllInSlice(a []string, split string, index int) (replaced []string) {
 	return
 }
 
+// ToGenericMap converts a map[string]string to a map[string]interface{}
 func ToGenericMap(m map[string]string) map[string]interface{} {
 	var out = map[string]interface{}{}
 	for k, v := range m {
@@ -127,6 +128,7 @@ func ToGenericMap(m map[string]string) map[string]interface{} {
 	return out
 }
 
+// ToStringMap converts a map[string]interface{} to a map[string]string by using each objects String() fn
 func ToStringMap(m map[string]interface{}) map[string]string {
 	var out = make(map[string]string)
 	for k, v := range m {

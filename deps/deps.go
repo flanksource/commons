@@ -16,6 +16,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// Dependency is a struct referring to a version and the templated path
+// to download the dependency on the different OS platforms
 type Dependency struct {
 	Version           string
 	Linux, Macosx, Go string
@@ -95,6 +97,8 @@ var dependencies = map[string]Dependency{
 	},
 }
 
+// InstallDependencies takes a map of supported dependencies and their version and
+// installs them to the specified binDir
 func InstallDependencies(deps map[string]string, binDir string) error {
 	os.Mkdir(binDir, 0755)
 	for name, ver := range deps {

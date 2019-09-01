@@ -39,6 +39,7 @@ func GzipFile(path string) ([]byte, error) {
 	return result, nil
 }
 
+// Unarchive extracts the contents of an archive to the dest directory
 func Unarchive(src, dest string) error {
 	log.Debugf("Unarchiving %s to %s", src, dest)
 	if strings.HasSuffix(src, ".zip") {
@@ -49,6 +50,7 @@ func Unarchive(src, dest string) error {
 	return fmt.Errorf("Unknown format type %s", src)
 }
 
+// UnarchiveExecutables extracts all executable's to the dest directory, ignoring any path's specified by the archive
 func UnarchiveExecutables(src, dest string) error {
 	log.Debugf("Unarchiving %s to %s", src, dest)
 	if strings.HasSuffix(src, ".zip") {
@@ -64,6 +66,7 @@ func UnarchiveExecutables(src, dest string) error {
 	return fmt.Errorf("Unknown format type %s", src)
 }
 
+// Ungzip the source file to the target directory
 func Ungzip(source, target string) error {
 	reader, err := os.Open(source)
 	if err != nil {
@@ -88,8 +91,10 @@ func Ungzip(source, target string) error {
 	return err
 }
 
+// FileFilter is a function used for filtering files
 type FileFilter func(header os.FileInfo) string
 
+// Unzip the source file to the target directory
 func Unzip(src, dest string) error {
 	r, err := zip.OpenReader(src)
 	if err != nil {
@@ -135,10 +140,14 @@ func Unzip(src, dest string) error {
 
 }
 
+// Untar extracts all files in tarball to the target directory
 func Untar(tarball, target string) error {
 	return UntarWithFilter(tarball, target, nil)
 }
 
+// UntarWithFilter extracts all files in tarball to the target directory, passing each file to filter
+// if the filter returns "" then the file is ignored, otherwise the return string is used as the relative
+// destination path
 func UntarWithFilter(tarball, target string, filter FileFilter) error {
 	var reader io.Reader
 	file, err := os.Open(tarball)
@@ -201,6 +210,7 @@ func SafeRead(path string) string {
 	return string(data)
 }
 
+// Copy a file from src to dst
 func Copy(src string, dst string) error {
 	sourceFileStat, err := os.Stat(src)
 	if err != nil {
@@ -226,11 +236,13 @@ func Copy(src string, dst string) error {
 	return err
 }
 
+// Exists returns true if the file exists
 func Exists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }
 
+// GetBaseName returns the base part of the filename without the extension
 func GetBaseName(filename string) string {
 	filename = path.Base(filename)
 	parts := strings.Split(filename, ".")

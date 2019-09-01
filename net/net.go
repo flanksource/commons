@@ -9,6 +9,7 @@ import (
 	"os"
 )
 
+// GET downloads and returns the contents at url
 func GET(url string, args ...interface{}) ([]byte, error) {
 	url = fmt.Sprintf(url, args...)
 
@@ -21,6 +22,7 @@ func GET(url string, args ...interface{}) ([]byte, error) {
 	return body, nil
 }
 
+// Download the url to the path on disk
 func Download(url, path string) error {
 	resp, err := http.Get(url)
 	if err != nil {
