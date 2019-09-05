@@ -5,9 +5,13 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
+	"context"
+	"encoding/hex"
 	"fmt"
+	"github.com/hashicorp/go-getter"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"path"
 	"path/filepath"
@@ -250,4 +254,27 @@ func GetBaseName(filename string) string {
 		return filename
 	}
 	return strings.Join(parts[0:len(parts)-1], ".")
+}
+
+// Getter gets a directory or file using the Hashicorp go-getter library
+// See https://github.com/hashicorp/go-getter
+func Getter(url, dst string) error {
+	pwd, _ := os.Getwd()
+	client := &getter.Client{
+		Ctx:     context.TODO(),
+		Src:     url,
+		Dst:     dst,
+		Pwd:     pwd,
+		Mode:    getter.ClientModeDir,
+		Options: []getter.ClientOption{},
+	}
+	log.Infof("Downloading %s -> %s", url, dst)
+	return client.Get()
+}
+
+// TempFileName generates a temporary filename for
+func TempFileName(prefix, suffix string) string {
+	randBytes := make([]byte, 16)
+	rand.Read(randBytes)
+	return filepath.Join(os.TempDir(), prefix+hex.EncodeToString(randBytes)+suffix)
 }
