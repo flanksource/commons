@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -21,6 +22,43 @@ import (
 type Dependency struct {
 	Version           string
 	Linux, Macosx, Go string
+}
+
+// BinaryFunc is an interface to executing a binary, downloading it necessary
+type BinaryFunc func(msg string, args ...interface{}) error
+
+// BinaryFuncWithEnv is an interface to executing a binary, downloading it necessary
+type BinaryFuncWithEnv func(msg string, env map[string]string, args ...interface{}) error
+
+func absolutePath(dir string) string {
+	if !strings.HasPrefix("/", dir) {
+		cwd, _ := os.Getwd()
+		dir = cwd + "/" + dir
+	}
+	// dir, _ = os.Readlink(dir)
+	return dir
+}
+
+// BinaryWithEnv returns a function that be called to execute the binary
+func BinaryWithEnv(name, ver string, binDir string, env map[string]string) BinaryFunc {
+	binDir = absolutePath(binDir)
+	return func(msg string, args ...interface{}) error {
+		bin := fmt.Sprintf("%s/%s", binDir, name)
+		InstallDependency(name, ver, binDir)
+		return exec.ExecfWithEnv(bin+" "+msg, env, args...)
+	}
+}
+
+// Binary returns a function that can be called to execute the binary
+func Binary(name, ver string, binDir string) BinaryFunc {
+	binDir = absolutePath(binDir)
+	return func(msg string, args ...interface{}) error {
+		bin := fmt.Sprintf("%s/%s", binDir, name)
+		// ver, _ := *vers[name]
+		InstallDependency(name, ver, binDir)
+		return exec.Execf(bin+" "+msg, args...)
+	}
+
 }
 
 var dependencies = map[string]Dependency{
@@ -84,6 +122,7 @@ var dependencies = map[string]Dependency{
 	"kubectl": Dependency{
 		Version: "v1.15.3",
 		Linux:   "https://storage.googleapis.com/kubernetes-release/release/{{.version}}/bin/linux/amd64/kubectl",
+		Macosx:  "https://storage.googleapis.com/kubernetes-release/release/{{.version}}/bin/darwin/amd64/kubectl",
 	},
 	"terraform": Dependency{
 		Version: "0.12.",
@@ -95,6 +134,59 @@ var dependencies = map[string]Dependency{
 		Linux:   "https://github.com/weaveworks/eksctl/releases/download/{{.version}}/eksctl_Linux_amd64.tar.gz",
 		Macosx:  "https://github.com/weaveworks/eksctl/releases/download/{{.version}}/eksctl_Darwin_amd64.tar.gz",
 	},
+	// "go-getter": Dependency{
+	// 	Version: "1.3",
+	// 	Go:      "github.com/hashicorp/go-getter@{{.version}}",
+	// },
+	"expenv": Dependency{
+		Version: "v1.2.0",
+		Macosx:  "https://github.com/TheWolfNL/expenv/releases/download/{{.version}}/expenv_darwin_amd64",
+		Linux:   "https://github.com/TheWolfNL/expenv/releases/download/{{.version}}/expenv_linux_amd64",
+	},
+}
+
+// InstallDependency installs a binary to binDir, if ver is nil then the default version is used
+func InstallDependency(name, ver string, binDir string) error {
+	bin := fmt.Sprintf("%s/%s", binDir, name)
+	if is.File(bin) {
+		log.Debugf("%s already exists", bin)
+		return nil
+	}
+
+	dependency, ok := dependencies[name]
+	if !ok {
+		return errors.New("Unknown dependency " + name)
+	}
+	if ver == "" {
+		ver = dependency.Version
+	}
+
+	path := dependency.Linux
+	if runtime.GOOS == "darwin" {
+		path = dependency.Macosx
+	}
+	if path != "" {
+		url := utils.Interpolate(path, map[string]string{"version": ver})
+		log.Infof("Installing %s (%s) -> %s", name, ver, url)
+		err := download(url, bin)
+		if err != nil {
+			return fmt.Errorf("failed to download %s: %+v", name, err)
+		}
+		if err := os.Chmod(bin, 0755); err != nil {
+			return fmt.Errorf("failed to make %s executable", name)
+		}
+	} else if dependency.Go != "" {
+		//FIXME this only works if the PWD is in the GOPATH
+		url := utils.Interpolate(dependency.Go, map[string]string{"version": ver})
+		log.Infof("Installing via go get %s (%s) -> %s", name, ver, url)
+		if err := exec.Execf("GOPATH=$PWD/.go go get %s", url); err != nil {
+			return err
+		}
+		if err := os.Rename(".go/bin/"+name, bin); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // InstallDependencies takes a map of supported dependencies and their version and
@@ -102,40 +194,8 @@ var dependencies = map[string]Dependency{
 func InstallDependencies(deps map[string]string, binDir string) error {
 	os.Mkdir(binDir, 0755)
 	for name, ver := range deps {
-		bin := fmt.Sprintf("%s/%s", binDir, name)
-		if is.File(bin) {
-			log.Debugf("%s already exists", bin)
-			continue
-		}
-
-		dependency, ok := dependencies[name]
-		if !ok {
-			return errors.New("Unknown dependency " + name)
-		}
-
-		path := dependency.Linux
-		if runtime.GOOS == "darwin" {
-			path = dependency.Macosx
-		}
-		if path != "" {
-			url := utils.Interpolate(path, map[string]string{"version": ver})
-			log.Infof("Installing %s (%s) -> %s", name, ver, url)
-			err := download(url, bin)
-			if err != nil {
-				return fmt.Errorf("failed to download %s: %+v", name, err)
-			}
-			if err := os.Chmod(bin, 0755); err != nil {
-				return fmt.Errorf("failed to make %s executable", name)
-			}
-		} else if dependency.Go != "" {
-			url := utils.Interpolate(dependency.Go, map[string]string{"version": ver})
-			log.Infof("Installing via go get %s (%s) -> %s", name, ver, url)
-			if err := exec.Execf("GOPATH=$PWD/.go go get %s", url); err != nil {
-				return err
-			}
-			if err := os.Rename(".go/bin/"+name, bin); err != nil {
-				return err
-			}
+		if err := InstallDependency(name, ver, binDir); err != nil {
+			return err
 		}
 	}
 	return nil
