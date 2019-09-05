@@ -1,8 +1,10 @@
 package exec
 
 import (
+	"bytes"
 	"fmt"
 	log "github.com/sirupsen/logrus"
+	"io"
 	"os"
 	"os/exec"
 )
@@ -29,20 +31,42 @@ func Exec(sh string) error {
 	return Execf(sh)
 }
 
-//Execf runs the sh script and forwards stderr/stdout to the console
-func Execf(sh string, args ...interface{}) error {
-	log.Debugf("exec: "+sh, args...)
+//ExecfWithEnv runs the sh script and forwards stderr/stdout to the console
+func ExecfWithEnv(sh string, env map[string]string, args ...interface{}) error {
+	if log.IsLevelEnabled(log.TraceLevel) {
+		delete(env, "PATH")
+		envString := ""
+		for k, v := range env {
+			envString += fmt.Sprintf("%s=%s ", k, v)
+		}
+		log.Tracef("exec: %s %s\n", envString, fmt.Sprintf(sh, args...))
+	} else {
+		log.Debugf("exec: %s\n", fmt.Sprintf(sh, args...))
+	}
+
 	cmd := exec.Command("bash", "-c", fmt.Sprintf(sh, args...))
-	cmd.Stderr = os.Stderr
+
+	var buf bytes.Buffer
+
+	cmd.Stderr = io.MultiWriter(&buf, os.Stderr)
 	cmd.Stdout = os.Stdout
+
+	for k, v := range env {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
+	}
 
 	err := cmd.Run()
 	if err != nil {
-		return fmt.Errorf("%s failed with %s", sh, err)
+		return fmt.Errorf("%s failed with: %s, stderr: %s", sh, err, buf.String())
 	}
 
 	if !cmd.ProcessState.Success() {
 		return fmt.Errorf("%s failed to run", sh)
 	}
 	return nil
+}
+
+//Execf runs the sh script and forwards stderr/stdout to the console
+func Execf(sh string, args ...interface{}) error {
+	return ExecfWithEnv(sh, make(map[string]string), args...)
 }
