@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"github.com/hashicorp/go-getter"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -16,6 +15,8 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/hashicorp/go-getter"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -238,6 +239,20 @@ func Copy(src string, dst string) error {
 	defer destination.Close()
 	_, err = io.Copy(destination, source)
 	return err
+}
+
+func CopyFromReader(src io.Reader, dst string, mode os.FileMode) (int64, error) {
+	dir := path.Dir(dst)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return 0, err
+	}
+	f, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY, mode)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+	nBytes, err := io.Copy(f, src)
+	return nBytes, err
 }
 
 // Exists returns true if the file exists

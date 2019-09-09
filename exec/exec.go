@@ -3,10 +3,11 @@ package exec
 import (
 	"bytes"
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"io"
 	"os"
 	"os/exec"
+
+	log "github.com/sirupsen/logrus"
 )
 
 //SafeExec executes the sh script and returns the stdout and stderr, errors will result in a nil return only.
@@ -34,7 +35,6 @@ func Exec(sh string) error {
 //ExecfWithEnv runs the sh script and forwards stderr/stdout to the console
 func ExecfWithEnv(sh string, env map[string]string, args ...interface{}) error {
 	if log.IsLevelEnabled(log.TraceLevel) {
-		delete(env, "PATH")
 		envString := ""
 		for k, v := range env {
 			envString += fmt.Sprintf("%s=%s ", k, v)

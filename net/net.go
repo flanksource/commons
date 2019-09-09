@@ -2,11 +2,12 @@ package net
 
 import (
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // GET downloads and returns the contents at url
@@ -19,6 +20,9 @@ func GET(url string, args ...interface{}) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return body, fmt.Errorf(resp.Status)
+	}
 	return body, nil
 }
 
