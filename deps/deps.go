@@ -143,13 +143,18 @@ var dependencies = map[string]Dependency{
 		Macosx:  "https://github.com/TheWolfNL/expenv/releases/download/{{.version}}/expenv_darwin_amd64",
 		Linux:   "https://github.com/TheWolfNL/expenv/releases/download/{{.version}}/expenv_linux_amd64",
 	},
+	"velero": Dependency{
+		Version: "v1.1.0",
+		Macosx:  "https://github.com/heptio/velero/releases/download/{{.version}}/velero-{{.version}}-darwin-amd64.tar.gz",
+		Linux:   "https://github.com/heptio/velero/releases/download/{{.version}}/velero-{{.version}}-linux-amd64.tar.gz",
+	},
 }
 
 // InstallDependency installs a binary to binDir, if ver is nil then the default version is used
 func InstallDependency(name, ver string, binDir string) error {
 	bin := fmt.Sprintf("%s/%s", binDir, name)
 	if is.File(bin) {
-		log.Debugf("%s already exists", bin)
+		log.Tracef("%s already exists", bin)
 		return nil
 	}
 
