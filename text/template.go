@@ -1,11 +1,14 @@
 package text
 
 import (
-	"github.com/moshloop/commons/deps"
-	"github.com/moshloop/commons/files"
-	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"os"
+
+	log "github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v2"
+
+	"github.com/moshloop/commons/deps"
+	"github.com/moshloop/commons/files"
 )
 
 var gomplate = deps.Binary("gomplate", "", ".bin")
@@ -20,8 +23,10 @@ func ToFile(text string, ext string) string {
 // TemplateDir templates out a directory using gomplate
 func TemplateDir(dir string, dst string, vars interface{}) error {
 	data, _ := yaml.Marshal(vars)
-	tmp := ToFile(string(data), "yml")
-	defer os.Remove(tmp)
+	tmp := ToFile(string(data), ".yml")
+	if !log.IsLevelEnabled(log.TraceLevel) {
+		defer os.Remove(tmp)
+	}
 	return gomplate("--input-dir \"%s\" --output-dir %s -c \".=%s\"", dir, dst, tmp)
 }
 
@@ -29,16 +34,22 @@ func TemplateDir(dir string, dst string, vars interface{}) error {
 func Template(template string, vars interface{}) (string, error) {
 	data, _ := yaml.Marshal(vars)
 	tmp := ToFile(string(data), ".yml")
-	defer os.Remove(tmp)
+	if !log.IsLevelEnabled(log.TraceLevel) {
+		defer os.Remove(tmp)
+	}
 
 	in := ToFile(string(template), ".tmpl")
-	defer os.Remove(in)
+	if !log.IsLevelEnabled(log.TraceLevel) {
+		defer os.Remove(in)
+	}
 
 	out := files.TempFileName("", ".out")
-	defer os.Remove(out)
+	if !log.IsLevelEnabled(log.TraceLevel) {
+		defer os.Remove(out)
+	}
 
 	if err := gomplate("-f \"%s\" -o \"%s\" -c \".=%s\"", in, out, tmp); err != nil {
-		return "", nil
+		return "", err
 	}
 	dataOut, err := ioutil.ReadFile(out)
 	if err != nil {
