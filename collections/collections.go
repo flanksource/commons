@@ -1,6 +1,7 @@
 package collections
 
 import (
+	"encoding/base64"
 	"fmt"
 	"github.com/moshloop/commons/files"
 	"reflect"
@@ -133,6 +134,34 @@ func ToStringMap(m map[string]interface{}) map[string]string {
 	var out = make(map[string]string)
 	for k, v := range m {
 		out[k] = fmt.Sprintf("%v", v)
+	}
+	return out
+}
+
+// ToBase64Map converts a map[string]interface{} to a map[string]string by converting []byte to base64
+func ToBase64Map(m map[string]interface{}) map[string]string {
+	var out = make(map[string]string)
+	for k, v := range m {
+		switch b := v.(type) {
+		case []byte:
+			out[k] = base64.StdEncoding.EncodeToString(b)
+		default:
+			out[k] = fmt.Sprintf("%v", v)
+		}
+	}
+	return out
+}
+
+// ToByteMap converts a map[string]interface{} to a map[string]string by converting []byte to base64
+func ToByteMap(m map[string]interface{}) map[string][]byte {
+	var out = make(map[string][]byte)
+	for k, v := range m {
+		switch b := v.(type) {
+		case []byte:
+			out[k] = b
+		default:
+			out[k] = []byte(fmt.Sprintf("%v", v))
+		}
 	}
 	return out
 }

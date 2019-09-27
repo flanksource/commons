@@ -12,6 +12,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// GetEnvOrDefault returns the first non-empty environment variable
 func GetEnvOrDefault(names ...string) string {
 	for _, name := range names {
 		if val := os.Getenv(name); val != "" {
