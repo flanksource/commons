@@ -21,8 +21,8 @@ import (
 // Dependency is a struct referring to a version and the templated path
 // to download the dependency on the different OS platforms
 type Dependency struct {
-	Version           string
-	Linux, Macosx, Go string
+	Version                   string
+	Linux, Macosx, Go, Docker string
 }
 
 // BinaryFunc is an interface to executing a binary, downloading it necessary
@@ -50,18 +50,6 @@ func BinaryWithEnv(name, ver string, binDir string, env map[string]string) Binar
 	}
 }
 
-// Binary returns a function that can be called to execute the binary
-func Binary(name, ver string, binDir string) BinaryFunc {
-	binDir = absolutePath(binDir)
-	return func(msg string, args ...interface{}) error {
-		bin := fmt.Sprintf("%s/%s", binDir, name)
-		// ver, _ := *vers[name]
-		InstallDependency(name, ver, binDir)
-		return exec.Execf(bin+" "+msg, args...)
-	}
-
-}
-
 var dependencies = map[string]Dependency{
 	"gomplate": Dependency{
 		Version: "v3.5.0",
@@ -79,8 +67,8 @@ var dependencies = map[string]Dependency{
 		Macosx:  "https://github.com/jsonnet-bundler/jsonnet-bundler/releases/download/{{.version}}/jb-darwin-amd64",
 	},
 	"jsonnet": Dependency{
-		Version: "v0.13.0",
-		Go:      "github.com/google/go-jsonnet/cmd/jsonnet@{{.version}}",
+		Version: "0.14",
+		Docker:  "docker.io/bitnami/jsonnet",
 	},
 	"sonobuoy": Dependency{
 		Version: "0.15.0",
@@ -102,7 +90,7 @@ var dependencies = map[string]Dependency{
 	},
 	"pgo": Dependency{
 		Version: "4.0.1",
-		Linux:   "https://github.com/CrunchyData/postgres-operator/releases/download/s{{.version}}/pgo",
+		Linux:   "https://github.com/CrunchyData/postgres-operator/releases/download/{{.version}}/pgo",
 		Macosx:  "https://github.com/CrunchyData/postgres-operator/releases/download/{{.version}}/pgo-mac",
 	},
 	"helm": Dependency{
@@ -198,6 +186,34 @@ func InstallDependency(name, ver string, binDir string) error {
 		}
 	}
 	return nil
+}
+
+// Binary returns a function that can be called to execute the binary
+func Binary(name, ver string, binDir string) BinaryFunc {
+	binDir = absolutePath(binDir)
+
+	dependency, ok := dependencies[name]
+	if !ok {
+		return func(msg string, args ...interface{}) error { return errors.New("Unknown dependency " + name) }
+	}
+
+	if dependency.Docker != "" {
+
+		return func(msg string, args ...interface{}) error {
+			cwd, _ := os.Getwd()
+			docker := fmt.Sprintf("docker run --rm -v %s:%s -w %s %s:%s ", cwd, cwd, cwd, dependency.Docker, ver)
+			return exec.Execf(docker+msg, args...)
+		}
+	}
+
+	return func(msg string, args ...interface{}) error {
+
+		bin := fmt.Sprintf("%s/%s", binDir, name)
+		// ver, _ := *vers[name]
+		InstallDependency(name, ver, binDir)
+		return exec.Execf(bin+" "+msg, args...)
+	}
+
 }
 
 // InstallDependencies takes a map of supported dependencies and their version and
