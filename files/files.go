@@ -12,12 +12,12 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/hashicorp/go-getter"
-
 	log "github.com/sirupsen/logrus"
 )
 
@@ -275,6 +275,21 @@ func GetBaseName(filename string) string {
 // See https://github.com/hashicorp/go-getter
 func Getter(url, dst string) error {
 	pwd, _ := os.Getwd()
+
+	stashed := false
+	if Exists(dst + "/.git") {
+		cmd := exec.Command("git", "stash")
+		cmd.Dir = pwd
+
+		cmd.Dir = dst
+		cmd.Stderr = os.Stderr
+		cmd.Stdout = os.Stdout
+
+		if err := cmd.Run(); err == nil {
+			stashed = true
+		}
+
+	}
 	client := &getter.Client{
 		Ctx:     context.TODO(),
 		Src:     url,
@@ -284,7 +299,15 @@ func Getter(url, dst string) error {
 		Options: []getter.ClientOption{},
 	}
 	log.Infof("Downloading %s -> %s", url, dst)
-	return client.Get()
+	err := client.Get()
+	if stashed {
+		cmd := exec.Command("git", "stash", "pop")
+		cmd.Dir = dst
+		cmd.Stderr = os.Stderr
+		cmd.Stdout = os.Stdout
+		cmd.Run()
+	}
+	return err
 }
 
 // TempFileName generates a temporary filename for
