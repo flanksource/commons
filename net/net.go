@@ -1,6 +1,7 @@
 package net
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -14,12 +15,20 @@ import (
 func GET(url string, args ...interface{}) ([]byte, error) {
 	url = fmt.Sprintf(url, args...)
 
-	resp, err := http.Get(url)
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: tr}
+
+	resp, err := client.Get(url)
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return body, fmt.Errorf(resp.Status)
 	}

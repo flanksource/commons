@@ -2,19 +2,20 @@ package deps
 
 import (
 	"fmt"
-	"github.com/moshloop/commons/exec"
-	"github.com/moshloop/commons/files"
-	"github.com/moshloop/commons/is"
-	"github.com/moshloop/commons/net"
-	"github.com/moshloop/commons/utils"
-	"github.com/pkg/errors"
 	"io/ioutil"
 	"os"
 	"path"
 	"runtime"
 	"strings"
 
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/moshloop/commons/exec"
+	"github.com/moshloop/commons/files"
+	"github.com/moshloop/commons/is"
+	"github.com/moshloop/commons/net"
+	"github.com/moshloop/commons/utils"
 )
 
 // Dependency is a struct referring to a version and the templated path
@@ -147,6 +148,11 @@ var dependencies = map[string]Dependency{
 		Version: "v1.1.0",
 		Macosx:  "https://github.com/heptio/velero/releases/download/{{.version}}/velero-{{.version}}-darwin-amd64.tar.gz",
 		Linux:   "https://github.com/heptio/velero/releases/download/{{.version}}/velero-{{.version}}-linux-amd64.tar.gz",
+	},
+	"jx": Dependency{
+		Version: "2.0.795",
+		Macosx:  "https://github.com/jenkins-x/jx/releases/download/v2.0.795/jx-darwin-amd64.tar.gz",
+		Linux:   "https://github.com/jenkins-x/jx/releases/download/v2.0.795/jx-linux-amd64.tar.gz",
 	},
 }
 
