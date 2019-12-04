@@ -8,13 +8,13 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 	"github.com/flanksource/commons/exec"
 	"github.com/flanksource/commons/files"
 	"github.com/flanksource/commons/is"
 	"github.com/flanksource/commons/net"
 	"github.com/flanksource/commons/utils"
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 // Dependency is a struct referring to a version and the templated path
@@ -88,6 +88,11 @@ var dependencies = map[string]Dependency{
 	"gojsontoyaml": Dependency{
 		Version: "0.15.0",
 		Linux:   "github.com/hongkailiu/gojsontoyaml/releases/download/e8bd32d/gojsontoyaml",
+	},
+	"kind": Dependency{
+		Version: "0.6.1",
+		Linux:   "https://github.com/kubernetes-sigs/kind/releases/download/v{{.version}}/kind-linux-amd64",
+		Macosx:  "https://github.com/kubernetes-sigs/kind/releases/download/v{{.version}}/kind-darwin-amd64",
 	},
 	"pgo": Dependency{
 		Version: "4.0.1",
