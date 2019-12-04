@@ -154,6 +154,11 @@ var dependencies = map[string]Dependency{
 		Linux:      "https://github.com/corneliusweig/ketall/releases/download/{{.version}}/get-all-amd64-linux.tar.gz",
 		BinaryName: "get-all-{{.platform}}-{{.os}}",
 	},
+	"sops": Dependency{
+		Version: "v3.5.0",
+		Linux:   "https://github.com/mozilla/sops/releases/download/{{.version}}/sops-{{.version}}.linux",
+		Macosx:  "https://github.com/mozilla/sops/releases/download/{{.version}}/sops-{{.version}}.darwin",
+	},
 }
 
 // InstallDependency installs a binary to binDir, if ver is nil then the default version is used
