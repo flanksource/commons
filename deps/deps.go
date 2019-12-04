@@ -87,7 +87,7 @@ var dependencies = map[string]Dependency{
 	},
 	"gojsontoyaml": Dependency{
 		Version: "0.15.0",
-		Go:      "github.com/brancz/gojsontoyaml",
+		Linux:   "github.com/hongkailiu/gojsontoyaml/releases/download/e8bd32d/gojsontoyaml",
 	},
 	"pgo": Dependency{
 		Version: "4.0.1",
