@@ -12,10 +12,24 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+type environment interface {
+	Getenv(name string) string
+	Setenv(name, value string)
+}
+
+type osEnv struct{}
+
+func (o *osEnv) Getenv(name string) string {
+	return os.Getenv(name)
+}
+func (o *osEnv) Setenv(name, value string) {
+	os.Setenv(name, value)
+}
+
 // GetEnvOrDefault returns the first non-empty environment variable
-func GetEnvOrDefault(names ...string) string {
+func GetEnvOrDefault(env environment, names ...string) string {
 	for _, name := range names {
-		if val := os.Getenv(name); val != "" {
+		if val := env.Getenv(name); val != "" {
 			return val
 		}
 	}

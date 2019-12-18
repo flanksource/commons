@@ -11,16 +11,29 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// GET downloads and returns the contents at url
-func GET(url string, args ...interface{}) ([]byte, error) {
+type API struct {
+	Client  *http.Client
+	baseURL string
+}
+
+// NewClient returns new client ...
+func NewClient(url string, args ...interface{}) *API {
 	url = fmt.Sprintf(url, args...)
 
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
-	client := &http.Client{Transport: tr}
 
-	resp, err := client.Get(url)
+	client := &http.Client{Transport: tr}
+	return &API{
+		Client:  client,
+		baseURL: url,
+	}
+}
+
+// GET downloads and returns the contents at url
+func (a *API) GET() ([]byte, error) {
+	resp, err := a.Client.Get(a.baseURL)
 	if err != nil {
 		return nil, err
 	}
