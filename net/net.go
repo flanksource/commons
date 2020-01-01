@@ -5,11 +5,22 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"os"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 )
+
+func Ping(host string, port int, timeout int) bool {
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), time.Duration(timeout)*time.Millisecond)
+	if conn != nil {
+		conn.Close()
+	}
+
+	return err == nil
+}
 
 // GET downloads and returns the contents at url
 func GET(url string, args ...interface{}) ([]byte, error) {
