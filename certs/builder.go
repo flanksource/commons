@@ -14,16 +14,29 @@ type CertificateBuilder struct {
 
 func NewCertificateBuilder(commonName string) *CertificateBuilder {
 	b := &CertificateBuilder{}
-	b.X509 = &x509.Certificate{
+	b.Certificate = &Certificate{}
+	b.Certificate.X509 = &x509.Certificate{
 		Subject: pkix.Name{
 			CommonName: commonName,
 		},
 	}
 	key, _ := rsa.GenerateKey(rand.Reader, 2048)
-	b.PrivateKey = key
+	b.Certificate.PrivateKey = key
 	return b
 }
-func (b *CertificateBuilder) AltName(hostOrIp ...string) *CertificateBuilder {
+
+func (b *CertificateBuilder) Organization(org string) *CertificateBuilder {
+	b.Certificate.X509.Subject.Organization = []string{org}
+	return b
+}
+
+func (b *CertificateBuilder) OrganizationUnit(ou string) *CertificateBuilder {
+	b.Certificate.X509.Subject.OrganizationalUnit = []string{ou}
+	return b
+}
+
+func (b *CertificateBuilder) AltName(names ...string) *CertificateBuilder {
+	b.Certificate.X509.DNSNames = append(b.Certificate.X509.DNSNames, names...)
 	return b
 }
 
