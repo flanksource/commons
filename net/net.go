@@ -13,12 +13,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func Ping(host string, port int, timeout int) bool {
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), time.Duration(timeout)*time.Millisecond)
+func Ping(host string, port int, timeoutSeconds int) bool {
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), time.Duration(timeoutSeconds)*time.Second)
 	if conn != nil {
 		conn.Close()
 	}
-
 	return err == nil
 }
 
