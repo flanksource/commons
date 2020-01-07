@@ -10,12 +10,14 @@ type TestResults struct {
 	FailCount int
 	SkipCount int
 	Tests     []JUnitTestCase
+	Name string
 }
 
 func (c TestResults) ToXML() (string, error) {
 	return JUnitTestSuites{
 		Suites: []JUnitTestSuite{
 			JUnitTestSuite{
+				Name: c.Name,
 				TestCases: c.Tests,
 				Tests:     c.PassCount + c.FailCount + c.SkipCount,
 				Failures:  c.FailCount,
@@ -67,4 +69,9 @@ func (c *TestResults) Skipf(name, msg string, args ...interface{}) {
 	})
 	c.SkipCount++
 	fmt.Println(LightCyanf(" [skip] "+msg, args...))
+}
+
+func (c *TestResults) SuiteName(name string) *TestResults {
+	c.Name = name
+	return c
 }
