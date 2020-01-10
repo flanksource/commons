@@ -14,11 +14,21 @@ type TestResults struct {
 }
 
 func (c TestResults) ToXML() (string, error) {
+	var tests []JUnitTestCase
+
+	for _, test := range c.Tests {
+		if test.Classname == "" {
+			test.Classname = c.Name
+		} else {
+			test.Classname = c.Name + "." + test.Classname
+		}
+		tests = append(tests, test)
+	}
 	return JUnitTestSuites{
 		Suites: []JUnitTestSuite{
 			JUnitTestSuite{
 				Name: c.Name,
-				TestCases: c.Tests,
+				TestCases: tests,
 				Tests:     c.PassCount + c.FailCount + c.SkipCount,
 				Failures:  c.FailCount,
 			},
