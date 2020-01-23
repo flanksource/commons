@@ -23,6 +23,7 @@ import (
 type Dependency struct {
 	Version                   string
 	Linux, Macosx, Go, Docker string
+	BinaryName 				  string
 }
 
 // BinaryFunc is an interface to executing a binary, downloading it necessary
@@ -46,6 +47,11 @@ func BinaryWithEnv(name, ver string, binDir string, env map[string]string) Binar
 	return func(msg string, args ...interface{}) error {
 		bin := fmt.Sprintf("%s/%s", binDir, name)
 		InstallDependency(name, ver, binDir)
+		customName := dependencies[name].BinaryName
+		if customName != "" {
+			templated := utils.Interpolate(customName, map[string]string{"os": runtime.GOOS, "platform": runtime.GOARCH})
+			bin = fmt.Sprintf("%s/%s", binDir, templated)
+		}
 		return exec.ExecfWithEnv(bin+" "+msg, env, args...)
 	}
 }
@@ -72,7 +78,7 @@ var dependencies = map[string]Dependency{
 	},
 	"sonobuoy": Dependency{
 		Version: "0.15.0",
-		Linux:   "https://github.com/heptio/sonobuoy/releases/download/v{.version}}/sonobuoy_{{.version}}_linux_amd64.tar.gz",
+		Linux:   "https://github.com/heptio/sonobuoy/releases/download/v{{.version}}/sonobuoy_{{.version}}_linux_amd64.tar.gz",
 		Macosx:  "https://github.com/heptio/sonobuoy/releases/download/v{{.version}}/sonobuoy_{{.version}}_darwin_amd64.tar.gz",
 	},
 	"govc": Dependency{
@@ -83,10 +89,6 @@ var dependencies = map[string]Dependency{
 	"gojsontoyaml": Dependency{
 		Version: "0.15.0",
 		Go:      "github.com/brancz/gojsontoyaml",
-	},
-	"kustomize": Dependency{
-		Version: "v3.0.2",
-		Go:      "sigs.k8s.io/kustomize/v3/cmd/kustomize",
 	},
 	"pgo": Dependency{
 		Version: "4.0.1",
@@ -142,6 +144,12 @@ var dependencies = map[string]Dependency{
 		Macosx:  "https://github.com/jenkins-x/jx/releases/download/v2.0.795/jx-darwin-amd64.tar.gz",
 		Linux:   "https://github.com/jenkins-x/jx/releases/download/v2.0.795/jx-linux-amd64.tar.gz",
 	},
+	"ketall": Dependency{
+		Version: "v1.3.0",
+		Macosx:  "https://github.com/corneliusweig/ketall/releases/download/{{.version}}/get-all-amd64-darwin.tar.gz",
+		Linux:   "https://github.com/corneliusweig/ketall/releases/download/{{.version}}/get-all-amd64-linux.tar.gz",
+		BinaryName: "get-all-{{.platform}}-{{.os}}",
+},
 }
 
 // InstallDependency installs a binary to binDir, if ver is nil then the default version is used
