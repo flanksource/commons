@@ -50,8 +50,7 @@ func BinaryWithEnv(name, ver string, binDir string, env map[string]string) Binar
 		customName := dependencies[name].BinaryName
 		if customName != "" {
 			templated := utils.Interpolate(customName, map[string]string{"os": runtime.GOOS, "platform": runtime.GOARCH})
-			bin := fmt.Sprintf("%s/%s", binDir, templated)
-			return exec.ExecfWithEnv(bin+" "+msg, env, args...)
+			bin = fmt.Sprintf("%s/%s", binDir, templated)
 		}
 		return exec.ExecfWithEnv(bin+" "+msg, env, args...)
 	}
