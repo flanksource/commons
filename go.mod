@@ -3,6 +3,7 @@ module github.com/moshloop/commons
 go 1.12
 
 require (
+	github.com/brancz/gojsontoyaml v0.0.0-20191212081931-bf2969bbd742 // indirect
 	github.com/hashicorp/go-getter v1.3.0
 	github.com/pkg/errors v0.8.1
 	github.com/sirupsen/logrus v1.4.2
