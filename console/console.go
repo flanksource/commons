@@ -2,7 +2,7 @@ package console
 
 import (
 	"fmt"
-	"github.com/moshloop/commons/is"
+	"github.com/flanksource/commons/is"
 )
 
 var (

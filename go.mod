@@ -1,4 +1,4 @@
-module github.com/moshloop/commons
+module github.com/flanksource/commons
 
 go 1.12
 
