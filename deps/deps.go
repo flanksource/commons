@@ -11,11 +11,11 @@ import (
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/moshloop/commons/exec"
-	"github.com/moshloop/commons/files"
-	"github.com/moshloop/commons/is"
-	"github.com/moshloop/commons/net"
-	"github.com/moshloop/commons/utils"
+	"github.com/flanksource/commons/exec"
+	"github.com/flanksource/commons/files"
+	"github.com/flanksource/commons/is"
+	"github.com/flanksource/commons/net"
+	"github.com/flanksource/commons/utils"
 )
 
 // Dependency is a struct referring to a version and the templated path

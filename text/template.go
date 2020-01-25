@@ -7,8 +7,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 
-	"github.com/moshloop/commons/deps"
-	"github.com/moshloop/commons/files"
+	"github.com/flanksource/commons/deps"
+	"github.com/flanksource/commons/files"
 )
 
 var gomplate = deps.Binary("gomplate", "", ".bin")

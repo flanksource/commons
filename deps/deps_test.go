@@ -2,8 +2,8 @@ package deps
 
 import (
 	"fmt"
-	"github.com/moshloop/commons/files"
-	"github.com/moshloop/commons/utils"
+	"github.com/flanksource/commons/files"
+	"github.com/flanksource/commons/utils"
 	"runtime"
 	"testing"
 )
