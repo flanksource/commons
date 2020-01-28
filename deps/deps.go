@@ -163,16 +163,22 @@ var dependencies = map[string]Dependency{
 
 // InstallDependency installs a binary to binDir, if ver is nil then the default version is used
 func InstallDependency(name, ver string, binDir string) error {
-	bin := fmt.Sprintf("%s/%s", binDir, name)
+	dependency, ok := dependencies[name]
+	if !ok {
+		return errors.New("Unknown dependency " + name)
+	}
+	var bin string
+	if dependency.BinaryName != "" {
+		templated := utils.Interpolate(dependency.BinaryName, map[string]string{"os": runtime.GOOS, "platform": runtime.GOARCH})
+		bin = fmt.Sprintf("%s/%s", binDir, templated)
+	} else {
+		bin = fmt.Sprintf("%s/%s", binDir, name)
+	}
 	if is.File(bin) {
 		log.Tracef("%s already exists", bin)
 		return nil
 	}
 
-	dependency, ok := dependencies[name]
-	if !ok {
-		return errors.New("Unknown dependency " + name)
-	}
 	if ver == "" {
 		ver = dependency.Version
 	}
