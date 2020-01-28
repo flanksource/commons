@@ -8,14 +8,13 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/flanksource/commons/exec"
+	"github.com/flanksource/commons/files"
+	"github.com/flanksource/commons/is"
+	"github.com/flanksource/commons/net"
+	"github.com/flanksource/commons/utils"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-
-	"github.com/moshloop/commons/exec"
-	"github.com/moshloop/commons/files"
-	"github.com/moshloop/commons/is"
-	"github.com/moshloop/commons/net"
-	"github.com/moshloop/commons/utils"
 )
 
 // Dependency is a struct referring to a version and the templated path
@@ -23,6 +22,7 @@ import (
 type Dependency struct {
 	Version                   string
 	Linux, Macosx, Go, Docker string
+	BinaryName                string
 }
 
 // BinaryFunc is an interface to executing a binary, downloading it necessary
@@ -46,6 +46,11 @@ func BinaryWithEnv(name, ver string, binDir string, env map[string]string) Binar
 	return func(msg string, args ...interface{}) error {
 		bin := fmt.Sprintf("%s/%s", binDir, name)
 		InstallDependency(name, ver, binDir)
+		customName := dependencies[name].BinaryName
+		if customName != "" {
+			templated := utils.Interpolate(customName, map[string]string{"os": runtime.GOOS, "platform": runtime.GOARCH})
+			bin = fmt.Sprintf("%s/%s", binDir, templated)
+		}
 		return exec.ExecfWithEnv(bin+" "+msg, env, args...)
 	}
 }
@@ -71,8 +76,8 @@ var dependencies = map[string]Dependency{
 		Docker:  "docker.io/bitnami/jsonnet",
 	},
 	"sonobuoy": Dependency{
-		Version: "0.15.0",
-		Linux:   "https://github.com/heptio/sonobuoy/releases/download/v{.version}}/sonobuoy_{{.version}}_linux_amd64.tar.gz",
+		Version: "0.16.4",
+		Linux:   "https://github.com/heptio/sonobuoy/releases/download/v{{.version}}/sonobuoy_{{.version}}_linux_amd64.tar.gz",
 		Macosx:  "https://github.com/heptio/sonobuoy/releases/download/v{{.version}}/sonobuoy_{{.version}}_darwin_amd64.tar.gz",
 	},
 	"govc": Dependency{
@@ -82,11 +87,12 @@ var dependencies = map[string]Dependency{
 	},
 	"gojsontoyaml": Dependency{
 		Version: "0.15.0",
-		Go:      "github.com/brancz/gojsontoyaml",
+		Linux:   "github.com/hongkailiu/gojsontoyaml/releases/download/e8bd32d/gojsontoyaml",
 	},
-	"kustomize": Dependency{
-		Version: "v3.0.2",
-		Go:      "sigs.k8s.io/kustomize/v3/cmd/kustomize",
+	"kind": Dependency{
+		Version: "0.6.1",
+		Linux:   "https://github.com/kubernetes-sigs/kind/releases/download/v{{.version}}/kind-linux-amd64",
+		Macosx:  "https://github.com/kubernetes-sigs/kind/releases/download/v{{.version}}/kind-darwin-amd64",
 	},
 	"pgo": Dependency{
 		Version: "4.0.1",
@@ -133,7 +139,7 @@ var dependencies = map[string]Dependency{
 		Linux:   "https://github.com/TheWolfNL/expenv/releases/download/{{.version}}/expenv_linux_amd64",
 	},
 	"velero": Dependency{
-		Version: "v1.1.0",
+		Version: "v1.2.0",
 		Macosx:  "https://github.com/heptio/velero/releases/download/{{.version}}/velero-{{.version}}-darwin-amd64.tar.gz",
 		Linux:   "https://github.com/heptio/velero/releases/download/{{.version}}/velero-{{.version}}-linux-amd64.tar.gz",
 	},
@@ -141,6 +147,17 @@ var dependencies = map[string]Dependency{
 		Version: "2.0.795",
 		Macosx:  "https://github.com/jenkins-x/jx/releases/download/v2.0.795/jx-darwin-amd64.tar.gz",
 		Linux:   "https://github.com/jenkins-x/jx/releases/download/v2.0.795/jx-linux-amd64.tar.gz",
+	},
+	"ketall": Dependency{
+		Version:    "v1.3.0",
+		Macosx:     "https://github.com/corneliusweig/ketall/releases/download/{{.version}}/get-all-amd64-darwin.tar.gz",
+		Linux:      "https://github.com/corneliusweig/ketall/releases/download/{{.version}}/get-all-amd64-linux.tar.gz",
+		BinaryName: "get-all-{{.platform}}-{{.os}}",
+	},
+	"sops": Dependency{
+		Version: "v3.5.0",
+		Linux:   "https://github.com/mozilla/sops/releases/download/{{.version}}/sops-{{.version}}.linux",
+		Macosx:  "https://github.com/mozilla/sops/releases/download/{{.version}}/sops-{{.version}}.darwin",
 	},
 }
 

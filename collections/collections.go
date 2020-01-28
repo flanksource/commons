@@ -3,7 +3,7 @@ package collections
 import (
 	"encoding/base64"
 	"fmt"
-	"github.com/moshloop/commons/files"
+	"github.com/flanksource/commons/files"
 	"reflect"
 	"strings"
 )

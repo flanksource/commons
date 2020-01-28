@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"html/template"
 	"os"
@@ -28,6 +29,15 @@ func GetEnvOrDefault(names ...string) string {
 func ShortTimestamp() string {
 	_, week := time.Now().ISOWeek()
 	return fmt.Sprintf("%d%d-%s", week, time.Now().Weekday(), time.Now().Format("150405"))
+}
+
+func RandomKey(length int) string {
+	bytes := make([]byte, length)
+	if _, err := rand.Read(bytes); err != nil {
+		log.Fatalf("Cannot generate random data: %v", err)
+		return ""
+	}
+	return hex.EncodeToString(bytes)
 }
 
 // randomChars defines the alphanumeric characters that can be part of a random string
