@@ -100,3 +100,11 @@ func InterpolateStrings(arg []string, vars interface{}) []string {
 	}
 	return out
 }
+
+// normalizeVersion appends "v" to version string if it's not exist
+func normalizeVersion(version string) string {
+	if !strings.HasPrefix(version, "v") {
+		return "v"+version
+	}
+	return version
+}
