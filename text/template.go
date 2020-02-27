@@ -1,17 +1,16 @@
 package text
 
 import (
+	"bytes"
+	"fmt"
 	"io/ioutil"
-	"os"
+	"strings"
+	gotemplate "text/template"
 
-	log "github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
-
-	"github.com/flanksource/commons/deps"
 	"github.com/flanksource/commons/files"
+	"github.com/hairyhenderson/gomplate"
+	"gopkg.in/yaml.v2"
 )
-
-var gomplate = deps.Binary("gomplate", "", ".bin")
 
 // ToFile saves text as a temp file with an extension
 func ToFile(text string, ext string) string {
@@ -20,40 +19,25 @@ func ToFile(text string, ext string) string {
 	return tmp
 }
 
-// TemplateDir templates out a directory using gomplate
-func TemplateDir(dir string, dst string, vars interface{}) error {
-	data, _ := yaml.Marshal(vars)
-	tmp := ToFile(string(data), ".yml")
-	if !log.IsLevelEnabled(log.TraceLevel) {
-		defer os.Remove(tmp)
-	}
-	return gomplate("--input-dir \"%s\" --output-dir %s -c \".=%s\"", dir, dst, tmp)
-}
-
 // Template templates out a template using gomplate
 func Template(template string, vars interface{}) (string, error) {
-	data, _ := yaml.Marshal(vars)
-	tmp := ToFile(string(data), ".yml")
-	if !log.IsLevelEnabled(log.TraceLevel) {
-		defer os.Remove(tmp)
-	}
+	tpl := gotemplate.New("")
 
-	in := ToFile(string(template), ".tmpl")
-	if !log.IsLevelEnabled(log.TraceLevel) {
-		defer os.Remove(in)
-	}
+	tpl, err := tpl.Funcs(gomplate.Funcs(nil)).Parse(template)
 
-	out := files.TempFileName("", ".out")
-	if !log.IsLevelEnabled(log.TraceLevel) {
-		defer os.Remove(out)
-	}
-
-	if err := gomplate("-f \"%s\" -o \"%s\" -c \".=%s\"", in, out, tmp); err != nil {
-		return "", err
-	}
-	dataOut, err := ioutil.ReadFile(out)
 	if err != nil {
+		return "", fmt.Errorf("invalid template %s: %v", strings.Split(template, "\n")[0], err)
+	}
+
+	data, _ := yaml.Marshal(vars)
+	unstructured := make(map[string]interface{})
+	if err := yaml.Unmarshal(data, &unstructured); err != nil {
 		return "", err
 	}
-	return string(dataOut), nil
+
+	var buf bytes.Buffer
+	if err := tpl.Execute(&buf, unstructured); err != nil {
+		return "", fmt.Errorf("error executing template %s: %v", strings.Split(template, "\n")[0], err)
+	}
+	return buf.String(), nil
 }
