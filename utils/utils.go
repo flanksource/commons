@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"html/template"
 	"os"
+	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -101,10 +102,10 @@ func InterpolateStrings(arg []string, vars interface{}) []string {
 	return out
 }
 
-// normalizeVersion appends "v" to version string if it's not exist
-func normalizeVersion(version string) string {
+// NormalizeVersion appends "v" to version string if it's not exist
+func NormalizeVersion(version string) string {
 	if !strings.HasPrefix(version, "v") {
-		return "v"+version
+		return "v" + version
 	}
 	return version
 }
