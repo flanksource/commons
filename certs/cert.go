@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"strings"
 )
 
@@ -19,6 +20,10 @@ type Certificate struct {
 
 // DecryptCertificate decrypts a certificate / private key pair and returns a Certificate
 func DecryptCertificate(cert []byte, privateKey []byte, password []byte) (*Certificate, error) {
+	if len(password) == 0 {
+		logrus.Warnf("No password provided for CA certificate")
+		return DecodeCertificate(cert, privateKey)
+	}
 
 	var err error
 	var key *rsa.PrivateKey
