@@ -1,0 +1,3 @@
+ca:
+  cert: "https://raw.githubusercontent.com/grpc/grpc-java/v1.28.x/testing/src/main/resources/certs/server0.pem"
+  privateKey: "https://raw.githubusercontent.com/grpc/grpc-java/v1.28.x/testing/src/main/resources/certs/server0.key"
