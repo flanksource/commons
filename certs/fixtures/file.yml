@@ -1,0 +1,4 @@
+ca:
+  cert: fixtures/k8s-ca-crt.pem
+  privateKey: fixtures/k8s-ca-key.pem
+  password: foobar

@@ -7,8 +7,9 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"strings"
+
+	"github.com/sirupsen/logrus"
 )
 
 // Certificate is a X509 certifcate / private key pair
