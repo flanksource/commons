@@ -159,6 +159,11 @@ var dependencies = map[string]Dependency{
 		Linux:   "https://github.com/mozilla/sops/releases/download/{{.version}}/sops-{{.version}}.linux",
 		Macosx:  "https://github.com/mozilla/sops/releases/download/{{.version}}/sops-{{.version}}.darwin",
 	},
+	"kubeseal": Dependency{
+		Version: "v0.10.0",
+		Linux:   "https://github.com/bitnami-labs/sealed-secrets/releases/download/{{.version}}/kubeseal-linux-amd64",
+		Macosx:  "https://github.com/bitnami-labs/sealed-secrets/releases/download/{{.version}}/kubeseal-darwin-amd64",
+	},
 }
 
 // InstallDependency installs a binary to binDir, if ver is nil then the default version is used
