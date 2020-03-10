@@ -18,11 +18,12 @@ type Config struct {
 
 var (
 	tests = map[string]string{
-		"plain.yml":       "plain.yml",
-		"file_src.yml":    "file_dst.yml",
-		"env_var_src.yml": "env_var_dst.yml",
-		"http_src.yml":    "http_dst.yml",
-		"https_src.yml":   "https_dst.yml",
+		"plain.yml":              "plain.yml",
+		"file_src.yml":           "file_dst.yml",
+		"env_var_src.yml":        "env_var_dst.yml",
+		"http_src.yml":           "http_dst.yml",
+		"https_src.yml":          "https_dst.yml",
+		"go_getter_http_src.yml": "go_getter_http_dst.yml",
 	}
 )
 
