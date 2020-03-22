@@ -4,10 +4,9 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/pkg/errors"
-
+	"github.com/flanksource/yaml"
 	. "github.com/onsi/gomega"
-	"gopkg.in/yaml.v2"
+	"github.com/pkg/errors"
 )
 
 type exampleConfig struct {
@@ -36,6 +35,34 @@ func TestLoadCertificateFromLiteral(t *testing.T) {
 
 	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(cfg.CA.X509.Subject.CommonName).To(Equal("wildcard.literal.flanksource.com"))
+}
+
+func TestMarshalCertificate(t *testing.T) {
+	g := NewWithT(t)
+
+	cfg, err := loadConfig("fixtures/literal.yml")
+	g.Expect(err).ToNot(HaveOccurred())
+
+	generatedBytes, err := yaml.Marshal(cfg)
+	g.Expect(err).ToNot(HaveOccurred())
+
+	generatedCfg := struct {
+		CA *struct {
+			Cert       *string `yaml:"cert,omitempty"`
+			PrivateKey *string `yaml:"privateKey,omitempty"`
+			Password   *string `yaml:"password,omitempty"`
+		}
+	}{}
+	err = yaml.Unmarshal(generatedBytes, &generatedCfg)
+	g.Expect(err).ToNot(HaveOccurred())
+
+	g.Expect(generatedCfg.CA).ToNot(BeNil())
+	g.Expect(generatedCfg.CA.Cert).ToNot(BeNil())
+	g.Expect(generatedCfg.CA.PrivateKey).ToNot(BeNil())
+	g.Expect(generatedCfg.CA.Password).To(BeNil())
+
+	g.Expect(*generatedCfg.CA.Cert).To(Equal(string(cfg.CA.EncodedCertificate())))
+	g.Expect(*generatedCfg.CA.PrivateKey).To(Equal(string(cfg.CA.EncodedPrivateKey())))
 }
 
 func loadConfig(path string) (*exampleConfig, error) {
