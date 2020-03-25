@@ -49,6 +49,14 @@ func (c *Certificate) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
+func (c Certificate) MarshalYAML() (interface{}, error) {
+	cm := &CertificateMarshaller{
+		CertFile:       string(c.EncodedCertificate()),
+		PrivateKeyFile: string(c.EncodedPrivateKey()),
+	}
+	return cm, nil
+}
+
 func LoadCertificate(certificate string) ([]byte, error) {
 	if strings.HasPrefix(certificate, CertificateHeader) {
 		return []byte(certificate), nil
