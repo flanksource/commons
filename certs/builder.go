@@ -22,6 +22,7 @@ func NewCertificateBuilder(commonName string) *CertificateBuilder {
 	}
 	key, _ := rsa.GenerateKey(rand.Reader, 2048)
 	b.Certificate.PrivateKey = key
+	b.X509.PublicKey = key.Public()
 	return b
 }
 
