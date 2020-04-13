@@ -29,7 +29,7 @@ func StripSecrets(text string) string {
 			v = line
 		}
 
-		if strings.Contains(k, "pass") || strings.Contains(k, "secret") || strings.TrimSpace(k) == "key" {
+		if strings.Contains(k, "pass") || strings.Contains(k, "secret") || strings.TrimSpace(k) == "key" || strings.TrimSpace(k) == "token" {
 			if len(v) == 0 {
 				out += k + sep + "\n"
 			} else {
