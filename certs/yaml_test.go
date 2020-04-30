@@ -4,9 +4,9 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/flanksource/yaml"
 	. "github.com/onsi/gomega"
 	"github.com/pkg/errors"
+	"gopkg.in/flanksource/yaml.v3"
 )
 
 type exampleConfig struct {

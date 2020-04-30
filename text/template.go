@@ -8,8 +8,8 @@ import (
 	gotemplate "text/template"
 
 	"github.com/flanksource/commons/files"
-	"github.com/flanksource/yaml"
 	"github.com/hairyhenderson/gomplate"
+	"gopkg.in/flanksource/yaml.v3"
 )
 
 // ToFile saves text as a temp file with an extension
