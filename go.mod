@@ -7,6 +7,7 @@ require (
 	github.com/hairyhenderson/gomplate v3.5.0+incompatible
 	github.com/hashicorp/go-getter v1.3.1-0.20190906090232-a0f878cb75da
 	github.com/hashicorp/vault/api v1.0.4
+	github.com/kr/pretty v0.2.0
 	github.com/onsi/gomega v1.9.0
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.4.2
