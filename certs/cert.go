@@ -3,6 +3,7 @@ package certs
 import (
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
@@ -115,5 +116,14 @@ func (c *Certificate) AsTLSSecret() map[string][]byte {
 	return map[string][]byte{
 		"tls.crt": c.EncodedCertificate(),
 		"tls.key": c.EncodedPrivateKey(),
+	}
+}
+
+func (c *Certificate) AsTLSConfig() *tls.Config) {
+	caPool := x509.NewCertPool()
+	caPool.AppendCertsFromPEM(c.EncodedCertificate())
+	return &tls.Config{
+		RootCAs:      caPool,
+		Certificates: []tls.Certificate{c.X509},
 	}
 }
