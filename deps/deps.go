@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"strings"
 
+	osExec "os/exec"
+
 	"github.com/flanksource/commons/exec"
 	"github.com/flanksource/commons/files"
 	"github.com/flanksource/commons/is"
@@ -23,6 +25,7 @@ type Dependency struct {
 	Version                   string
 	Linux, Macosx, Go, Docker string
 	BinaryName                string
+	PreInstalled              []string
 }
 
 // BinaryFunc is an interface to executing a binary, downloading it necessary
@@ -164,6 +167,25 @@ var dependencies = map[string]Dependency{
 		Linux:   "https://github.com/bitnami-labs/sealed-secrets/releases/download/{{.version}}/kubeseal-linux-amd64",
 		Macosx:  "https://github.com/bitnami-labs/sealed-secrets/releases/download/{{.version}}/kubeseal-darwin-amd64",
 	},
+	"packer": Dependency{
+		Version: "1.5.5",
+		Macosx:  "https://releases.hashicorp.com/packer/{{.version}}/packer_{{.version}}_darwin_amd64.zip",
+		Linux:   "https://releases.hashicorp.com/packer/{{.version}}/packer_{{.version}}_linux_amd64.zip",
+	},
+	"mkisofs": Dependency{
+		PreInstalled: []string{"mkisofs", "genisoimage"},
+	},
+	"qemu-img": Dependency{
+		PreInstalled: []string{"qemu-img"},
+	},
+	"qemu-system": Dependency{
+		PreInstalled: []string{"qemu-system-x86_64"},
+	},
+	"docker": Dependency{
+		PreInstalled: []string{"docker", "crictl"},
+	},
+
+	"hdiutil": Dependency{},
 }
 
 // InstallDependency installs a binary to binDir, if ver is nil then the default version is used
@@ -226,7 +248,6 @@ func Binary(name, ver string, binDir string) BinaryFunc {
 	}
 
 	if dependency.Docker != "" {
-
 		return func(msg string, args ...interface{}) error {
 			cwd, _ := os.Getwd()
 			docker := fmt.Sprintf("docker run --rm -v %s:%s -w %s %s:%s ", cwd, cwd, cwd, dependency.Docker, ver)
@@ -234,10 +255,19 @@ func Binary(name, ver string, binDir string) BinaryFunc {
 		}
 	}
 
-	return func(msg string, args ...interface{}) error {
+	if len(dependency.PreInstalled) > 0 {
+		return func(msg string, args ...interface{}) error {
+			for _, bin := range dependency.PreInstalled {
+				if Which(bin) {
+					return exec.Execf(bin+" "+msg, args...)
+				}
+			}
+			return fmt.Errorf("cannot find preinstalled dependency: %s", strings.Join(dependency.PreInstalled, ","))
+		}
+	}
 
+	return func(msg string, args ...interface{}) error {
 		bin := fmt.Sprintf("%s/%s", binDir, name)
-		// ver, _ := *vers[name]
 		InstallDependency(name, ver, binDir)
 		return exec.Execf(bin+" "+msg, args...)
 	}
@@ -265,4 +295,9 @@ func download(url, bin string) error {
 		return files.UnarchiveExecutables(file, path.Dir(bin))
 	}
 	return net.Download(url, bin)
+}
+
+func Which(cmd string) bool {
+	_, err := osExec.LookPath(cmd)
+	return err == nil
 }
