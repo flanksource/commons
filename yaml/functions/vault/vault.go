@@ -5,9 +5,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/flanksource/yaml"
 	"github.com/hashicorp/vault/api"
 	log "github.com/sirupsen/logrus"
+	"gopkg.in/flanksource/yaml.v3"
 )
 
 func init() {
