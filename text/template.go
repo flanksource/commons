@@ -8,7 +8,7 @@ import (
 	gotemplate "text/template"
 
 	"github.com/flanksource/commons/files"
-	"github.com/hairyhenderson/gomplate"
+	"github.com/hairyhenderson/gomplate/v3"
 	"gopkg.in/flanksource/yaml.v3"
 )
 
