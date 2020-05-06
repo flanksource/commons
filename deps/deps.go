@@ -15,7 +15,6 @@ import (
 	"github.com/flanksource/commons/is"
 	"github.com/flanksource/commons/net"
 	"github.com/flanksource/commons/utils"
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -184,7 +183,6 @@ var dependencies = map[string]Dependency{
 	"docker": Dependency{
 		PreInstalled: []string{"docker", "crictl"},
 	},
-
 	"hdiutil": Dependency{},
 }
 
@@ -192,7 +190,7 @@ var dependencies = map[string]Dependency{
 func InstallDependency(name, ver string, binDir string) error {
 	dependency, ok := dependencies[name]
 	if !ok {
-		return errors.New("Unknown dependency " + name)
+		return nil
 	}
 	var bin string
 	if dependency.BinaryName != "" {
@@ -244,7 +242,12 @@ func Binary(name, ver string, binDir string) BinaryFunc {
 
 	dependency, ok := dependencies[name]
 	if !ok {
-		return func(msg string, args ...interface{}) error { return errors.New("Unknown dependency " + name) }
+		return func(msg string, args ...interface{}) error {
+			if Which(name) {
+				return exec.Execf(name+" "+msg, args...)
+			}
+			return fmt.Errorf("cannot find preinstalled dependency: %s", name)
+		}
 	}
 
 	if dependency.Docker != "" {
