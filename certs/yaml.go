@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/pkg/errors"
 )
 
@@ -42,10 +44,17 @@ func (c *Certificate) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 	certificate, err := DecryptCertificate(cert, privateKey, []byte(password))
 	if err != nil {
-		return errors.Wrap(err, "failed to decrypt certificate")
+		log.Errorf("failed to decrypt certificate: %v", err)
+		certificate = &Certificate{
+			lazyLoaded:       true,
+			certificateBytes: cert,
+			privateKeyBytes:  privateKey,
+			password:         []byte(password),
+		}
 	}
 
 	*c = *certificate
+
 	return nil
 }
 
