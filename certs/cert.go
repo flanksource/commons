@@ -18,6 +18,11 @@ type Certificate struct {
 	X509       *x509.Certificate
 	PrivateKey *rsa.PrivateKey
 	Chain      []*Certificate
+
+	lazyLoaded       bool
+	certificateBytes []byte
+	privateKeyBytes  []byte
+	password         []byte
 }
 
 // DecryptCertificate decrypts a certificate / private key pair and returns a Certificate
@@ -119,11 +124,22 @@ func (c *Certificate) AsTLSSecret() map[string][]byte {
 	}
 }
 
-func (c *Certificate) AsTLSConfig() *tls.Config) {
+func (c *Certificate) AsTLSConfig() *tls.Config {
 	caPool := x509.NewCertPool()
 	caPool.AppendCertsFromPEM(c.EncodedCertificate())
 	return &tls.Config{
 		RootCAs:      caPool,
-		Certificates: []tls.Certificate{c.X509},
+		Certificates: []tls.Certificate{{Leaf: c.X509}},
 	}
+}
+
+func (c *Certificate) Load() (*Certificate, error) {
+	if !c.lazyLoaded {
+		return c, nil
+	}
+	return DecryptCertificate(c.certificateBytes, c.privateKeyBytes, c.password)
+}
+
+func (c *Certificate) IsLazyLoaded() bool {
+	return c.lazyLoaded
 }
