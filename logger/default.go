@@ -6,57 +6,81 @@ import (
 	"strings"
 
 	"github.com/kr/pretty"
-	"github.com/sirupsen/logrus"
+	logsrusapi "github.com/sirupsen/logrus"
+	"github.com/spf13/pflag"
 )
 
+var currentLogger Logger
+
+func init() {
+	currentLogger = logrusLogger{
+		Logger: logsrusapi.StandardLogger(),
+	}
+}
+
+func BindFlags(flags *pflag.FlagSet) {
+	flags.CountP("loglevel", "v", "Increase logging level")
+	flags.Bool("json-logs", false, "Print logs in json format to stderr")
+}
+
+func ParseFlags(flags *pflag.FlagSet) {
+	level, _ := flags.GetCount("loglevel")
+	currentLogger.SetLogLevel(level)
+}
+
 func Warnf(format string, args ...interface{}) {
-	logrus.Warnf(format, args...)
+	currentLogger.Warnf(format, args...)
 }
 
 func Infof(format string, args ...interface{}) {
-	logrus.Infof(format, args...)
+	currentLogger.Infof(format, args...)
 }
 
 //Secretf is like Tracef, but attempts to strip any secrets from the text
 func Secretf(format string, args ...interface{}) {
-	logrus.Tracef(stripSecrets(fmt.Sprintf(format, args...)))
+	currentLogger.Tracef(stripSecrets(fmt.Sprintf(format, args...)))
 }
 
 //Prettyf is like Tracef, but pretty prints the entire struct
 func Prettyf(msg string, obj interface{}) {
-	logrus.Tracef(msg, pretty.Sprint(obj))
+	pretty.Print(obj)
+	// currentLogger.Tracef(msg, pretty.Sprint(obj))
 }
 
 func Errorf(format string, args ...interface{}) {
-	logrus.Errorf(format, args...)
+	currentLogger.Errorf(format, args...)
 }
 
 func Debugf(format string, args ...interface{}) {
-	logrus.Debugf(format, args...)
+	currentLogger.Debugf(format, args...)
 }
 
 func Tracef(format string, args ...interface{}) {
-	logrus.Tracef(format, args...)
+	currentLogger.Tracef(format, args...)
 }
 
 func Fatalf(format string, args ...interface{}) {
-	logrus.Fatalf(format, args...)
+	currentLogger.Fatalf(format, args...)
 }
 
 func IsTraceEnabled() bool {
-	return logrus.IsLevelEnabled(logrus.TraceLevel)
+	return currentLogger.IsTraceEnabled()
 }
 
 func IsDebugEnabled() bool {
-	return logrus.IsLevelEnabled(logrus.DebugLevel)
+	return currentLogger.IsDebugEnabled()
 }
 
 func NewLogger(key string, value interface{}) Logger {
-	return logrus.New().WithField(key, value)
+	return currentLogger.NewLogger(key, value)
+}
+
+func NewLoggerWithFields(fields map[string]interface{}) Logger {
+	return currentLogger.NewLoggerWithFields(fields)
 }
 
 func StandardLogger() Logger {
-	return logrus.StandardLogger()
+	return currentLogger
 }
 
 // stripSecrets takes a YAML or INI formatted text and removes any potentially secret data
