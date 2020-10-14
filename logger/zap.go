@@ -109,20 +109,8 @@ func (zap ZapLogger) SetLogLevel(level int) {
 	zap.Level.SetLevel(atom.Level())
 }
 
-func (zap ZapLogger) NewLogger(key string, value interface{}) Logger {
-	logger := zap.Logger.With(key, value)
-	return ZapLogger{
-		Level:  zap.Level,
-		Base:   logger.Desugar(),
-		Logger: logger,
-	}
-}
-
-func (zap ZapLogger) NewLoggerWithFields(fields map[string]interface{}) Logger {
-	logger := zap.Logger
-	for k, v := range fields {
-		logger = logger.With(k, v)
-	}
+func (zap ZapLogger) WithValues(keysAndValues ...interface{}) Logger {
+	logger := zap.Logger.With(keysAndValues...)
 	return ZapLogger{
 		Level:  zap.Level,
 		Base:   logger.Desugar(),

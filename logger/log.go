@@ -7,8 +7,7 @@ type Logger interface {
 	Debugf(format string, args ...interface{})
 	Tracef(format string, args ...interface{})
 	Fatalf(format string, args ...interface{})
-	NewLogger(key string, value interface{}) Logger
-	NewLoggerWithFields(fields map[string]interface{}) Logger
+	WithValues(keysAndValues ...interface{}) Logger
 	IsTraceEnabled() bool
 	IsDebugEnabled() bool
 	SetLogLevel(level int)

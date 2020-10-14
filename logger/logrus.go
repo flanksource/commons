@@ -8,20 +8,31 @@ import (
 )
 
 type logrusLogger struct {
-	*logrusapi.Logger
+	*logrusapi.Entry
+}
+
+func NewLogrusLogger(existing logrusapi.Ext1FieldLogger) Logger {
+	switch existing.(type) {
+	case *logrusapi.Entry:
+		return logrusLogger{Entry: existing.(*logrusapi.Entry)}
+	case *logrusapi.Logger:
+		return logrusLogger{Entry: logrusapi.NewEntry(existing.(*logrusapi.Logger))}
+	default:
+		return logrusLogger{Entry: logrusapi.NewEntry(logrusapi.StandardLogger())}
+	}
 }
 
 func (logrus logrusLogger) Warnf(format string, args ...interface{}) {
-	logrus.Logger.Warnf(format, args...)
+	logrus.Entry.Warnf(format, args...)
 }
 
 func (logrus logrusLogger) Infof(format string, args ...interface{}) {
-	logrus.Logger.Infof(format, args...)
+	logrus.Entry.Infof(format, args...)
 }
 
 //Secretf is like Tracef, but attempts to strip any secrets from the text
 func (logrus logrusLogger) Secretf(format string, args ...interface{}) {
-	logrus.Logger.Tracef(stripSecrets(fmt.Sprintf(format, args...)))
+	logrus.Entry.Tracef(stripSecrets(fmt.Sprintf(format, args...)))
 }
 
 //Prettyf is like Tracef, but pretty prints the entire struct
@@ -30,48 +41,44 @@ func (logrus logrusLogger) Prettyf(msg string, obj interface{}) {
 }
 
 func (logrus logrusLogger) Errorf(format string, args ...interface{}) {
-	logrus.Logger.Errorf(format, args...)
+	logrus.Entry.Errorf(format, args...)
 }
 
 func (logrus logrusLogger) Debugf(format string, args ...interface{}) {
-	logrus.Logger.Debugf(format, args...)
+	logrus.Entry.Debugf(format, args...)
 }
 
 func (logrus logrusLogger) Tracef(format string, args ...interface{}) {
-	logrus.Logger.Tracef(format, args...)
+	logrus.Entry.Tracef(format, args...)
 }
 
 func (logrus logrusLogger) Fatalf(format string, args ...interface{}) {
-	logrus.Logger.Fatalf(format, args...)
+	logrus.Entry.Fatalf(format, args...)
 }
 
-func (logrus logrusLogger) NewLogger(key string, value interface{}) Logger {
-	return logrusLogger{Logger: logrusapi.New().WithField(key, value).Logger}
-}
-
-func (logrus logrusLogger) NewLoggerWithFields(fields map[string]interface{}) Logger {
-	return logrusLogger{Logger: logrusapi.New().WithFields(logrusapi.Fields(fields)).Logger}
-}
-
-func NewLogrusLogger(existing logrusapi.Logger) Logger {
-	return logrusLogger{Logger: &existing}
+func (logrus logrusLogger) WithValues(keysAndValues ...interface{}) Logger {
+	fieldMap := make(map[string]interface{})
+	for i := 0; i < len(keysAndValues); i += 2 {
+		fieldMap[fmt.Sprintf("%v", keysAndValues[i])] = keysAndValues[i+1]
+	}
+	return logrusLogger{Entry: logrus.Entry.WithFields(logrusapi.Fields(fieldMap))}
 }
 
 func (logrus logrusLogger) SetLogLevel(level int) {
 	switch {
 	case level > 1:
-		logrus.Logger.SetLevel(logrusapi.TraceLevel)
+		logrus.Entry.Logger.SetLevel(logrusapi.TraceLevel)
 	case level > 0:
-		logrus.Logger.SetLevel(logrusapi.DebugLevel)
+		logrus.Entry.Logger.SetLevel(logrusapi.DebugLevel)
 	default:
-		logrus.Logger.SetLevel(logrusapi.InfoLevel)
+		logrus.Entry.Logger.SetLevel(logrusapi.InfoLevel)
 	}
 }
 
 func (logrus logrusLogger) IsTraceEnabled() bool {
-	return logrus.Logger.IsLevelEnabled(logrusapi.TraceLevel)
+	return logrus.Entry.Logger.IsLevelEnabled(logrusapi.TraceLevel)
 }
 
 func (logrus logrusLogger) IsDebugEnabled() bool {
-	return logrus.Logger.IsLevelEnabled(logrusapi.DebugLevel)
+	return logrus.Entry.Logger.IsLevelEnabled(logrusapi.DebugLevel)
 }
