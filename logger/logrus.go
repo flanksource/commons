@@ -53,6 +53,10 @@ func (logrus logrusLogger) NewLoggerWithFields(fields map[string]interface{}) Lo
 	return logrusLogger{Logger: logrusapi.New().WithFields(logrusapi.Fields(fields)).Logger}
 }
 
+func NewLogrusLogger(existing logrusapi.Logger) Logger {
+	return logrusLogger{Logger: &existing}
+}
+
 func (logrus logrusLogger) SetLogLevel(level int) {
 	switch {
 	case level > 1:
