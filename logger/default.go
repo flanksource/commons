@@ -70,7 +70,7 @@ func IsDebugEnabled() bool {
 }
 
 func WithValues(keysAndValues ...interface{}) Logger {
-	return currentLogger.WithValues(keysAndValues)
+	return currentLogger.WithValues(keysAndValues...)
 }
 
 func StandardLogger() Logger {
