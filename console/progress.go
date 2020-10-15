@@ -49,7 +49,7 @@ func (p *terminalProgress) Status(status string) {
 
 func NewTextProgress(name string, localTest *TestResults) Progress {
 	return &textProgress{
-		Logger: logger.NewLogger("test", name),
+		Logger: logger.WithValues("test", name),
 		test:   localTest,
 	}
 }

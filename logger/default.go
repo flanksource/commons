@@ -13,9 +13,7 @@ import (
 var currentLogger Logger
 
 func init() {
-	currentLogger = logrusLogger{
-		Logger: logsrusapi.StandardLogger(),
-	}
+	currentLogger = NewLogrusLogger(logsrusapi.StandardLogger())
 }
 
 func BindFlags(flags *pflag.FlagSet) {
@@ -71,12 +69,8 @@ func IsDebugEnabled() bool {
 	return currentLogger.IsDebugEnabled()
 }
 
-func NewLogger(key string, value interface{}) Logger {
-	return currentLogger.NewLogger(key, value)
-}
-
-func NewLoggerWithFields(fields map[string]interface{}) Logger {
-	return currentLogger.NewLoggerWithFields(fields)
+func WithValues(keysAndValues ...interface{}) Logger {
+	return currentLogger.WithValues(keysAndValues)
 }
 
 func StandardLogger() Logger {
