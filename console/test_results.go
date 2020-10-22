@@ -75,7 +75,7 @@ func (c TestResults) String() string {
 		if s != "" {
 			s += " "
 		}
-		s += Redf("with %d retries", c.Retries)
+		s += Redf("after %d retries", c.Retries)
 	}
 	return s
 }
