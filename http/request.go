@@ -1,8 +1,11 @@
 package http
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"strings"
 
@@ -187,4 +190,33 @@ func (r *Request) sendRequest(client *http.Client, logger logger.Logger, retries
 	}
 
 	return &Response{response}, nil
+}
+
+type RequestLoggableStrings struct {
+	Headers string
+	Body    string
+}
+
+// GetLoggableStrings returns the Headers and Body of the response as strings that can be logged while
+// maintaining the request body's readability
+func (req *Request) GetLoggableStrings() (*RequestLoggableStrings, error) {
+	if req == nil {
+		return nil, errors.New("cannot read request information from nil request")
+	}
+
+	loggableStrings := &RequestLoggableStrings{}
+	buf := new(bytes.Buffer)
+	_, err := buf.ReadFrom(req.body)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("Failed to read request body: err=%+v", err))
+	}
+	err = req.body.Close()
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("Failed to close request body ReadCloser: err=%+v", err))
+	}
+
+	bodyString := buf.String()
+	loggableStrings.Body = bodyString
+	req.body = ioutil.NopCloser(strings.NewReader(bodyString))
+	return loggableStrings, nil
 }

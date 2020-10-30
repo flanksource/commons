@@ -24,6 +24,13 @@ type Config struct {
 	// BaseURL is added as a prefix to all URLs
 	BaseURL string
 
+	// LOGGING
+
+	// Specify if request/response bodies should be logged
+	TraceBody     bool
+	TraceResponse bool
+	Trace         bool
+	// GET's are on TRACE, PUT/PATCH/POST are on Debug, and DELETE are on Info
 	Logger logger.Logger
 
 	// RETRY HANDLING
