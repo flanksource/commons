@@ -55,7 +55,6 @@ func createHTTPClient(config *Config) *http.Client {
 func (c *Client) Get(url string) (*Response, error) {
 	request := NewGetRequest(c.config, url)
 	c.logRequest(request.Request, c.config.Logger.Tracef)
-
 	response, err := request.Send(c.httpClient, c.config.Logger)
 	c.logResponse(request.verb, c.config.Logger.Tracef, url, response, err)
 	return response, err
