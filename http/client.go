@@ -110,7 +110,7 @@ func (c *Client) logRequest(request *Request, logFunc func(message string, args 
 		return
 	}
 
-	message := fmt.Sprintf("HTTP %s Request: url=%s", request.verb, request.url)
+	message := fmt.Sprintf("Request: verb=%s, url=%s", request.verb, request.url)
 	if !c.config.TraceBody {
 		logFunc(message)
 		return
@@ -122,7 +122,7 @@ func (c *Client) logRequest(request *Request, logFunc func(message string, args 
 	}
 
 	if !shouldLogBody(bodyContentType) {
-		message += fmt.Sprintf(", content-type='%s', err='Not logging body: content-type not loggable'", bodyContentType)
+		message += fmt.Sprintf("\nBody Content Type: <%s>", bodyContentType)
 		logFunc(message)
 		return
 	}
@@ -132,13 +132,13 @@ func (c *Client) logRequest(request *Request, logFunc func(message string, args 
 		return
 	}
 
-	loggableStrings, err := request.GetLoggableStrings()
+	loggableString, err := request.GetLoggableStrings()
 	if err != nil {
 		message += fmt.Sprintf(", err=%+v", err)
 		logFunc(message)
 		return
 	}
-	message += fmt.Sprintf(", content-type='%s', body='%s'", bodyContentType, loggableStrings.Body)
+	message += fmt.Sprintf("\nBody: %s", loggableString)
 	logFunc(message)
 }
 
@@ -151,7 +151,7 @@ func (c *Client) logResponse(verb string, logFunc func(message string, args ...i
 		return
 	}
 
-	message := fmt.Sprintf("HTTP %s Response: url=%s", verb, url)
+	message := fmt.Sprintf("Response: verb=%s Response: url=%s", verb, url)
 	if response == nil {
 		logFunc(message)
 		return
@@ -169,21 +169,19 @@ func (c *Client) logResponse(verb string, logFunc func(message string, args ...i
 	}
 
 	if !shouldLogBody(bodyContentTypeString) {
-		message += fmt.Sprintf(", content-type='%s', err='Not logging body: content-type not loggable'", bodyContentTypeString)
+		message += fmt.Sprintf("\nBody=<%s>", bodyContentTypeString)
 		logFunc(message)
 		return
 	}
 
-	loggableStrings := &ResponseLoggableStrings{}
-	loggableStrings, err = response.GetLoggableStrings()
+	traceMessage, err := response.TraceMessage()
 	if err != nil {
 		message += fmt.Sprintf("content-type='%s', err=%+v", bodyContentTypeString, err)
 		logFunc(message)
 		return
 	}
 
-	message += fmt.Sprintf(", status=%s, content-type='%s', body='%s'",
-		loggableStrings.StatusCode, bodyContentTypeString, loggableStrings.Body)
+	message += fmt.Sprintf("\nBody: %s", traceMessage)
 	logFunc(message)
 }
 

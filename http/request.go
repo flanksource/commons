@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
@@ -199,24 +200,22 @@ type RequestLoggableStrings struct {
 
 // GetLoggableStrings returns the Headers and Body of the response as strings that can be logged while
 // maintaining the request body's readability
-func (req *Request) GetLoggableStrings() (*RequestLoggableStrings, error) {
-	if req == nil {
-		return nil, errors.New("cannot read request information from nil request")
+func (r *Request) GetLoggableStrings() (string, error) {
+	if r == nil {
+		return "", errors.New("cannot read request information from nil request")
 	}
 
-	loggableStrings := &RequestLoggableStrings{}
 	buf := new(bytes.Buffer)
-	_, err := buf.ReadFrom(req.body)
+	_, err := buf.ReadFrom(r.body)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Failed to read request body: err=%+v", err))
+		return "", errors.New(fmt.Sprintf("Failed to read request body: err=%+v", err))
 	}
-	err = req.body.Close()
+	err = r.body.Close()
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Failed to close request body ReadCloser: err=%+v", err))
+		return "", errors.New(fmt.Sprintf("Failed to close request body ReadCloser: err=%+v", err))
 	}
+	bodyString := buf
+	r.body = ioutil.NopCloser(bufio.NewReader(buf))
 
-	bodyString := buf.String()
-	loggableStrings.Body = bodyString
-	req.body = ioutil.NopCloser(strings.NewReader(bodyString))
-	return loggableStrings, nil
+	return fmt.Sprintf("body=<%s>", bodyString), nil
 }

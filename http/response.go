@@ -3,12 +3,10 @@ package http
 import (
 	"bytes"
 	"fmt"
+	"github.com/pkg/errors"
 	"io"
 	"io/ioutil"
 	"net/http"
-	"strings"
-
-	"github.com/pkg/errors"
 )
 
 // Response embeds the stdlib http.Response type and extends its functionality
@@ -73,29 +71,19 @@ func (resp *Response) AsBytes() ([]byte, error) {
 	return body, nil
 }
 
-type ResponseLoggableStrings struct {
-	Headers    string
-	StatusCode string
-	Body       string
-}
-
-// GetLoggableStrings returns the Headers, StatusCode and Body of the response as strings that can be logged while
+// TraceMessage returns the Headers, StatusCode and Body of the response as strings that can be logged while
 // maintaining the response body's readability
-func (resp *Response) GetLoggableStrings() (*ResponseLoggableStrings, error) {
+func (resp *Response) TraceMessage() (string, error) {
 	if resp == nil {
-		return nil, errors.New("cannot read response information from nil response")
+		return "", errors.New("cannot read response information from nil response")
 	}
-
-	loggableStrings := new(ResponseLoggableStrings)
-	loggableStrings.StatusCode = fmt.Sprintf("%d", resp.StatusCode)
-
+	traceMessage := fmt.Sprintf("status=%d, content-type=<%s>",
+		resp.StatusCode, resp.Header.Get(contentType))
 	buf := new(bytes.Buffer)
 	_, readErr := buf.ReadFrom(resp.Body)
 	readErr = resp.Body.Close()
 	if readErr == nil {
-		loggableStrings.Body = buf.String()
-		resp.Body = ioutil.NopCloser(strings.NewReader(loggableStrings.Body))
+		traceMessage += fmt.Sprintf("\n%+v", buf)
 	}
-	loggableStrings.Headers = fmt.Sprintf("%+v", resp.Header)
-	return loggableStrings, nil
+	return traceMessage, nil
 }
