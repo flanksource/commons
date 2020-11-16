@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"html/template"
+	"math/big"
 	"os"
 	"strings"
 	"time"
@@ -41,38 +42,55 @@ func RandomKey(length int) string {
 	return hex.EncodeToString(bytes)
 }
 
-// randomChars defines the alphanumeric characters that can be part of a random string
-const randomChars = "0123456789abcdefghijklmnopqrstuvwxyz"
+// RandomStringGenerator allows generating a random string of characters from a chosen alphabet.
+type RandomStringGenerator struct {
+	randReader *bufio.Reader
+	alphabet   []rune
+}
 
-// RandomString returns a random string consisting of the characters in
-// randomChars, with the length customized by the parameter
-func RandomString(length int) string {
-	// len("0123456789abcdefghijklmnopqrstuvwxyz") = 36 which doesn't evenly divide
-	// the possible values of a byte: 256 mod 36 = 4. Discard any random bytes we
-	// read that are >= 252 so the bytes we evenly divide the character set.
-	const maxByteValue = 252
+// NewRandomStringGenerator returns a new RandomStringGenerator using the specified alphabet.
+func NewRandomStringGenerator(alphabet string) (sg *RandomStringGenerator) {
+	return &RandomStringGenerator{
+		randReader: bufio.NewReader(rand.Reader),
+		alphabet:   []rune(alphabet),
+	}
+}
 
-	var (
-		b     byte
-		err   error
-		token = make([]byte, length)
-	)
-
-	reader := bufio.NewReaderSize(rand.Reader, length*2)
-	for i := range token {
-		for {
-			if b, err = reader.ReadByte(); err != nil {
-				return ""
-			}
-			if b < maxByteValue {
-				break
-			}
-		}
-
-		token[i] = randomChars[int(b)%len(randomChars)]
+func (rsg *RandomStringGenerator) Read(result []byte) (n int, err error) {
+	r, err := rsg.RandomString(len(result))
+	if err != nil {
+		return 0, err
 	}
 
-	return string(token)
+	for k := range result {
+		result[k] = r[k]
+	}
+	return len(result), nil
+}
+
+// RandomString returns a randomly generated string using the prespecified alphabet.
+func (rsg *RandomStringGenerator) RandomString(length int) (result string, err error) {
+	tempResult := make([]rune, length)
+	for k := range tempResult {
+		i, err := rand.Int(rsg.randReader, big.NewInt(int64(len(rsg.alphabet))))
+		if err != nil {
+			return "", err
+		}
+		tempResult[k] = rsg.alphabet[int(i.Int64())]
+	}
+	return string(tempResult), nil
+}
+
+// randomChars defines the alphabet for DefaultStringGenerator
+const randomChars = "0123456789abcdefghijklmnopqrstuvwxyz"
+
+// DefaultRandomStringGenerator is a default instance of RandomStringGenerator using the following alphabet: "0123456789abcdefghijklmnopqrstuvwxyz"
+var DefaultRandomStringGenerator = NewRandomStringGenerator(randomChars)
+
+// RandomString returns a random string generated using DefaultStringGenerator. Shorthand for "DefaultStringGenerator.RandomString"
+func RandomString(length int) string {
+	result, _ := DefaultRandomStringGenerator.RandomString(length)
+	return result
 }
 
 // Interpolate templatises the string using the vars as the context
