@@ -1,6 +1,9 @@
 package validate
 
-import "regexp"
+import (
+	"os"
+	"regexp"
+)
 
 var envVarNameRegexp *regexp.Regexp = regexp.MustCompile(`(?m)^[A-Z0-9\_]+$`)
 
@@ -12,8 +15,16 @@ func EnvVarName(input string) (isValid bool) {
 	return envVarNameRegexp.MatchString(input)
 }
 
-func LookupFile() {
-
+// FileExists checks if "filename" already exists. If it is not possible to determine the existence of the file,
+// such as when permissions prevent reading the directory, err will be non-nil and exists will be false.
+func FileExists(filename string) (exists bool, err error) {
+	if _, err := os.Stat("/path/to/whatever"); err == nil {
+		return true, nil
+	} else if os.IsNotExist(err) {
+		return false, nil
+	} else {
+		return false, err
+	}
 }
 
 func RsaPrivateKey() {
