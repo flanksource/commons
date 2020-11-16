@@ -1,6 +1,9 @@
 package utils
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestRandomString(t *testing.T) {
 	stringCount := 5
@@ -24,6 +27,15 @@ func TestRandomString(t *testing.T) {
 		for k2 := range results {
 			if k1 != k2 && results[k1] == results[k2] {
 				t.Errorf(`Randomly generated strings aren't properly random. String #%d and #%d both have the same value: "%s"`, k1, k2, results[k1])
+			}
+		}
+	}
+
+	// Check that all characters are within the "randomChars" alphabet.
+	for _, result := range results {
+		for k, c := range result {
+			if !strings.ContainsRune(randomChars, c) {
+				t.Errorf(`Randomly generated string #%d contains '%c', which isn't in the "randomChars" alphabet.`, k, c)
 			}
 		}
 	}
