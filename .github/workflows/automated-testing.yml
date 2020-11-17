@@ -1,0 +1,10 @@
+name: Automated Testing
+
+on:
+  [pull_request]
+jobs:
+  go-test:
+    runs-on: golang:latest
+    steps:
+    - run: |
+        make test
