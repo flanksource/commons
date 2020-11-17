@@ -4,7 +4,8 @@ on:
   [pull_request]
 jobs:
   go-test:
-    runs-on: golang:latest
+    runs-on: ubuntu-latest
+    uses: docker://golang:latest
     steps:
     - run: |
         make test
