@@ -2,13 +2,19 @@ package deps
 
 import (
 	"fmt"
-	"github.com/flanksource/commons/files"
-	"github.com/flanksource/commons/utils"
+	"os"
 	"runtime"
 	"testing"
+
+	"github.com/flanksource/commons/files"
+	"github.com/flanksource/commons/utils"
 )
 
 func TestInstallDependency(t *testing.T) {
+	err := os.MkdirAll("/tmp/.bin", os.ModeDir)
+	if err != nil {
+		t.Error("Failed to create test directory.")
+	}
 	for name, dependency := range dependencies {
 		InstallDependency(name, dependency.Version, "/tmp/.bin")
 		customName := dependencies[name].BinaryName
