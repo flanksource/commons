@@ -6,7 +6,6 @@ jobs:
   go-test:
     runs-on: ubuntu-latest
     steps:
-    - name: go test
-      uses: docker://golang:latest
-      run: |
-        make test
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v2
+      - run: make test
