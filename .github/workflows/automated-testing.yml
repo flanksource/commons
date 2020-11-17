@@ -5,7 +5,8 @@ on:
 jobs:
   go-test:
     runs-on: ubuntu-latest
-    uses: docker://golang:latest
     steps:
-    - run: |
+    - name: go test
+      uses: docker://golang:latest
+      run: |
         make test
