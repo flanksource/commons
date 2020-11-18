@@ -18,7 +18,7 @@ func EnvVarName(input string) (isValid bool) {
 // FileExists checks if "filename" already exists. If it is not possible to determine the existence of the file,
 // such as when permissions prevent reading the directory, err will be non-nil and exists will be false.
 func FileExists(filename string) (exists bool, err error) {
-	if _, err := os.Stat("/path/to/whatever"); err == nil {
+	if _, err := os.Stat(filename); err == nil {
 		return true, nil
 	} else if os.IsNotExist(err) {
 		return false, nil
