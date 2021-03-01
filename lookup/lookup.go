@@ -273,6 +273,30 @@ func FieldByTagName(ty reflect.Type, key string) (*reflect.StructField, bool) {
 				}
 			}
 		}
+		for i := 0; i < ty.NumField(); i++ {
+			field := ty.Field(i)
+			if field.Anonymous {
+				if yaml, ok := field.Tag.Lookup("yaml"); ok {
+					parts := strings.Split(yaml, ",")
+					if parts[0] == "" || len(parts) > 1 && parts[1] == "inline" {
+						f, ok := FieldByTagName(field.Type, key)
+						if ok {
+							return f, true
+						}
+					}
+				}
+
+				if json, ok := field.Tag.Lookup("json"); ok {
+					parts := strings.Split(json, ",")
+					if parts[0] == "" || len(parts) > 1 && parts[1] == "inline" {
+						f, ok := FieldByTagName(field.Type, key)
+						if ok {
+							return f, true
+						}
+					}
+				}
+			}
+		}
 	}
 	return nil, false
 }
