@@ -15,5 +15,6 @@ require (
 	github.com/vbauerster/mpb/v5 v5.0.3
 	go.uber.org/zap v1.15.0
 	golang.org/x/crypto v0.0.0-20200317142112-1b76d66859c6
+	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15
 	gopkg.in/flanksource/yaml.v3 v3.1.0
 )
