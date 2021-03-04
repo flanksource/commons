@@ -3,6 +3,8 @@ package console
 import (
 	"fmt"
 	"io"
+
+	"github.com/flanksource/commons/logger"
 )
 
 // TestResults contains the status of testing
@@ -106,6 +108,13 @@ var levels = map[string]string{
 }
 
 func (c *TestResults) log(level string, s string, args ...interface{}) {
+	logger.Infof("trace=%v debug=%s", logger.IsDebugEnabled, logger.IsTraceEnabled)
+	if !logger.IsTraceEnabled() && level == "TRACE" {
+		return
+	}
+	if !logger.IsDebugEnabled() && level == "DEBUG" {
+		return
+	}
 	fmt.Fprintf(c.Writer, levels[level]+s+"\n", args...)
 }
 func (c *TestResults) Printf(s string, args ...interface{}) {
@@ -125,6 +134,14 @@ func (c *TestResults) Warnf(s string, args ...interface{}) {
 }
 func (c *TestResults) Tracef(s string, args ...interface{}) {
 	c.log("TRACE", s, args...)
+}
+
+func (c *TestResults) Assert(name string, expect, actual interface{}) {
+	if expect == actual {
+		c.Passf(name, name)
+	} else {
+		c.Failf(name, "expected \"%v\", got \"%vs\"", expect, actual)
+	}
 }
 
 // Passf reports a new passing test

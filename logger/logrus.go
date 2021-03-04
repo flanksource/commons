@@ -11,6 +11,11 @@ type logrusLogger struct {
 	*logrusapi.Entry
 }
 
+type logrusVerbose struct {
+	Level logrusapi.Level
+	*logrusapi.Entry
+}
+
 func NewLogrusLogger(existing logrusapi.Ext1FieldLogger) Logger {
 	switch existing.(type) {
 	case *logrusapi.Entry:
@@ -19,6 +24,34 @@ func NewLogrusLogger(existing logrusapi.Ext1FieldLogger) Logger {
 		return logrusLogger{Entry: logrusapi.NewEntry(existing.(*logrusapi.Logger))}
 	default:
 		return logrusLogger{Entry: logrusapi.NewEntry(logrusapi.StandardLogger())}
+	}
+}
+
+func (v logrusVerbose) Info(args ...interface{}) {
+	v.Log(v.Level, args...)
+}
+
+func (v logrusVerbose) Infof(format string, args ...interface{}) {
+	v.Logf(v.Level, format, args...)
+}
+
+func (v logrusVerbose) Infoln(args ...interface{}) {
+	v.Logln(v.Level, args...)
+}
+
+func (logrus logrusLogger) V(level int) Verbose {
+	var l logrusapi.Level
+	switch level {
+	case 0:
+		l = logrusapi.InfoLevel
+	case 1:
+		l = logrusapi.DebugLevel
+	default:
+		l = logrusapi.TraceLevel
+	}
+	return logrusVerbose{
+		Entry: logrus.Entry,
+		Level: l,
 	}
 }
 

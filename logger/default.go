@@ -60,6 +60,9 @@ func Tracef(format string, args ...interface{}) {
 func Fatalf(format string, args ...interface{}) {
 	currentLogger.Fatalf(format, args...)
 }
+func V(level int) Verbose {
+	return currentLogger.V(level)
+}
 
 func IsTraceEnabled() bool {
 	return currentLogger.IsTraceEnabled()

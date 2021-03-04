@@ -7,28 +7,82 @@ import (
 )
 
 var (
-	reset        = "\x1b[0m"
-	red          = "\x1b[31m"
-	yellow       = "\x1b[33m"
-	gray         = "\x1b[37m"
-	lightRed     = "\x1b[31;1m"
-	green        = "\x1b[32m"
-	lightGreen   = "\x1b[32;1m"
-	lightBlue    = "\x1b[34;1m"
-	magenta      = "\x1b[35m"
-	lightMagenta = "\x1b[35;1m"
-	cyan         = "\x1b[36m"
-	lightCyan    = "\x1b[36;1m"
-	white        = "\x1b[37;1m"
-	bold         = "\x1b[1m"
-	boldOff      = "\x1b[22m"
-	darkWhite    = "\x1b[38;5;244m"
+	Light       = ";1m"
+	Bright      = ";40m"
+	Normal      = "m"
+	Reset       = "\x1b[0m"
+	LightYellow = yellow + Light
+	red         = "\x1b[31"
+	Red         = red + Normal
+
+	yellow     = "\x1b[33"
+	Yellow     = yellow + Normal
+	gray       = "\x1b[37"
+	Gray       = gray + Normal
+	LightGray  = gray + Light
+	BrightGray = gray + Bright
+	LightRed   = red + Light
+	green      = "\x1b[32"
+	Green      = green + Normal
+	LightGreen = green + Light
+
+	BrightYellow = yellow + Bright
+
+	blue          = "\x1b[34"
+	Blue          = blue + Normal
+	LightBlue     = blue + Light
+	magenta       = "\x1b[35"
+	Magenta       = magenta + Normal
+	LightMagenta  = magenta + Light
+	BrightMagenta = magenta + Bright
+	cyan          = "\x1b[36"
+	Cyan          = cyan + Normal
+	LightCyan     = cyan + Light
+	BrightCyan    = cyan + Bright
+	white         = "\x1b[38"
+	White         = white + Light
+	BoldOn        = "\x1b[1m"
+	BoldOff       = "\x1b[22m"
+	DarkWhite     = "\x1b[38;5;244m"
+	BrightWhite   = "\x1b[38;5;244m"
 )
+
+// DarkWhitef prints and formats msg as dark white
+func DarkWhitef(msg string, args ...interface{}) string {
+	if is.TTY() {
+		return DarkWhite + fmt.Sprintf(msg, args...) + Reset
+	}
+	return fmt.Sprintf(msg, args...)
+}
+
+// DarkWhitef prints and formats msg as dark white
+func LightWhitef(msg string, args ...interface{}) string {
+	if is.TTY() {
+		return white + Light + fmt.Sprintf(msg, args...) + Reset
+	}
+	return fmt.Sprintf(msg, args...)
+}
+
+// DarkWhitef prints and formats msg as dark white
+func BrightWhitef(msg string, args ...interface{}) string {
+	if is.TTY() {
+		return white + Bright + fmt.Sprintf(msg, args...) + Reset
+	}
+	return fmt.Sprintf(msg, args...)
+}
 
 // DarkWhitef prints and formats msg as dark white
 func DarkF(msg string, args ...interface{}) string {
 	if is.TTY() {
-		return darkWhite + fmt.Sprintf(msg, args...) + reset
+		return DarkWhite + fmt.Sprintf(msg, args...) + Reset
+	}
+	return fmt.Sprintf(msg, args...)
+}
+
+// DarkWhitef prints and formats msg as dark white
+func BrightF(msg string, args ...interface{}) string {
+	if is.TTY() {
+		return DarkWhite + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
 }
@@ -36,7 +90,7 @@ func DarkF(msg string, args ...interface{}) string {
 // Redf prints and formats msg as red text
 func Redf(msg string, args ...interface{}) string {
 	if is.TTY() {
-		return red + fmt.Sprintf(msg, args...) + reset
+		return Red + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
 }
@@ -44,7 +98,7 @@ func Redf(msg string, args ...interface{}) string {
 // LightRedf prints and formats msg as red text
 func LightRedf(msg string, args ...interface{}) string {
 	if is.TTY() {
-		return lightRed + fmt.Sprintf(msg, args...) + reset
+		return LightRed + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
 }
@@ -52,7 +106,23 @@ func LightRedf(msg string, args ...interface{}) string {
 // Yellowf prints and formats msg as red text
 func Yellowf(msg string, args ...interface{}) string {
 	if is.TTY() {
-		return yellow + fmt.Sprintf(msg, args...) + reset
+		return Yellow + fmt.Sprintf(msg, args...) + Reset
+	}
+	return fmt.Sprintf(msg, args...)
+}
+
+// BrightYellowf prints and formats msg as red text
+func BrightYellowf(msg string, args ...interface{}) string {
+	if is.TTY() {
+		return BrightYellow + fmt.Sprintf(msg, args...) + Reset
+	}
+	return fmt.Sprintf(msg, args...)
+}
+
+// LightYellowf prints and formats msg as red text
+func LightYellowf(msg string, args ...interface{}) string {
+	if is.TTY() {
+		return LightYellow + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
 }
@@ -60,7 +130,23 @@ func Yellowf(msg string, args ...interface{}) string {
 // Grayf prints and formats msg as red text
 func Grayf(msg string, args ...interface{}) string {
 	if is.TTY() {
-		return gray + fmt.Sprintf(msg, args...) + reset
+		return Gray + fmt.Sprintf(msg, args...) + Reset
+	}
+	return fmt.Sprintf(msg, args...)
+}
+
+// BrightGrayf prints and formats msg as red text
+func BrightGrayf(msg string, args ...interface{}) string {
+	if is.TTY() {
+		return BrightGray + fmt.Sprintf(msg, args...) + Reset
+	}
+	return fmt.Sprintf(msg, args...)
+}
+
+// LightGrayf prints and formats msg as red text
+func LightGrayf(msg string, args ...interface{}) string {
+	if is.TTY() {
+		return LightGray + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
 }
@@ -68,7 +154,23 @@ func Grayf(msg string, args ...interface{}) string {
 // Bluef prints and formats msg as red text
 func Bluef(msg string, args ...interface{}) string {
 	if is.TTY() {
-		return lightBlue + fmt.Sprintf(msg, args...) + reset
+		return Blue + fmt.Sprintf(msg, args...) + Reset
+	}
+	return fmt.Sprintf(msg, args...)
+}
+
+// LightBluef prints and formats msg as red text
+func LightBluef(msg string, args ...interface{}) string {
+	if is.TTY() {
+		return LightBlue + fmt.Sprintf(msg, args...) + Reset
+	}
+	return fmt.Sprintf(msg, args...)
+}
+
+// BrightBluef prints and formats msg as red text
+func BrightBluef(msg string, args ...interface{}) string {
+	if is.TTY() {
+		return blue + Light + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
 }
@@ -76,15 +178,15 @@ func Bluef(msg string, args ...interface{}) string {
 // Greenf prints and formats msg as green text
 func Greenf(msg string, args ...interface{}) string {
 	if is.TTY() {
-		return green + fmt.Sprintf(msg, args...) + reset
+		return Green + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
 }
 
-// Magentaf prints and formats msg as green text
-func Magentaf(msg string, args ...interface{}) string {
+// BrightGreenf prints and formats msg as light green text
+func BrightGreenf(msg string, args ...interface{}) string {
 	if is.TTY() {
-		return magenta + fmt.Sprintf(msg, args...) + reset
+		return green + Bright + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
 }
@@ -92,7 +194,7 @@ func Magentaf(msg string, args ...interface{}) string {
 // LightGreenf prints and formats msg as light green text
 func LightGreenf(msg string, args ...interface{}) string {
 	if is.TTY() {
-		return lightGreen + fmt.Sprintf(msg, args...) + reset
+		return green + Light + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
 }
@@ -100,7 +202,47 @@ func LightGreenf(msg string, args ...interface{}) string {
 // LightCyanf prints and formats msg as light cyan text
 func LightCyanf(msg string, args ...interface{}) string {
 	if is.TTY() {
-		return lightCyan + fmt.Sprintf(msg, args...) + reset
+		return LightCyan + fmt.Sprintf(msg, args...) + Reset
+	}
+	return fmt.Sprintf(msg, args...)
+}
+
+// LightCyanf prints and formats msg as light cyan text
+func Cyanf(msg string, args ...interface{}) string {
+	if is.TTY() {
+		return Cyan + fmt.Sprintf(msg, args...) + Reset
+	}
+	return fmt.Sprintf(msg, args...)
+}
+
+// LightCyanf prints and formats msg as light cyan text
+func BrightCyanf(msg string, args ...interface{}) string {
+	if is.TTY() {
+		return BrightCyan + fmt.Sprintf(msg, args...) + Reset
+	}
+	return fmt.Sprintf(msg, args...)
+}
+
+// Magentaf prints and formats msg as green text
+func Magentaf(msg string, args ...interface{}) string {
+	if is.TTY() {
+		return Magenta + fmt.Sprintf(msg, args...) + Reset
+	}
+	return fmt.Sprintf(msg, args...)
+}
+
+// Magentaf prints and formats msg as green text
+func LightMagentaf(msg string, args ...interface{}) string {
+	if is.TTY() {
+		return LightMagenta + fmt.Sprintf(msg, args...) + Reset
+	}
+	return fmt.Sprintf(msg, args...)
+}
+
+// Magentaf prints and formats msg as green text
+func BrightMagentaf(msg string, args ...interface{}) string {
+	if is.TTY() {
+		return BrightMagenta + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
 }
