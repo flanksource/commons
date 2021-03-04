@@ -21,6 +21,11 @@ type ZapLogger struct {
 	StackTraceLevel *zap.AtomicLevel
 }
 
+type zapVerbose struct {
+	*ZapLogger
+	level int
+}
+
 func GetZapLogger() *ZapLogger {
 	switch currentLogger.(type) {
 	case ZapLogger:
@@ -101,6 +106,43 @@ func (zap ZapLogger) Tracef(format string, args ...interface{}) {
 
 func (zap ZapLogger) Fatalf(format string, args ...interface{}) {
 	zap.Logger.Fatalf(format, args...)
+}
+
+func (v zapVerbose) Info(args ...interface{}) {
+	switch v.level {
+	case 0:
+		v.Logger.Info(args...)
+
+	default:
+		v.Logger.Debug(args...)
+	}
+}
+
+func (v zapVerbose) Infof(format string, args ...interface{}) {
+	switch v.level {
+	case 0:
+		v.Logger.Infof(format, args...)
+
+	default:
+		v.Logger.Debugf(format, args...)
+	}
+}
+
+func (v zapVerbose) Infoln(args ...interface{}) {
+	switch v.level {
+	case 0:
+		v.Logger.Info(args...)
+
+	default:
+		v.Logger.Info(args...)
+	}
+}
+
+func (zap ZapLogger) V(level int) Verbose {
+	return &zapVerbose{
+		ZapLogger: &zap,
+		level:     level,
+	}
 }
 
 func (zap ZapLogger) SetLogLevel(level int) {

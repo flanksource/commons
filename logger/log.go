@@ -11,4 +11,11 @@ type Logger interface {
 	IsTraceEnabled() bool
 	IsDebugEnabled() bool
 	SetLogLevel(level int)
+	V(level int) Verbose
+}
+
+type Verbose interface {
+	Info(args ...interface{})
+	Infof(format string, args ...interface{})
+	Infoln(args ...interface{})
 }
