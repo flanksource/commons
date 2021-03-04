@@ -136,6 +136,14 @@ func (c *TestResults) Tracef(s string, args ...interface{}) {
 	c.log("TRACE", s, args...)
 }
 
+func (c *TestResults) Assert(name string, expect, actual interface{}) {
+	if expect == actual {
+		c.Passf(name, name)
+	} else {
+		c.Failf(name, "expected \"%v\", got \"%vs\"", expect, actual)
+	}
+}
+
 // Passf reports a new passing test
 func (c *TestResults) Passf(name, msg string, args ...interface{}) {
 	c.Tests = append(c.Tests, JUnitTestCase{
