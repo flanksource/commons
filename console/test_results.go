@@ -108,7 +108,6 @@ var levels = map[string]string{
 }
 
 func (c *TestResults) log(level string, s string, args ...interface{}) {
-	logger.Infof("trace=%v debug=%s", logger.IsDebugEnabled, logger.IsTraceEnabled)
 	if !logger.IsTraceEnabled() && level == "TRACE" {
 		return
 	}
