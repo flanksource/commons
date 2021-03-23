@@ -47,7 +47,7 @@ const (
 //	K: Kilobyte
 //	B: Byte
 // The unit that results in the smallest number greater than or equal to 1 is always chosen.
-func HumanByteSize(bytes uint64) string {
+func HumanizeBytes(bytes uint64) string {
 	unit := ""
 	value := float64(bytes)
 

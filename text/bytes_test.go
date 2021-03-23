@@ -21,7 +21,7 @@ func TestByteSizeFormating(t *testing.T) {
 		{10 * 1024 * 1024 * 1024 * 1024 * 1024 * 1024, "10E"},
 	}
 	for _, tc := range tests {
-		if HumanByteSize(tc.Bytes) != tc.Humanized {
+		if HumanizeBytes(tc.Bytes) != tc.Humanized {
 			t.Errorf("Failed for test case %v ", tc)
 		}
 	}
