@@ -2,7 +2,6 @@ package logger
 
 import (
 	"fmt"
-
 	"strings"
 
 	"github.com/kr/pretty"
@@ -13,7 +12,11 @@ import (
 var currentLogger Logger
 
 func init() {
-	currentLogger = NewLogrusLogger(logsrusapi.StandardLogger())
+	logger := logsrusapi.StandardLogger()
+	logger.SetFormatter(&logsrusapi.TextFormatter{
+		DisableQuote: true,
+	})
+	currentLogger = NewLogrusLogger(logger)
 }
 
 func BindFlags(flags *pflag.FlagSet) {
