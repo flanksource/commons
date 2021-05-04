@@ -171,6 +171,11 @@ var dependencies = map[string]Dependency{
 		Macosx:  "https://releases.hashicorp.com/packer/{{.version}}/packer_{{.version}}_darwin_amd64.zip",
 		Linux:   "https://releases.hashicorp.com/packer/{{.version}}/packer_{{.version}}_linux_amd64.zip",
 	},
+	"reg": {
+		Version: "v0.16.1",
+		Linux: "https://github.com/genuinetools/reg/releases/download/{{.version}}/reg-linux-amd64",
+		Macosx: "https://github.com/genuinetools/reg/releases/download/{{.version}}/reg-darwin-amd64",
+	},
 	"mkisofs": Dependency{
 		PreInstalled: []string{"mkisofs", "genisoimage"},
 	},
