@@ -58,65 +58,65 @@ func BinaryWithEnv(name, ver string, binDir string, env map[string]string) Binar
 }
 
 var dependencies = map[string]Dependency{
-	"gomplate": Dependency{
+	"gomplate": {
 		Version: "v3.5.0",
 		Linux:   "https://github.com/hairyhenderson/gomplate/releases/download/{{.version}}/gomplate_linux-amd64",
 		Macosx:  "https://github.com/hairyhenderson/gomplate/releases/download/{{.version}}/gomplate_darwin-amd64",
 	},
-	"konfigadm": Dependency{
+	"konfigadm": {
 		Version: "v0.3.6",
 		Linux:   "https://github.com/moshloop/konfigadm/releases/download/{{.version}}/konfigadm",
 		Macosx:  "https://github.com/moshloop/konfigadm/releases/download/{{.version}}/konfigadm_osx",
 	},
-	"jb": Dependency{
+	"jb": {
 		Version: "v0.1.0",
 		Linux:   "https://github.com/jsonnet-bundler/jsonnet-bundler/releases/download/{{.version}}/jb-linux-amd64",
 		Macosx:  "https://github.com/jsonnet-bundler/jsonnet-bundler/releases/download/{{.version}}/jb-darwin-amd64",
 	},
-	"jsonnet": Dependency{
+	"jsonnet": {
 		Version: "0.14",
 		Docker:  "docker.io/bitnami/jsonnet",
 	},
-	"sonobuoy": Dependency{
+	"sonobuoy": {
 		Version: "0.16.4",
 		Linux:   "https://github.com/heptio/sonobuoy/releases/download/v{{.version}}/sonobuoy_{{.version}}_linux_amd64.tar.gz",
 		Macosx:  "https://github.com/heptio/sonobuoy/releases/download/v{{.version}}/sonobuoy_{{.version}}_darwin_amd64.tar.gz",
 	},
-	"govc": Dependency{
+	"govc": {
 		Version: "v0.20.0",
 		Linux:   "https://github.com/vmware/govmomi/releases/download/{{.version}}/govc_linux_amd64.gz",
 		Macosx:  "https://github.com/vmware/govmomi/releases/download/{{.version}}/govc_darwin_amd64.gz",
 	},
-	"gojsontoyaml": Dependency{
+	"gojsontoyaml": {
 		Version: "0.15.0",
 		Linux:   "github.com/hongkailiu/gojsontoyaml/releases/download/e8bd32d/gojsontoyaml",
 	},
-	"kind": Dependency{
+	"kind": {
 		Version: "0.6.1",
 		Linux:   "https://github.com/kubernetes-sigs/kind/releases/download/v{{.version}}/kind-linux-amd64",
 		Macosx:  "https://github.com/kubernetes-sigs/kind/releases/download/v{{.version}}/kind-darwin-amd64",
 	},
-	"pgo": Dependency{
+	"pgo": {
 		Version: "4.0.1",
 		Linux:   "https://github.com/CrunchyData/postgres-operator/releases/download/{{.version}}/pgo",
 		Macosx:  "https://github.com/CrunchyData/postgres-operator/releases/download/{{.version}}/pgo-mac",
 	},
-	"helm": Dependency{
+	"helm": {
 		Version: "v2.13.0",
 		Linux:   "https://storage.googleapis.com/kubernetes-helm/helm-{{.version}}-linux-amd64.tar.gz",
 		Macosx:  "https://storage.googleapis.com/kubernetes-helm/helm-{{.version}}-darwin-amd64.tar.gz",
 	},
-	"helmfile": Dependency{
+	"helmfile": {
 		Version: "v0.45.3",
 		Macosx:  "https://github.com/roboll/helmfile/releases/download/{{.version}}/helmfile_darwin_amd64",
 		Linux:   "https://github.com/roboll/helmfile/releases/download/{{.version}}/helmfile_linux_amd64",
 	},
-	"aws-iam-authenticator": Dependency{
+	"aws-iam-authenticator": {
 		Version: "1.13.7/2019-06-11",
 		Linux:   "https://amazon-eks.s3-us-west-2.amazonaws.com/{{.version}}/bin/linux/amd64/aws-iam-authenticator",
 		Macosx:  "https://amazon-eks.s3-us-west-2.amazonaws.com/{{.version}}/bin/darwin/amd64/aws-iam-authenticator",
 	},
-	"kubectl": Dependency{
+	"kubectl": {
 		Version: "v1.15.3",
 		Linux:   "https://storage.googleapis.com/kubernetes-release/release/{{.version}}/bin/linux/amd64/kubectl",
 		Macosx:  "https://storage.googleapis.com/kubernetes-release/release/{{.version}}/bin/darwin/amd64/kubectl",
@@ -126,7 +126,7 @@ var dependencies = map[string]Dependency{
 		Linux:   "https://releases.hashicorp.com/terraform/{{.version}}/terraform_{{.version}}_linux_amd64.zip",
 		Macosx:  "https://releases.hashicorp.com/terraform/{{.version}}/terraform_{{.version}}_darwin_amd64.zip",
 	},
-	"eksctl": Dependency{
+	"eksctl": {
 		Version: "0.4.3",
 		Linux:   "https://github.com/weaveworks/eksctl/releases/download/{{.version}}/eksctl_Linux_amd64.tar.gz",
 		Macosx:  "https://github.com/weaveworks/eksctl/releases/download/{{.version}}/eksctl_Darwin_amd64.tar.gz",
@@ -135,60 +135,60 @@ var dependencies = map[string]Dependency{
 	// 	Version: "1.3",
 	// 	Go:      "github.com/hashicorp/go-getter@{{.version}}",
 	// },
-	"expenv": Dependency{
+	"expenv": {
 		Version: "v1.2.0",
 		Macosx:  "https://github.com/TheWolfNL/expenv/releases/download/{{.version}}/expenv_darwin_amd64",
 		Linux:   "https://github.com/TheWolfNL/expenv/releases/download/{{.version}}/expenv_linux_amd64",
 	},
-	"velero": Dependency{
+	"velero": {
 		Version: "v1.2.0",
 		Macosx:  "https://github.com/heptio/velero/releases/download/{{.version}}/velero-{{.version}}-darwin-amd64.tar.gz",
 		Linux:   "https://github.com/heptio/velero/releases/download/{{.version}}/velero-{{.version}}-linux-amd64.tar.gz",
 	},
-	"jx": Dependency{
+	"jx": {
 		Version: "2.0.795",
 		Macosx:  "https://github.com/jenkins-x/jx/releases/download/v2.0.795/jx-darwin-amd64.tar.gz",
 		Linux:   "https://github.com/jenkins-x/jx/releases/download/v2.0.795/jx-linux-amd64.tar.gz",
 	},
-	"ketall": Dependency{
+	"ketall": {
 		Version:    "v1.3.0",
 		Macosx:     "https://github.com/corneliusweig/ketall/releases/download/{{.version}}/get-all-amd64-darwin.tar.gz",
 		Linux:      "https://github.com/corneliusweig/ketall/releases/download/{{.version}}/get-all-amd64-linux.tar.gz",
 		BinaryName: "get-all-{{.platform}}-{{.os}}",
 	},
-	"sops": Dependency{
+	"sops": {
 		Version: "v3.5.0",
 		Linux:   "https://github.com/mozilla/sops/releases/download/{{.version}}/sops-{{.version}}.linux",
 		Macosx:  "https://github.com/mozilla/sops/releases/download/{{.version}}/sops-{{.version}}.darwin",
 	},
-	"kubeseal": Dependency{
+	"kubeseal": {
 		Version: "v0.10.0",
 		Linux:   "https://github.com/bitnami-labs/sealed-secrets/releases/download/{{.version}}/kubeseal-linux-amd64",
 		Macosx:  "https://github.com/bitnami-labs/sealed-secrets/releases/download/{{.version}}/kubeseal-darwin-amd64",
 	},
-	"packer": Dependency{
+	"packer": {
 		Version: "1.5.5",
 		Macosx:  "https://releases.hashicorp.com/packer/{{.version}}/packer_{{.version}}_darwin_amd64.zip",
 		Linux:   "https://releases.hashicorp.com/packer/{{.version}}/packer_{{.version}}_linux_amd64.zip",
 	},
 	"reg": {
 		Version: "v0.16.1",
-		Linux: "https://github.com/genuinetools/reg/releases/download/{{.version}}/reg-linux-amd64",
-		Macosx: "https://github.com/genuinetools/reg/releases/download/{{.version}}/reg-darwin-amd64",
+		Linux:   "https://github.com/genuinetools/reg/releases/download/{{.version}}/reg-linux-amd64",
+		Macosx:  "https://github.com/genuinetools/reg/releases/download/{{.version}}/reg-darwin-amd64",
 	},
-	"mkisofs": Dependency{
+	"mkisofs": {
 		PreInstalled: []string{"mkisofs", "genisoimage"},
 	},
-	"qemu-img": Dependency{
+	"qemu-img": {
 		PreInstalled: []string{"qemu-img"},
 	},
-	"qemu-system": Dependency{
+	"qemu-system": {
 		PreInstalled: []string{"qemu-system-x86_64"},
 	},
-	"docker": Dependency{
+	"docker": {
 		PreInstalled: []string{"docker", "crictl"},
 	},
-	"hdiutil": Dependency{},
+	"hdiutil": {},
 }
 
 // InstallDependency installs a binary to binDir, if ver is nil then the default version is used
