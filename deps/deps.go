@@ -189,6 +189,18 @@ var dependencies = map[string]Dependency{
 		PreInstalled: []string{"docker", "crictl"},
 	},
 	"hdiutil": {},
+	//the kubebuilder testenv binaries are all in the same tarball
+	//installing any one will result in all three being installed (kubectl not listed here due to map collision)
+	"etcd": {
+		Version:      "1.19.2",
+		Linux:        "https://storage.googleapis.com/kubebuilder-tools-{{.version}}-linux-amd64.tar.gz",
+		Macosx:       "https://storage.googleapis.com/kubebuilder-tools-{{.version}}-darwin-amd64.tar.gz",
+	},
+	"kube-apiserver": {
+		Version:      "1.19.2",
+		Linux:        "https://storage.googleapis.com/kubebuilder-tools-{{.version}}-linux-amd64.tar.gz",
+		Macosx:       "https://storage.googleapis.com/kubebuilder-tools-{{.version}}-darwin-amd64.tar.gz",
+	},
 }
 
 // InstallDependency installs a binary to binDir, if ver is nil then the default version is used
