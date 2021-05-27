@@ -261,6 +261,18 @@ func Exists(path string) bool {
 	return err == nil
 }
 
+func IsValidPathType(input string, extensions ...string) bool {
+	if strings.Contains(input, "\n") {
+		return false
+	}
+	for _, ext := range extensions{
+		if strings.Trim(filepath.Ext(input), ".") == ext {
+			return true
+		}
+	}
+	return false
+}
+
 // GetBaseName returns the base part of the filename without the extension
 func GetBaseName(filename string) string {
 	filename = path.Base(filename)
