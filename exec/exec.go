@@ -50,6 +50,7 @@ func ExecfWithEnv(sh string, env map[string]string, args ...interface{}) error {
 
 	cmd.Stderr = io.MultiWriter(&buf, os.Stderr)
 	cmd.Stdout = os.Stdout
+	cmd.Stdin = os.Stdin
 
 	for k, v := range env {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
