@@ -192,14 +192,14 @@ var dependencies = map[string]Dependency{
 	//the kubebuilder testenv binaries are all in the same tarball
 	//installing any one will result in all three being installed (kubectl not listed here due to map collision)
 	"etcd": {
-		Version:      "1.19.2",
-		Linux:        "https://storage.googleapis.com/kubebuilder-tools/kubebuilder-tools-{{.version}}-linux-amd64.tar.gz",
-		Macosx:       "https://storage.googleapis.com/kubebuilder-tools/kubebuilder-tools-{{.version}}-darwin-amd64.tar.gz",
+		Version: "1.19.2",
+		Linux:   "https://storage.googleapis.com/kubebuilder-tools/kubebuilder-tools-{{.version}}-linux-amd64.tar.gz",
+		Macosx:  "https://storage.googleapis.com/kubebuilder-tools/kubebuilder-tools-{{.version}}-darwin-amd64.tar.gz",
 	},
 	"kube-apiserver": {
-		Version:      "1.19.2",
-		Linux:        "https://storage.googleapis.com/kubebuilder-tools/kubebuilder-tools-{{.version}}-linux-amd64.tar.gz",
-		Macosx:       "https://storage.googleapis.com/kubebuilder-tools/kubebuilder-tools-{{.version}}-darwin-amd64.tar.gz",
+		Version: "1.19.2",
+		Linux:   "https://storage.googleapis.com/kubebuilder-tools/kubebuilder-tools-{{.version}}-linux-amd64.tar.gz",
+		Macosx:  "https://storage.googleapis.com/kubebuilder-tools/kubebuilder-tools-{{.version}}-darwin-amd64.tar.gz",
 	},
 }
 

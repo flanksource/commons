@@ -265,7 +265,7 @@ func IsValidPathType(input string, extensions ...string) bool {
 	if strings.Contains(input, "\n") {
 		return false
 	}
-	for _, ext := range extensions{
+	for _, ext := range extensions {
 		if strings.Trim(filepath.Ext(input), ".") == ext {
 			return true
 		}
