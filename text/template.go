@@ -24,11 +24,7 @@ func ToFile(text string, ext string) string {
 func Template(template string, vars interface{}) (string, error) {
 	tpl := gotemplate.New("")
 
-	funcs := gomplate.Funcs(nil)
-	funcs["humanizeBytes"] = HumanizeBytes
-	funcs["humanizeTime"] = humanize.Time
-	funcs["ftoa"] = humanize.Ftoa
-	tpl, err := tpl.Funcs(funcs).Parse(template)
+	tpl, err := tpl.Funcs(GetTemplateFuncs()).Parse(template)
 
 	if err != nil {
 		return "", fmt.Errorf("invalid template %s: %v", strings.Split(template, "\n")[0], err)
@@ -50,11 +46,8 @@ func Template(template string, vars interface{}) (string, error) {
 // TemplateWithDelims templates out a template using gomplate using the given opening and closing Delims
 func TemplateWithDelims(template, openingDelims, closingDelims string, vars interface{}) (string, error) {
 	tpl := gotemplate.New("").Delims(openingDelims, closingDelims)
-	funcs := gomplate.Funcs(nil)
-	funcs["humanizeBytes"] = HumanizeBytes
-	funcs["humanizeTime"] = humanize.Time
-	funcs["ftoa"] = humanize.Ftoa
-	tpl, err := tpl.Funcs(funcs).Parse(template)
+
+	tpl, err := tpl.Funcs(GetTemplateFuncs()).Parse(template)
 
 	if err != nil {
 		return "", fmt.Errorf("invalid template %s: %v", strings.Split(template, "\n")[0], err)
@@ -71,4 +64,12 @@ func TemplateWithDelims(template, openingDelims, closingDelims string, vars inte
 		return "", fmt.Errorf("error executing template %s: %v", strings.Split(template, "\n")[0], err)
 	}
 	return buf.String(), nil
+}
+
+func GetTemplateFuncs() gotemplate.FuncMap {
+	funcs := gomplate.Funcs(nil)
+	funcs["humanizeBytes"] = HumanizeBytes
+	funcs["humanizeTime"] = humanize.Time
+	funcs["ftoa"] = humanize.Ftoa
+	return funcs
 }
