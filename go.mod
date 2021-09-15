@@ -3,6 +3,7 @@ module github.com/flanksource/commons
 go 1.13
 
 require (
+	github.com/dustin/go-humanize v1.0.0 // indirect
 	github.com/hairyhenderson/gomplate/v3 v3.6.0
 	github.com/hashicorp/go-getter v1.4.1
 	github.com/hashicorp/vault/api v1.0.4

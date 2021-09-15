@@ -7,6 +7,7 @@ import (
 	"strings"
 	gotemplate "text/template"
 
+	"github.com/dustin/go-humanize"
 	"github.com/flanksource/commons/files"
 	"github.com/hairyhenderson/gomplate/v3"
 	"gopkg.in/flanksource/yaml.v3"
@@ -23,7 +24,7 @@ func ToFile(text string, ext string) string {
 func Template(template string, vars interface{}) (string, error) {
 	tpl := gotemplate.New("")
 
-	tpl, err := tpl.Funcs(gomplate.Funcs(nil)).Parse(template)
+	tpl, err := tpl.Funcs(GetTemplateFuncs()).Parse(template)
 
 	if err != nil {
 		return "", fmt.Errorf("invalid template %s: %v", strings.Split(template, "\n")[0], err)
@@ -46,7 +47,7 @@ func Template(template string, vars interface{}) (string, error) {
 func TemplateWithDelims(template, openingDelims, closingDelims string, vars interface{}) (string, error) {
 	tpl := gotemplate.New("").Delims(openingDelims, closingDelims)
 
-	tpl, err := tpl.Funcs(gomplate.Funcs(nil)).Parse(template)
+	tpl, err := tpl.Funcs(GetTemplateFuncs()).Parse(template)
 
 	if err != nil {
 		return "", fmt.Errorf("invalid template %s: %v", strings.Split(template, "\n")[0], err)
@@ -63,4 +64,12 @@ func TemplateWithDelims(template, openingDelims, closingDelims string, vars inte
 		return "", fmt.Errorf("error executing template %s: %v", strings.Split(template, "\n")[0], err)
 	}
 	return buf.String(), nil
+}
+
+func GetTemplateFuncs() gotemplate.FuncMap {
+	funcs := gomplate.Funcs(nil)
+	funcs["humanizeBytes"] = HumanizeBytes
+	funcs["humanizeTime"] = humanize.Time
+	funcs["ftoa"] = humanize.Ftoa
+	return funcs
 }
