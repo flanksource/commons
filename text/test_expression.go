@@ -1,6 +1,7 @@
 package text
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/antonmedv/expr"
@@ -10,6 +11,7 @@ func GetTestExpressionEnvs(envs map[string]interface{}) map[string]interface{} {
 	for name, funcMap := range GetTemplateFuncs() {
 		envs[name] = funcMap
 	}
+	envs["Sprintf"] = fmt.Sprintf
 	envs["Now"] = time.Now
 	envs["Date"] = Date
 	envs["Duration"] = Duration
@@ -25,6 +27,7 @@ func GetTestExpressionEnvs(envs map[string]interface{}) map[string]interface{} {
 	envs["BeforeOrEqualDuration"] = BeforeOrEqualDuration
 	envs["AfterDuration"] = AfterDuration
 	envs["AfterOrEqualDuration"] = AfterOrEqualDuration
+	envs["Age"] = Age
 	return envs
 }
 
@@ -81,3 +84,10 @@ func BeforeDuration(a, b time.Duration) bool        { return a < b }
 func BeforeOrEqualDuration(a, b time.Duration) bool { return a <= b }
 func AfterDuration(a, b time.Duration) bool         { return a > b }
 func AfterOrEqualDuration(a, b time.Duration) bool  { return a >= b }
+func Age(s string) time.Duration {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		panic(err)
+	}
+	return time.Since(t)
+}
