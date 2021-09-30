@@ -5,12 +5,14 @@ import (
 	"time"
 
 	"github.com/antonmedv/expr"
+	"github.com/flanksource/commons/duration"
 )
 
 func MakeExpressionEnvs(envs map[string]interface{}) map[string]interface{} {
 	for name, funcMap := range GetTemplateFuncs() {
 		envs[name] = funcMap
 	}
+	envs["humanizeDuration"] = HumanizeDuration
 	envs["Sprintf"] = fmt.Sprintf
 	envs["Now"] = time.Now
 	envs["Date"] = Date
@@ -65,11 +67,11 @@ func Date(s string) time.Time {
 	return t
 }
 func Duration(s string) time.Duration {
-	d, err := time.ParseDuration(s)
+	d, err := duration.ParseDuration(s)
 	if err != nil {
 		panic(err)
 	}
-	return d
+	return time.Duration(d)
 }
 
 func EqualTime(a, b time.Time) bool                 { return a.Equal(b) }
