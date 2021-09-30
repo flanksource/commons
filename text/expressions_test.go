@@ -1,12 +1,25 @@
 package text
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/antonmedv/expr"
 )
 
-var results = map[string]interface{}{
+type Expression string
+type Output interface{}
+
+type Fixtures map[Expression]Output
+
+var fixtures = Fixtures{
+	`Age(result["started_at"]) > Duration("24h")`: true,
+	`humanizeBytes(result["size_string"])`:        "1K",
+	`humanizeBytes(result["size_int"])`:           "1K",
+	`humanizeTime(Date(result["started_at"]))`:    "1 year ago",
+}
+
+var Results = map[string]interface{}{
 	"result": map[string]interface{}{
 		"started_at":  "2020-09-21T10:02:05Z",
 		"size_string": "1024",
@@ -14,74 +27,30 @@ var results = map[string]interface{}{
 	},
 }
 
-func TestExpressionsTimeFunctions(t *testing.T) {
-	var expression = `Age(result["started_at"]) > Duration("24h")`
-	program, err := expr.Compile(expression, GetTestExpresionOptions(results)...)
-	if err != nil {
-		t.Error(err)
-		return
+func (fixtures Fixtures) Evaluate() error {
+	for expression, output := range fixtures {
+		program, err := expr.Compile(string(expression), MakeExpressionOptions(Results)...)
+		if err != nil {
+			return err
+		}
+		result, err := expr.Run(program, MakeExpressionEnvs(Results))
+		if err != nil {
+			return err
+		}
+		if result != output {
+			return fmt.Errorf("expected: %v. Got: %v", output, result)
+		}
 	}
-	output, err := expr.Run(program, GetTestExpressionEnvs(results))
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if output != true {
-		t.Error("Expression should be true")
-		return
-	}
-
+	return nil
 }
 
-func TestExpressionHumanizeBytesString(t *testing.T) {
-	var expression = `humanizeBytes(uint64FromString(result["size_string"]))`
-	program, err := expr.Compile(expression, GetTestExpresionOptions(results)...)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	output, err := expr.Run(program, GetTestExpressionEnvs(results))
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if output != "1K" {
-		t.Errorf("Expected 1K, Got: %v", output)
-		return
-	}
-}
-
-func TestExpressionHumanizeBytesInt(t *testing.T) {
-	var expression = `humanizeBytes(uint64FromInt(result["size_int"]))`
-	program, err := expr.Compile(expression, GetTestExpresionOptions(results)...)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	output, err := expr.Run(program, GetTestExpressionEnvs(results))
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if output != "1K" {
-		t.Errorf("Expected: 1K, Got: %v", output)
-		return
-	}
-}
-
-func TestExpressionHumanizeTime(t *testing.T) {
-	var expression = `humanizeTime(Date(result["started_at"]))`
-	program, err := expr.Compile(expression, GetTestExpresionOptions(results)...)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	output, err := expr.Run(program, GetTestExpressionEnvs(results))
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if output != "1 year ago" {
-		t.Errorf("expected: '1 year ago' but got: %v", output)
+func TestExpressions(t *testing.T) {
+	for expression, output := range fixtures {
+		var fixture Fixtures = map[Expression]Output{}
+		fixture[expression] = output
+		err := fixture.Evaluate()
+		if err != nil {
+			t.Errorf("error evaluating expression %q: %v", expression, err)
+		}
 	}
 }

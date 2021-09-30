@@ -26,6 +26,8 @@ package text
 import (
 	"strconv"
 	"strings"
+
+	"github.com/flanksource/commons/logger"
 )
 
 const (
@@ -47,8 +49,28 @@ const (
 //	K: Kilobyte
 //	B: Byte
 // The unit that results in the smallest number greater than or equal to 1 is always chosen.
-func HumanizeBytes(bytes uint64) string {
+// Input is the size in bytes.
+func HumanizeBytes(size interface{}) string {
 	unit := ""
+	var bytes uint64
+	var err error
+	switch t := size.(type) {
+	case uint:
+		bytes = uint64(t)
+	case uint64:
+		bytes = t
+	case int:
+		bytes = uint64(t)
+	case int64:
+		bytes = uint64(t)
+	case string:
+		bytes, err = strconv.ParseUint(t, 10, 64)
+		if err != nil {
+			logger.Debugf("error converting string to bytes: %v", err)
+			return ""
+		}
+	}
+
 	value := float64(bytes)
 
 	switch {

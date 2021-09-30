@@ -2,18 +2,15 @@ package text
 
 import (
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/antonmedv/expr"
 )
 
-func GetTestExpressionEnvs(envs map[string]interface{}) map[string]interface{} {
+func MakeExpressionEnvs(envs map[string]interface{}) map[string]interface{} {
 	for name, funcMap := range GetTemplateFuncs() {
 		envs[name] = funcMap
 	}
-	envs["uint64FromString"] = Uint64FromString
-	envs["uint64FromInt"] = func(i int) uint64 { return uint64(i) }
 	envs["Sprintf"] = fmt.Sprintf
 	envs["Now"] = time.Now
 	envs["Date"] = Date
@@ -34,9 +31,9 @@ func GetTestExpressionEnvs(envs map[string]interface{}) map[string]interface{} {
 	return envs
 }
 
-func GetTestExpresionOptions(envs map[string]interface{}) []expr.Option {
+func MakeExpressionOptions(envs map[string]interface{}) []expr.Option {
 	// Operators override for date comprising.
-	envs = GetTestExpressionEnvs(envs)
+	envs = MakeExpressionEnvs(envs)
 	options := []expr.Option{
 		expr.Env(envs),
 		// Operators override for date comprising.
@@ -93,12 +90,4 @@ func Age(s string) time.Duration {
 		panic(err)
 	}
 	return time.Since(t)
-}
-
-func Uint64FromString(s string) uint64 {
-	i, err := strconv.ParseUint(s, 10, 64)
-	if err != nil {
-		panic(err)
-	}
-	return i
 }
