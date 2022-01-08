@@ -14,6 +14,7 @@ require (
 	github.com/sirupsen/logrus v1.7.0
 	github.com/smartystreets/assertions v1.0.0 // indirect
 	github.com/spf13/pflag v1.0.5
+	github.com/ulikunitz/xz v0.5.10 // indirect
 	github.com/vbauerster/mpb/v5 v5.0.3
 	go.uber.org/zap v1.15.0
 	golang.org/x/crypto v0.0.0-20200317142112-1b76d66859c6

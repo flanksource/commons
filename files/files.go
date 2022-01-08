@@ -19,6 +19,7 @@ import (
 
 	"github.com/hashicorp/go-getter"
 	log "github.com/sirupsen/logrus"
+	"github.com/ulikunitz/xz"
 )
 
 //GzipFile takes the path to a file and returns a Gzip comppressed byte slice
@@ -60,15 +61,40 @@ func UnarchiveExecutables(src, dest string) error {
 	log.Debugf("Unarchiving %s to %s", src, dest)
 	if strings.HasSuffix(src, ".zip") {
 		return Unzip(src, dest)
-	} else if strings.HasSuffix(src, ".tar") || strings.HasSuffix(src, ".tgz") || strings.HasSuffix(src, ".tar.gz") {
+	} else if strings.HasSuffix(src, ".tar") || strings.HasSuffix(src, ".tgz") || strings.HasSuffix(src, ".tar.gz") || strings.HasSuffix(src, ".tar.xz") {
 		return UntarWithFilter(src, dest, func(header os.FileInfo) string {
 			if fmt.Sprintf("%v", header.Mode()&0100) != "---x------" {
 				return ""
 			}
 			return path.Base(header.Name())
 		})
+	} else if strings.HasSuffix(src, ".xz") {
+		return Unxz(src, dest)
 	}
 	return fmt.Errorf("Unknown format type %s", src)
+}
+
+func Unxz(source, target string) error {
+	reader, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	// decompress buffer and write output to stdout
+	r, err := xz.NewReader(reader)
+	if err != nil {
+		return err
+	}
+	writer, err := os.Create(target)
+	if err != nil {
+		return err
+	}
+	defer writer.Close()
+	if _, err = io.Copy(writer, r); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Ungzip the source file to the target directory
@@ -125,7 +151,6 @@ func Unzip(src, dest string) error {
 
 			err = os.MkdirAll(fdir, f.Mode())
 			if err != nil {
-				log.Fatal(err)
 				return err
 			}
 			f, err := os.OpenFile(
@@ -166,7 +191,13 @@ func UntarWithFilter(tarball, target string, filter FileFilter) error {
 		if err != nil {
 			return err
 		}
+	} else if strings.HasSuffix(tarball, ".tar.xz") {
+		reader, err = xz.NewReader(reader)
+		if err != nil {
+			return err
+		}
 	}
+
 	tarReader := tar.NewReader(reader)
 
 	for {

@@ -27,5 +27,6 @@ func File(path string) bool {
 func Archive(filename string) bool {
 	return strings.HasSuffix(filename, ".zip") ||
 		strings.HasSuffix(filename, ".tar.gz") ||
-		strings.HasSuffix(filename, ".gz")
+		strings.HasSuffix(filename, ".gz") ||
+		strings.HasSuffix(filename, ".xz")
 }
