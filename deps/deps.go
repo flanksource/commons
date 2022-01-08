@@ -21,10 +21,11 @@ import (
 // Dependency is a struct referring to a version and the templated path
 // to download the dependency on the different OS platforms
 type Dependency struct {
-	Version                   string
-	Linux, Macosx, Go, Docker string
-	BinaryName                string
-	PreInstalled              []string
+	Version                            string
+	Linux, Macosx, Windows, Go, Docker string
+	Template                           string
+	BinaryName                         string
+	PreInstalled                       []string
 }
 
 // BinaryFunc is an interface to executing a binary, downloading it necessary
@@ -47,7 +48,12 @@ func BinaryWithEnv(name, ver string, binDir string, env map[string]string) Binar
 	binDir = absolutePath(binDir)
 	return func(msg string, args ...interface{}) error {
 		bin := fmt.Sprintf("%s/%s", binDir, name)
-		InstallDependency(name, ver, binDir)
+		if !files.Exists(binDir) {
+			os.MkdirAll(binDir, 0755)
+		}
+		if err := InstallDependency(name, ver, binDir); err != nil {
+			return err
+		}
 		customName := dependencies[name].BinaryName
 		if customName != "" {
 			templated := utils.Interpolate(customName, map[string]string{"os": runtime.GOOS, "platform": runtime.GOARCH})
@@ -58,10 +64,13 @@ func BinaryWithEnv(name, ver string, binDir string, env map[string]string) Binar
 }
 
 var dependencies = map[string]Dependency{
+	"jq": {
+		Version: "1.6",
+		Linux:   "https://github.com/stedolan/jq/releases/download/jq-{{.version}}/jq-linux64",
+	},
 	"gomplate": {
-		Version: "v3.5.0",
-		Linux:   "https://github.com/hairyhenderson/gomplate/releases/download/{{.version}}/gomplate_linux-amd64",
-		Macosx:  "https://github.com/hairyhenderson/gomplate/releases/download/{{.version}}/gomplate_darwin-amd64",
+		Version:  "v3.5.0",
+		Template: "https://github.com/hairyhenderson/gomplate/releases/download/{{.version}}/gomplate_{{.os}}-{{.platform}}",
 	},
 	"konfigadm": {
 		Version: "v0.3.6",
@@ -69,32 +78,28 @@ var dependencies = map[string]Dependency{
 		Macosx:  "https://github.com/moshloop/konfigadm/releases/download/{{.version}}/konfigadm_osx",
 	},
 	"jb": {
-		Version: "v0.1.0",
-		Linux:   "https://github.com/jsonnet-bundler/jsonnet-bundler/releases/download/{{.version}}/jb-linux-amd64",
-		Macosx:  "https://github.com/jsonnet-bundler/jsonnet-bundler/releases/download/{{.version}}/jb-darwin-amd64",
+		Version:  "v0.1.0",
+		Template: "https://github.com/jsonnet-bundler/jsonnet-bundler/releases/download/{{.version}}/jb-{{.os}}-{{.platform}}",
 	},
 	"jsonnet": {
 		Version: "0.14",
 		Docker:  "docker.io/bitnami/jsonnet",
 	},
 	"sonobuoy": {
-		Version: "0.16.4",
-		Linux:   "https://github.com/heptio/sonobuoy/releases/download/v{{.version}}/sonobuoy_{{.version}}_linux_amd64.tar.gz",
-		Macosx:  "https://github.com/heptio/sonobuoy/releases/download/v{{.version}}/sonobuoy_{{.version}}_darwin_amd64.tar.gz",
+		Version:  "0.55.1",
+		Template: "https://github.com/vmware-tanzu/sonobuoy/releases/download/v{{.version}}/sonobuoy_{{.version}}_{{.os}}_{{.platform}}.tar.gz",
 	},
 	"govc": {
-		Version: "v0.20.0",
-		Linux:   "https://github.com/vmware/govmomi/releases/download/{{.version}}/govc_linux_amd64.gz",
-		Macosx:  "https://github.com/vmware/govmomi/releases/download/{{.version}}/govc_darwin_amd64.gz",
+		Version:  "v0.20.0",
+		Template: "https://github.com/vmware/govmomi/releases/download/{{.version}}/govc_{{.os}}_{{.platform}}.gz",
 	},
 	"gojsontoyaml": {
 		Version: "0.15.0",
 		Linux:   "github.com/hongkailiu/gojsontoyaml/releases/download/e8bd32d/gojsontoyaml",
 	},
 	"kind": {
-		Version: "0.6.1",
-		Linux:   "https://github.com/kubernetes-sigs/kind/releases/download/v{{.version}}/kind-linux-amd64",
-		Macosx:  "https://github.com/kubernetes-sigs/kind/releases/download/v{{.version}}/kind-darwin-amd64",
+		Version:  "0.6.1",
+		Template: "https://github.com/kubernetes-sigs/kind/releases/download/v{{.version}}/kind-{{.os}}-{{.platform}}",
 	},
 	"pgo": {
 		Version: "4.0.1",
@@ -102,79 +107,61 @@ var dependencies = map[string]Dependency{
 		Macosx:  "https://github.com/CrunchyData/postgres-operator/releases/download/{{.version}}/pgo-mac",
 	},
 	"helm": {
-		Version: "v2.13.0",
-		Linux:   "https://storage.googleapis.com/kubernetes-helm/helm-{{.version}}-linux-amd64.tar.gz",
-		Macosx:  "https://storage.googleapis.com/kubernetes-helm/helm-{{.version}}-darwin-amd64.tar.gz",
+		Version:  "v3.7.2",
+		Template: "https://get.helm.sh/helm-{{.version}}-{{.os}}-{{.platform}}.tar.gz",
 	},
 	"helmfile": {
-		Version: "v0.45.3",
-		Macosx:  "https://github.com/roboll/helmfile/releases/download/{{.version}}/helmfile_darwin_amd64",
-		Linux:   "https://github.com/roboll/helmfile/releases/download/{{.version}}/helmfile_linux_amd64",
+		Version:  "v0.45.3",
+		Template: "https://github.com/roboll/helmfile/releases/download/{{.version}}/helmfile_{{.os}}_{{.platform}}",
 	},
 	"aws-iam-authenticator": {
-		Version: "1.13.7/2019-06-11",
-		Linux:   "https://amazon-eks.s3-us-west-2.amazonaws.com/{{.version}}/bin/linux/amd64/aws-iam-authenticator",
-		Macosx:  "https://amazon-eks.s3-us-west-2.amazonaws.com/{{.version}}/bin/darwin/amd64/aws-iam-authenticator",
+		Version:  "1.13.7/2019-06-11",
+		Template: "https://amazon-eks.s3-us-west-2.amazonaws.com/{{.version}}/bin/{{.os}}/{{.platform}}/aws-iam-authenticator",
 	},
 	"kubectl": {
-		Version: "v1.15.3",
-		Linux:   "https://storage.googleapis.com/kubernetes-release/release/{{.version}}/bin/linux/amd64/kubectl",
-		Macosx:  "https://storage.googleapis.com/kubernetes-release/release/{{.version}}/bin/darwin/amd64/kubectl",
+		Version:  "v1.15.3",
+		Template: "https://storage.googleapis.com/kubernetes-release/release/{{.version}}/bin/{{.os}}/{{.platform}}/kubectl",
 	},
-	"terraform": Dependency{
-		Version: "0.12.",
-		Linux:   "https://releases.hashicorp.com/terraform/{{.version}}/terraform_{{.version}}_linux_amd64.zip",
-		Macosx:  "https://releases.hashicorp.com/terraform/{{.version}}/terraform_{{.version}}_darwin_amd64.zip",
+	"terraform": {
+		Version:  "0.12.",
+		Template: "https://releases.hashicorp.com/terraform/{{.version}}/terraform_{{.version}}_{{.os}}_{{.platform}}.zip",
 	},
-	"eksctl": {
-		Version: "0.4.3",
-		Linux:   "https://github.com/weaveworks/eksctl/releases/download/{{.version}}/eksctl_Linux_amd64.tar.gz",
-		Macosx:  "https://github.com/weaveworks/eksctl/releases/download/{{.version}}/eksctl_Darwin_amd64.tar.gz",
+	"go-getter": {
+		Version:  "1.5.10",
+		Template: "https://github.com/hashicorp/go-getter/releases/download/v{{.version}}/go-getter_{{.version}}_{{.os}}_{{.platform}}.zip",
 	},
-	// "go-getter": Dependency{
-	// 	Version: "1.3",
-	// 	Go:      "github.com/hashicorp/go-getter@{{.version}}",
-	// },
 	"expenv": {
-		Version: "v1.2.0",
-		Macosx:  "https://github.com/TheWolfNL/expenv/releases/download/{{.version}}/expenv_darwin_amd64",
-		Linux:   "https://github.com/TheWolfNL/expenv/releases/download/{{.version}}/expenv_linux_amd64",
+		Version:  "v1.2.0",
+		Template: "https://github.com/TheWolfNL/expenv/releases/download/{{.version}}/expenv_{{.os}}_{{.platform}}",
 	},
 	"velero": {
-		Version: "v1.2.0",
-		Macosx:  "https://github.com/heptio/velero/releases/download/{{.version}}/velero-{{.version}}-darwin-amd64.tar.gz",
-		Linux:   "https://github.com/heptio/velero/releases/download/{{.version}}/velero-{{.version}}-linux-amd64.tar.gz",
+		Version:  "v1.2.0",
+		Template: "https://github.com/heptio/velero/releases/download/{{.version}}/velero-{{.version}}-{{.os}}-{{.platform}}.tar.gz",
 	},
 	"jx": {
-		Version: "2.0.795",
-		Macosx:  "https://github.com/jenkins-x/jx/releases/download/v2.0.795/jx-darwin-amd64.tar.gz",
-		Linux:   "https://github.com/jenkins-x/jx/releases/download/v2.0.795/jx-linux-amd64.tar.gz",
+		Version:  "2.0.795",
+		Template: "https://github.com/jenkins-x/jx/releases/download/{{.version}}/jx-{{.os}}-{{.platform}}.tar.gz",
 	},
 	"ketall": {
 		Version:    "v1.3.0",
-		Macosx:     "https://github.com/corneliusweig/ketall/releases/download/{{.version}}/get-all-amd64-darwin.tar.gz",
-		Linux:      "https://github.com/corneliusweig/ketall/releases/download/{{.version}}/get-all-amd64-linux.tar.gz",
+		Template:   "https://github.com/corneliusweig/ketall/releases/download/{{.version}}/get-all-{{.platform}}-{{.os}}.tar.gz",
 		BinaryName: "get-all-{{.platform}}-{{.os}}",
 	},
 	"sops": {
-		Version: "v3.5.0",
-		Linux:   "https://github.com/mozilla/sops/releases/download/{{.version}}/sops-{{.version}}.linux",
-		Macosx:  "https://github.com/mozilla/sops/releases/download/{{.version}}/sops-{{.version}}.darwin",
+		Version:  "v3.5.0",
+		Template: "https://github.com/mozilla/sops/releases/download/{{.version}}/sops-{{.version}}.{{.os}}",
 	},
 	"kubeseal": {
-		Version: "v0.10.0",
-		Linux:   "https://github.com/bitnami-labs/sealed-secrets/releases/download/{{.version}}/kubeseal-linux-amd64",
-		Macosx:  "https://github.com/bitnami-labs/sealed-secrets/releases/download/{{.version}}/kubeseal-darwin-amd64",
+		Version:  "v0.10.0",
+		Template: "https://github.com/bitnami-labs/sealed-secrets/releases/download/{{.version}}/kubeseal-{{.os}}-{{.platform}}",
 	},
 	"packer": {
-		Version: "1.5.5",
-		Macosx:  "https://releases.hashicorp.com/packer/{{.version}}/packer_{{.version}}_darwin_amd64.zip",
-		Linux:   "https://releases.hashicorp.com/packer/{{.version}}/packer_{{.version}}_linux_amd64.zip",
+		Version:  "1.5.5",
+		Template: "https://releases.hashicorp.com/packer/{{.version}}/packer_{{.version}}_{{.os}}_{{.platform}}.zip",
 	},
 	"reg": {
-		Version: "v0.16.1",
-		Linux:   "https://github.com/genuinetools/reg/releases/download/{{.version}}/reg-linux-amd64",
-		Macosx:  "https://github.com/genuinetools/reg/releases/download/{{.version}}/reg-darwin-amd64",
+		Version:  "v0.16.1",
+		Template: "https://github.com/genuinetools/reg/releases/download/{{.version}}/reg-{{.os}}-{{.platform}}",
 	},
 	"mkisofs": {
 		PreInstalled: []string{"mkisofs", "genisoimage"},
@@ -192,14 +179,37 @@ var dependencies = map[string]Dependency{
 	//the kubebuilder testenv binaries are all in the same tarball
 	//installing any one will result in all three being installed (kubectl not listed here due to map collision)
 	"etcd": {
-		Version: "1.19.2",
-		Linux:   "https://storage.googleapis.com/kubebuilder-tools/kubebuilder-tools-{{.version}}-linux-amd64.tar.gz",
-		Macosx:  "https://storage.googleapis.com/kubebuilder-tools/kubebuilder-tools-{{.version}}-darwin-amd64.tar.gz",
+		Version:  "1.19.2",
+		Template: "https://storage.googleapis.com/kubebuilder-tools/kubebuilder-tools-{{.version}}-{{.os}}-{{.platform}}.tar.gz",
 	},
 	"kube-apiserver": {
-		Version: "1.19.2",
-		Linux:   "https://storage.googleapis.com/kubebuilder-tools/kubebuilder-tools-{{.version}}-linux-amd64.tar.gz",
-		Macosx:  "https://storage.googleapis.com/kubebuilder-tools/kubebuilder-tools-{{.version}}-darwin-amd64.tar.gz",
+		Version:  "1.19.2",
+		Template: "https://storage.googleapis.com/kubebuilder-tools/kubebuilder-tools-{{.version}}-{{.os}}-{{.platform}}.tar.gz",
+	},
+	"postgREST": {
+		Version:    "v9.0.0.20211220",
+		Linux:      "https://github.com/PostgREST/postgrest/releases/download/{{.version}}/postgrest-{{.version}}-linux-static-x64.tar.xz",
+		Windows:    "https://github.com/PostgREST/postgrest/releases/download/{{.version}}/postgrest-{{.version}}-windows-x64.zip",
+		Macosx:     "https://github.com/PostgREST/postgrest/releases/download/{{.version}}/postgrest-{{.version}}-macos-x64.tar.xz",
+		BinaryName: "postgrest",
+	},
+	"yq": {
+		Version:  "v4.16.2",
+		Template: "https://github.com/mikefarah/yq/releases/download/{{.version}}/yq_{{.os}}_{{.platform}}",
+	},
+	"karina": {
+		Version:  "v0.60.3",
+		Template: "https://github.com/flanksource/karina/releases/download/{{.version}}/karina_{{.os}}-{{.platform}}",
+	},
+	"canary-checker": {
+		Version:  "v0.38.73",
+		Template: "https://github.com/flanksource/canary-checker/releases/download/{{.version}}/canary-checker_{{.os}}-{{.platform}}",
+	},
+	"eksctl": {
+		Version: "0.77.0",
+		Linux:   "https://github.com/weaveworks/eksctl/releases/download/{{.version}}/eksctl_Linux_amd64.tar.gz",
+		Windows: "https://github.com/weaveworks/eksctl/releases/download/{{.version}}/eksctl_Windows_amd64.tar.gz",
+		Macosx:  "https://github.com/weaveworks/eksctl/releases/download/{{.version}}/eksctl_Darwin_amd64.tar.gz",
 	},
 }
 
@@ -207,11 +217,12 @@ var dependencies = map[string]Dependency{
 func InstallDependency(name, ver string, binDir string) error {
 	dependency, ok := dependencies[name]
 	if !ok {
-		return nil
+		return fmt.Errorf("dependency %s not found", name)
 	}
 	var bin string
+	data := map[string]string{"os": runtime.GOOS, "platform": runtime.GOARCH, "version": ver}
 	if dependency.BinaryName != "" {
-		templated := utils.Interpolate(dependency.BinaryName, map[string]string{"os": runtime.GOOS, "platform": runtime.GOARCH})
+		templated := utils.Interpolate(dependency.BinaryName, data)
 		bin = fmt.Sprintf("%s/%s", binDir, templated)
 	} else {
 		bin = fmt.Sprintf("%s/%s", binDir, name)
@@ -225,9 +236,17 @@ func InstallDependency(name, ver string, binDir string) error {
 		ver = dependency.Version
 	}
 
-	path := dependency.Linux
-	if runtime.GOOS == "darwin" {
+	var path string
+	if runtime.GOOS == "linux" {
+		path = dependency.Linux
+	} else if runtime.GOOS == "darwin" {
 		path = dependency.Macosx
+	} else if runtime.GOOS == "windows" {
+		path = dependency.Windows
+	}
+
+	if path == "" && dependency.Template != "" {
+		path = utils.Interpolate(dependency.Template, data)
 	}
 	if path != "" {
 		url := utils.Interpolate(path, map[string]string{"version": ver})
@@ -288,7 +307,9 @@ func Binary(name, ver string, binDir string) BinaryFunc {
 
 	return func(msg string, args ...interface{}) error {
 		bin := fmt.Sprintf("%s/%s", binDir, name)
-		InstallDependency(name, ver, binDir)
+		if err := InstallDependency(name, ver, binDir); err != nil {
+			return err
+		}
 		return exec.Execf(bin+" "+msg, args...)
 	}
 
@@ -297,7 +318,7 @@ func Binary(name, ver string, binDir string) BinaryFunc {
 // InstallDependencies takes a map of supported dependencies and their version and
 // installs them to the specified binDir
 func InstallDependencies(deps map[string]string, binDir string) error {
-	os.Mkdir(binDir, 0755)
+	_ = os.Mkdir(binDir, 0755)
 	for name, ver := range deps {
 		if err := InstallDependency(name, ver, binDir); err != nil {
 			return err
@@ -310,7 +331,9 @@ func download(url, bin string) error {
 	if is.Archive(url) {
 		tmp, _ := ioutil.TempDir("", "")
 		file := path.Join(tmp, path.Base(url))
-		net.Download(url, file)
+		if err := net.Download(url, file); err != nil {
+			return fmt.Errorf("failed to download %s: %+v", url, err)
+		}
 		defer os.Remove(file)
 		return files.UnarchiveExecutables(file, path.Dir(bin))
 	}
