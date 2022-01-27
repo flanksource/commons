@@ -98,7 +98,7 @@ var dependencies = map[string]Dependency{
 		Linux:   "github.com/hongkailiu/gojsontoyaml/releases/download/e8bd32d/gojsontoyaml",
 	},
 	"kind": {
-		Version:  "0.6.1",
+		Version:  "0.11.1",
 		Template: "https://github.com/kubernetes-sigs/kind/releases/download/v{{.version}}/kind-{{.os}}-{{.platform}}",
 	},
 	"pgo": {
