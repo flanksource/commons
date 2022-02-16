@@ -3,14 +3,15 @@ package text
 import (
 	"bytes"
 	"fmt"
+	"github.com/Masterminds/sprig"
+	"github.com/dustin/go-humanize"
+	"github.com/ghodss/yaml"
 	"io/ioutil"
 	"strings"
 	gotemplate "text/template"
 
-	"github.com/dustin/go-humanize"
 	"github.com/flanksource/commons/files"
 	"github.com/hairyhenderson/gomplate/v3"
-	"gopkg.in/flanksource/yaml.v3"
 )
 
 // ToFile saves text as a temp file with an extension
@@ -71,5 +72,11 @@ func GetTemplateFuncs() gotemplate.FuncMap {
 	funcs["humanizeBytes"] = HumanizeBytes
 	funcs["humanizeTime"] = humanize.Time
 	funcs["ftoa"] = humanize.Ftoa
+	sprigFuncs := sprig.TxtFuncMap()
+	for funcName, _ := range sprigFuncs {
+		if _, ok := funcs[funcName]; !ok {
+			funcs[funcName] = sprigFuncs[funcName]
+		}
+	}
 	return funcs
 }
