@@ -17,8 +17,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/flanksource/commons/logger"
 	"github.com/hashicorp/go-getter"
-	log "github.com/sirupsen/logrus"
 	"github.com/ulikunitz/xz"
 )
 
@@ -47,7 +47,7 @@ func GzipFile(path string) ([]byte, error) {
 
 // Unarchive extracts the contents of an archive to the dest directory
 func Unarchive(src, dest string) error {
-	log.Debugf("Unarchiving %s to %s", src, dest)
+	logger.Debugf("Unarchiving %s to %s", src, dest)
 	if strings.HasSuffix(src, ".zip") {
 		return Unzip(src, dest)
 	} else if strings.HasSuffix(src, ".tar") || strings.HasSuffix(src, ".tgz") || strings.HasSuffix(src, ".tar.gz") {
@@ -58,7 +58,7 @@ func Unarchive(src, dest string) error {
 
 // UnarchiveExecutables extracts all executable's to the dest directory, ignoring any path's specified by the archive
 func UnarchiveExecutables(src, dest string) error {
-	log.Debugf("Unarchiving %s to %s", src, dest)
+	logger.Debugf("Unarchiving %s to %s", src, dest)
 	if strings.HasSuffix(src, ".zip") {
 		return Unzip(src, dest)
 	} else if strings.HasSuffix(src, ".tar") || strings.HasSuffix(src, ".tgz") || strings.HasSuffix(src, ".tar.gz") || strings.HasSuffix(src, ".tar.xz") {
@@ -341,7 +341,7 @@ func Getter(url, dst string) error {
 		Mode:    getter.ClientModeDir,
 		Options: []getter.ClientOption{},
 	}
-	log.Infof("Downloading %s -> %s", url, dst)
+	logger.Infof("Downloading %s -> %s", url, dst)
 	err := client.Get()
 	if stashed {
 		cmd := exec.Command("git", "stash", "pop")
