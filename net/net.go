@@ -10,7 +10,7 @@ import (
 	"os"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/flanksource/commons/logger"
 )
 
 func Ping(host string, port int, timeoutSeconds int) bool {
@@ -49,9 +49,9 @@ func GET(url string, args ...interface{}) ([]byte, error) {
 func Download(url, path string) error {
 	resp, err := http.Get(url)
 	if err != nil {
-		return nil
+		return err
 	}
-	log.Debugf("Download %s [%d]-> %s\n", url, resp.StatusCode, path)
+	logger.Tracef("Download %s [%d]-> %s\n", url, resp.StatusCode, path)
 
 	if resp.StatusCode != 200 {
 		return fmt.Errorf(resp.Status)
