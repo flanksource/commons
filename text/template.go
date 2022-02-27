@@ -3,12 +3,13 @@ package text
 import (
 	"bytes"
 	"fmt"
-	"github.com/Masterminds/sprig"
-	"github.com/dustin/go-humanize"
-	"github.com/ghodss/yaml"
 	"io/ioutil"
 	"strings"
 	gotemplate "text/template"
+
+	"github.com/Masterminds/sprig"
+	"github.com/dustin/go-humanize"
+	"github.com/ghodss/yaml"
 
 	"github.com/flanksource/commons/files"
 	"github.com/hairyhenderson/gomplate/v3"
@@ -71,6 +72,7 @@ func GetTemplateFuncs() gotemplate.FuncMap {
 	funcs := gomplate.Funcs(nil)
 	funcs["humanizeBytes"] = HumanizeBytes
 	funcs["humanizeTime"] = humanize.Time
+	funcs["humanizeDuration"] = HumanizeDuration
 	funcs["ftoa"] = humanize.Ftoa
 	sprigFuncs := sprig.TxtFuncMap()
 	for funcName, _ := range sprigFuncs {
