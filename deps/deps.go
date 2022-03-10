@@ -14,6 +14,7 @@ import (
 	"github.com/flanksource/commons/files"
 	"github.com/flanksource/commons/is"
 	"github.com/flanksource/commons/net"
+	"github.com/flanksource/commons/text"
 	"github.com/flanksource/commons/utils"
 	log "github.com/sirupsen/logrus"
 )
@@ -45,6 +46,7 @@ func absolutePath(dir string) string {
 
 // BinaryWithEnv returns a function that be called to execute the binary
 func BinaryWithEnv(name, ver string, binDir string, env map[string]string) BinaryFunc {
+	name = strings.ToLower(name)
 	binDir = absolutePath(binDir)
 	return func(msg string, args ...interface{}) error {
 		bin := fmt.Sprintf("%s/%s", binDir, name)
@@ -67,15 +69,17 @@ var dependencies = map[string]Dependency{
 	"jq": {
 		Version: "1.6",
 		Linux:   "https://github.com/stedolan/jq/releases/download/jq-{{.version}}/jq-linux64",
+		Windows: "https://github.com/stedolan/jq/releases/download/jq-{{.version}}/jq-win64.exe",
+		Macosx:  "https://github.com/stedolan/jq/releases/download/jq-{{.version}}/jq-osx-amd64",
 	},
 	"gomplate": {
 		Version:  "v3.5.0",
 		Template: "https://github.com/hairyhenderson/gomplate/releases/download/{{.version}}/gomplate_{{.os}}-{{.platform}}",
 	},
 	"konfigadm": {
-		Version: "v0.3.6",
-		Linux:   "https://github.com/moshloop/konfigadm/releases/download/{{.version}}/konfigadm",
-		Macosx:  "https://github.com/moshloop/konfigadm/releases/download/{{.version}}/konfigadm_osx",
+		Version: "v0.12.0",
+		Linux:   "https://github.com/flanksource/konfigadm/releases/download/{{.version}}/konfigadm",
+		Macosx:  "https://github.com/flanksource/konfigadm/releases/download/{{.version}}/konfigadm_osx",
 	},
 	"jb": {
 		Version:  "v0.1.0",
@@ -90,12 +94,16 @@ var dependencies = map[string]Dependency{
 		Template: "https://github.com/vmware-tanzu/sonobuoy/releases/download/v{{.version}}/sonobuoy_{{.version}}_{{.os}}_{{.platform}}.tar.gz",
 	},
 	"govc": {
-		Version:  "v0.20.0",
-		Template: "https://github.com/vmware/govmomi/releases/download/{{.version}}/govc_{{.os}}_{{.platform}}.gz",
+		Version:  "v0.27.4",
+		Template: "https://github.com/vmware/govmomi/releases/download/{{.version}}/govc_{{.os | title}}_{{ ternary \"x86_64\" \"armv6\" (eq .platform \"amd64\")}}.tar.gz",
 	},
 	"gojsontoyaml": {
 		Version: "0.15.0",
-		Linux:   "github.com/hongkailiu/gojsontoyaml/releases/download/e8bd32d/gojsontoyaml",
+		Linux:   "https://github.com/hongkailiu/gojsontoyaml/releases/download/e8bd32d/gojsontoyaml",
+	},
+	"yaml-cli": {
+		Version:  "v1.0.2",
+		Template: "https://github.com/flanksource/yaml-cli/releases/download/{{.version}}/yaml_{{.os}}-{{.platform}}",
 	},
 	"kind": {
 		Version:  "0.6.1",
@@ -123,7 +131,7 @@ var dependencies = map[string]Dependency{
 		Template: "https://storage.googleapis.com/kubernetes-release/release/{{.version}}/bin/{{.os}}/{{.platform}}/kubectl",
 	},
 	"terraform": {
-		Version:  "0.12.",
+		Version:  "1.1.7",
 		Template: "https://releases.hashicorp.com/terraform/{{.version}}/terraform_{{.version}}_{{.os}}_{{.platform}}.zip",
 	},
 	"go-getter": {
@@ -138,12 +146,8 @@ var dependencies = map[string]Dependency{
 		Version:  "v1.2.0",
 		Template: "https://github.com/heptio/velero/releases/download/{{.version}}/velero-{{.version}}-{{.os}}-{{.platform}}.tar.gz",
 	},
-	"jx": {
-		Version:  "2.0.795",
-		Template: "https://github.com/jenkins-x/jx/releases/download/{{.version}}/jx-{{.os}}-{{.platform}}.tar.gz",
-	},
 	"ketall": {
-		Version:    "v1.3.0",
+		Version:    "v1.3.8",
 		Template:   "https://github.com/corneliusweig/ketall/releases/download/{{.version}}/get-all-{{.platform}}-{{.os}}.tar.gz",
 		BinaryName: "get-all-{{.platform}}-{{.os}}",
 	},
@@ -175,7 +179,6 @@ var dependencies = map[string]Dependency{
 	"docker": {
 		PreInstalled: []string{"docker", "crictl"},
 	},
-	"hdiutil": {},
 	//the kubebuilder testenv binaries are all in the same tarball
 	//installing any one will result in all three being installed (kubectl not listed here due to map collision)
 	"etcd": {
@@ -186,7 +189,7 @@ var dependencies = map[string]Dependency{
 		Version:  "1.19.2",
 		Template: "https://storage.googleapis.com/kubebuilder-tools/kubebuilder-tools-{{.version}}-{{.os}}-{{.platform}}.tar.gz",
 	},
-	"postgREST": {
+	"postgrest": {
 		Version:    "v9.0.0.20211220",
 		Linux:      "https://github.com/PostgREST/postgrest/releases/download/{{.version}}/postgrest-{{.version}}-linux-static-x64.tar.xz",
 		Windows:    "https://github.com/PostgREST/postgrest/releases/download/{{.version}}/postgrest-{{.version}}-windows-x64.zip",
@@ -198,15 +201,15 @@ var dependencies = map[string]Dependency{
 		Template: "https://github.com/mikefarah/yq/releases/download/{{.version}}/yq_{{.os}}_{{.platform}}",
 	},
 	"karina": {
-		Version:  "v0.60.3",
+		Version:  "v0.61.0",
 		Template: "https://github.com/flanksource/karina/releases/download/{{.version}}/karina_{{.os}}-{{.platform}}",
 	},
 	"canary-checker": {
-		Version:  "v0.38.73",
-		Template: "https://github.com/flanksource/canary-checker/releases/download/{{.version}}/canary-checker_{{.os}}-{{.platform}}",
+		Version:  "v0.38.74",
+		Template: "https://github.com/flanksource/canary-checker/releases/download/{{.version}}/canary-checker_{{.os}}_{{.platform}}",
 	},
 	"eksctl": {
-		Version: "0.77.0",
+		Version: "v0.86.0",
 		Linux:   "https://github.com/weaveworks/eksctl/releases/download/{{.version}}/eksctl_Linux_amd64.tar.gz",
 		Windows: "https://github.com/weaveworks/eksctl/releases/download/{{.version}}/eksctl_Windows_amd64.tar.gz",
 		Macosx:  "https://github.com/weaveworks/eksctl/releases/download/{{.version}}/eksctl_Darwin_amd64.tar.gz",
@@ -215,52 +218,70 @@ var dependencies = map[string]Dependency{
 
 // InstallDependency installs a binary to binDir, if ver is nil then the default version is used
 func InstallDependency(name, ver string, binDir string) error {
+	name = strings.ToLower(name)
 	dependency, ok := dependencies[name]
 	if !ok {
 		return fmt.Errorf("dependency %s not found", name)
 	}
 	var bin string
+	if len(strings.TrimSpace(ver)) == 0 {
+		ver = dependency.Version
+	}
 	data := map[string]string{"os": runtime.GOOS, "platform": runtime.GOARCH, "version": ver}
 	if dependency.BinaryName != "" {
-		templated := utils.Interpolate(dependency.BinaryName, data)
+		templated, err := text.Template(dependency.BinaryName, data)
+		if err != nil {
+			return err
+		}
 		bin = fmt.Sprintf("%s/%s", binDir, templated)
 	} else {
 		bin = fmt.Sprintf("%s/%s", binDir, name)
 	}
-	if is.File(bin) {
-		log.Tracef("%s already exists", bin)
+
+	finalBin := path.Join(binDir, name)
+
+	if is.File(finalBin) {
+		log.Debugf("%s already exists", finalBin)
 		return nil
 	}
 
-	if ver == "" {
-		ver = dependency.Version
-	}
-
-	var path string
+	var urlPath string
+	var err error
 	if runtime.GOOS == "linux" {
-		path = dependency.Linux
+		urlPath = dependency.Linux
 	} else if runtime.GOOS == "darwin" {
-		path = dependency.Macosx
+		urlPath = dependency.Macosx
 	} else if runtime.GOOS == "windows" {
-		path = dependency.Windows
+		urlPath = dependency.Windows
 	}
 
-	if path == "" && dependency.Template != "" {
-		path = utils.Interpolate(dependency.Template, data)
+	if urlPath == "" && dependency.Template != "" {
+		urlPath, err = text.Template(dependency.Template, data)
+		if err != nil {
+			return err
+		}
 	}
-	if path != "" {
-		url := utils.Interpolate(path, map[string]string{"version": ver})
+	if urlPath != "" {
+		url, err := text.Template(urlPath, data)
+		if err != nil {
+			return err
+		}
 		log.Infof("Installing %s (%s) -> %s", name, ver, url)
-		err := download(url, bin)
+		err = download(url, bin)
 		if err != nil {
 			return fmt.Errorf("failed to download %s: %+v", name, err)
 		}
 		if err := os.Chmod(bin, 0755); err != nil {
 			return fmt.Errorf("failed to make %s executable", name)
 		}
+		if dependency.BinaryName != "" {
+			if err := os.Rename(bin, finalBin); err != nil {
+				return fmt.Errorf("failed to rename %s to %s: %v", bin, finalBin, err)
+			}
+		}
 	} else if dependency.Go != "" {
 		//FIXME this only works if the PWD is in the GOPATH
-		url := utils.Interpolate(dependency.Go, map[string]string{"version": ver})
+		url, _ := text.Template(dependency.Go, data)
 		log.Infof("Installing via go get %s (%s) -> %s", name, ver, url)
 		if err := exec.Execf("GOPATH=$PWD/.go go get %s", url); err != nil {
 			return err
