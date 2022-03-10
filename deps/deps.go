@@ -99,7 +99,7 @@ var dependencies = map[string]Dependency{
 	},
 	"gojsontoyaml": {
 		Version: "0.15.0",
-		Linux:   "github.com/hongkailiu/gojsontoyaml/releases/download/e8bd32d/gojsontoyaml",
+		Linux:   "https://github.com/hongkailiu/gojsontoyaml/releases/download/e8bd32d/gojsontoyaml",
 	},
 	"yaml-cli": {
 		Version:  "v1.0.2",
