@@ -9,7 +9,7 @@ require (
 	github.com/dustin/go-humanize v1.0.0
 	github.com/ghodss/yaml v1.0.0
 	github.com/hairyhenderson/gomplate/v3 v3.6.0
-	github.com/hashicorp/go-getter v1.4.1
+	github.com/hashicorp/go-getter v1.6.1
 	github.com/hashicorp/vault/api v1.0.4
 	github.com/huandu/xstrings v1.3.2 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
