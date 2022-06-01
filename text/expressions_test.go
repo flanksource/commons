@@ -16,7 +16,7 @@ var fixtures = Fixtures{
 	`Age(result["started_at"]) > Duration("24h")`: true,
 	`humanizeBytes(result["size_string"])`:        "1K",
 	`humanizeBytes(result["size_int"])`:           "1K",
-	`humanizeTime(Date(result["started_at"]))`:    "1 year ago",
+	`humanizeTime(Date(result["started_at"]))`:    "2 years ago",
 }
 
 var Results = map[string]interface{}{
