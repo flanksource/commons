@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path"
 	"testing"
 
 	"github.com/flanksource/commons/files"
@@ -29,8 +28,12 @@ func TestInstallDependency(t *testing.T) {
 				return
 			}
 
-			if !files.Exists(path.Join(dir, name)) {
-				t.Errorf("Failed to install %s. %s/%s does not exist", name, dir, name)
+			path, err := dependency.GetPath(name, dir)
+			if err != nil {
+				t.Errorf("Failed to install %s. ", err)
+			}
+			if !files.Exists(path) {
+				t.Errorf("Failed to install %s. %s does not exist", name, path)
 			}
 		})
 

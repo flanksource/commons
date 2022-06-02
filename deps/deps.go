@@ -35,6 +35,19 @@ type BinaryFunc func(msg string, args ...interface{}) error
 // BinaryFuncWithEnv is an interface to executing a binary, downloading it necessary
 type BinaryFuncWithEnv func(msg string, env map[string]string, args ...interface{}) error
 
+func (dependency *Dependency) GetPath(name string, binDir string) (string, error) {
+	data := map[string]string{"os": runtime.GOOS, "platform": runtime.GOARCH, "version": dependency.Version}
+	if dependency.BinaryName != "" {
+		templated, err := text.Template(dependency.BinaryName, data)
+		if err != nil {
+			return "", err
+		}
+		return path.Join(binDir, templated), nil
+	} else {
+		return path.Join(binDir, name), nil
+	}
+}
+
 func absolutePath(dir string) string {
 	if !strings.HasPrefix("/", dir) {
 		cwd, _ := os.Getwd()
@@ -223,30 +236,20 @@ func InstallDependency(name, ver string, binDir string) error {
 	if !ok {
 		return fmt.Errorf("dependency %s not found", name)
 	}
-	var bin string
 	if len(strings.TrimSpace(ver)) == 0 {
 		ver = dependency.Version
 	}
-	data := map[string]string{"os": runtime.GOOS, "platform": runtime.GOARCH, "version": ver}
-	if dependency.BinaryName != "" {
-		templated, err := text.Template(dependency.BinaryName, data)
-		if err != nil {
-			return err
-		}
-		bin = fmt.Sprintf("%s/%s", binDir, templated)
-	} else {
-		bin = fmt.Sprintf("%s/%s", binDir, name)
+	bin, err := dependency.GetPath(name, binDir)
+	if err != nil {
+		return err
 	}
 
-	finalBin := path.Join(binDir, name)
-
-	if is.File(finalBin) {
-		log.Debugf("%s already exists", finalBin)
+	if is.File(bin) {
+		log.Debugf("%s already exists", bin)
 		return nil
 	}
 
 	var urlPath string
-	var err error
 	if runtime.GOOS == "linux" {
 		urlPath = dependency.Linux
 	} else if runtime.GOOS == "darwin" {
@@ -255,6 +258,7 @@ func InstallDependency(name, ver string, binDir string) error {
 		urlPath = dependency.Windows
 	}
 
+	data := map[string]string{"os": runtime.GOOS, "platform": runtime.GOARCH, "version": ver}
 	if urlPath == "" && dependency.Template != "" {
 		urlPath, err = text.Template(dependency.Template, data)
 		if err != nil {
@@ -273,11 +277,6 @@ func InstallDependency(name, ver string, binDir string) error {
 		}
 		if err := os.Chmod(bin, 0755); err != nil {
 			return fmt.Errorf("failed to make %s executable", name)
-		}
-		if dependency.BinaryName != "" {
-			if err := os.Rename(bin, finalBin); err != nil {
-				return fmt.Errorf("failed to rename %s to %s: %v", bin, finalBin, err)
-			}
 		}
 	} else if dependency.Go != "" {
 		//FIXME this only works if the PWD is in the GOPATH
@@ -327,8 +326,11 @@ func Binary(name, ver string, binDir string) BinaryFunc {
 	}
 
 	return func(msg string, args ...interface{}) error {
-		bin := fmt.Sprintf("%s/%s", binDir, name)
 		if err := InstallDependency(name, ver, binDir); err != nil {
+			return err
+		}
+		bin, err := dependency.GetPath(name, binDir)
+		if err != nil {
 			return err
 		}
 		return exec.Execf(bin+" "+msg, args...)
