@@ -7,10 +7,12 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand"
+	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -20,6 +22,16 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/hashicorp/go-getter"
 	"github.com/ulikunitz/xz"
+)
+
+//	Errors
+//
+var (
+	ErrExists      = errors.New("file already exist")
+	ErrNotExists   = errors.New("file doesn't exist")
+	ErrInvalidPath = errors.New("file path invalid")
+	ErrIsDir       = errors.New("path is a directory")
+	ErrInvalidURL  = errors.New("invalid url")
 )
 
 //GzipFile takes the path to a file and returns a Gzip comppressed byte slice
@@ -316,14 +328,25 @@ func GetBaseName(filename string) string {
 
 // Getter gets a directory or file using the Hashicorp go-getter library
 // See https://github.com/hashicorp/go-getter
-func Getter(url, dst string) error {
+func Getter(source, dst string) error {
+
+	//	Validate the URL first.
+	url, err := url.ParseRequestURI(source)
+	if err != nil {
+		return err
+	}
+
 	pwd, _ := os.Getwd()
+
+	//	If the destination is empty,
+	//	choose the current working directory.
+	if dst == "" {
+		dst, _ = os.Getwd()
+	}
 
 	stashed := false
 	if Exists(dst + "/.git") {
 		cmd := exec.Command("git", "stash")
-		cmd.Dir = pwd
-
 		cmd.Dir = dst
 		cmd.Stderr = os.Stderr
 		cmd.Stdout = os.Stdout
@@ -335,14 +358,16 @@ func Getter(url, dst string) error {
 	}
 	client := &getter.Client{
 		Ctx:     context.TODO(),
-		Src:     url,
+		Src:     source,
 		Dst:     dst,
 		Pwd:     pwd,
 		Mode:    getter.ClientModeDir,
 		Options: []getter.ClientOption{},
 	}
+
 	logger.Infof("Downloading %s -> %s", url, dst)
-	err := client.Get()
+	err = client.Get()
+
 	if stashed {
 		cmd := exec.Command("git", "stash", "pop")
 		cmd.Dir = dst
@@ -358,4 +383,80 @@ func TempFileName(prefix, suffix string) string {
 	randBytes := make([]byte, 16)
 	rand.Read(randBytes)
 	return filepath.Join(os.TempDir(), prefix+hex.EncodeToString(randBytes)+suffix)
+}
+
+//	Resolve File
+//
+//	If file location passed as argument is a valid,
+//	then it returns the contents of the file.
+//	Otherwise, an error.
+func ResolveFile(file string) (string, error) {
+
+	var payload string
+
+	//	Ensure it is a valid file path,
+	//	by ensuring there an extension suffixed at the end.
+	//
+	//	This will validate both a file in the filesystem,
+	//	as well as the URL source for a file.
+	if filepath.Ext(file) == "" {
+		return payload, ErrInvalidPath
+	}
+
+	//	Try to parse the file as a URL,
+	//	and go-get the file if it a valid URL.
+	//
+	//	For some reason, this inbuilt parser is broken
+	//	and it even matches relative paths that need not be URLs.
+	//	But we still need to parse the URL so that we can
+	//	validate the scheme to detect a URL.
+	url, err := url.ParseRequestURI(file)
+
+	//	Ensure the scheme is HTTP or HTTPS.
+	if err == nil &&
+		url.Scheme != "" &&
+		(strings.ToLower(url.Scheme) == "http" ||
+			strings.ToLower(url.Scheme) == "https") {
+
+		//	Try to go-get the file.
+		return payload, Getter(filepath.Dir(file), "")
+	}
+
+	//	Since, it is not a URL,
+	//	we must validate as a source in the filesystem.
+
+	//	Ensure the file exists.
+	if !Exists(file) {
+		return payload, ErrNotExists
+	}
+
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return payload, err
+	}
+
+	//	Update the response payload.
+	payload = string(data)
+
+	return payload, nil
+}
+
+//	ResolveFiles
+//
+//	Calls ResolveFile(filepath) function on an array of files.
+func ResolveFiles(files []string) (map[string]string, error) {
+
+	var payload map[string]string
+
+	for _, source := range files {
+
+		response, err := ResolveFile(source)
+		if err != nil {
+			return nil, errors.New(strings.Join([]string{source, err.Error()}, " : "))
+		}
+
+		payload[source] = response
+	}
+
+	return payload, nil
 }
