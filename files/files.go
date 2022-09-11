@@ -384,18 +384,9 @@ func TempFileName(prefix, suffix string) string {
 //	If file location passed as argument is a valid,
 //	then it returns the contents of the file.
 //	Otherwise, an error.
-func ResolveFile(file string) (string, error) {
+func ResolveFile(source string) (string, error) {
 
 	var payload string
-
-	//	Ensure it is a valid file path,
-	//	by ensuring there an extension suffixed at the end.
-	//
-	//	This will validate both a file in the filesystem,
-	//	as well as the URL source for a file.
-	if filepath.Ext(file) == "" {
-		return payload, ErrInvalidPath
-	}
 
 	//	Try to parse the file as a URL,
 	//	and go-get the file if it a valid URL.
@@ -404,7 +395,7 @@ func ResolveFile(file string) (string, error) {
 	//	and it even matches relative paths that need not be URLs.
 	//	But we still need to parse the URL so that we can
 	//	validate the scheme to detect a URL.
-	url, err := url.ParseRequestURI(file)
+	url, err := url.ParseRequestURI(source)
 
 	//	Ensure the scheme is HTTP or HTTPS.
 	if err == nil &&
@@ -413,18 +404,32 @@ func ResolveFile(file string) (string, error) {
 			strings.ToLower(url.Scheme) == "https") {
 
 		//	Try to go-get the file.
-		return payload, Getter(filepath.Dir(file), "")
+		return payload, Getter(filepath.Dir(source), "")
 	}
 
 	//	Since, it is not a URL,
 	//	we must validate as a source in the filesystem.
 
-	//	Ensure the file exists.
-	if !Exists(file) {
-		return payload, ErrNotExists
+	//	Open the file in system.
+	file, err := os.Open(source)
+	if err != nil {
+		return payload, err
 	}
 
-	data, err := os.ReadFile(file)
+	defer file.Close()
+
+	//	If it is a directory, return an error.
+	info, err := file.Stat()
+	if err != nil {
+		return payload, err
+	}
+
+	if info.IsDir() {
+		return payload, ErrIsDir
+	}
+
+	//	Finally, read the contents of the file.
+	data, err := os.ReadFile(source)
 	if err != nil {
 		return payload, err
 	}
