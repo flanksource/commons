@@ -1,6 +1,7 @@
 package files
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -32,24 +33,27 @@ func TestIsValidPathType(t *testing.T) {
 func TestResolveFile(t *testing.T) {
 	type args struct {
 		file string
+		dest string
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantErr bool
 	}{
-		{"directory", args{"/Users/mrinalwahal/go/src/github.com/flanksource/regen"}, true},
-		{"correctFile", args{"/Users/mrinalwahal/go/src/github.com/flanksource/regen/file.temp"}, false},
-		{"incorrectFile", args{"https/Users/mrinalwahal/go/src/github.com/flanksource/regen/file1.temp"}, true},
-		//	{"url", args{"https://github.com/mrinalwahal/portfolio/README.md"}, false},
+		{"incorrectDestination", args{"/Users/mrinalwahal/go/src/github.com/flanksource/regen", "/Users/mrinalwahal/go/src/github.com/flanksource/regen/file.temp"}, true},
+		{"correctFile", args{"/Users/mrinalwahal/go/src/github.com/flanksource/regen/file.temp", ""}, false},
+		{"incorrectFile", args{"https/Users/mrinalwahal/go/src/github.com/flanksource/regen/file1.temp", ""}, true},
+		{"url", args{"github.com/mrinalwahal/portfolio/README.md", ""}, false},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := ResolveFile(tt.args.file)
+			got, err := ResolveFile(tt.args.file, tt.args.dest)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("%v: error = %v, wantErr %v", tt.name, err, tt.wantErr)
 				return
 			}
+			fmt.Println(got)
 		})
 	}
 }

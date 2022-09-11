@@ -32,6 +32,16 @@ var (
 	ErrInvalidPath = errors.New("file path invalid")
 	ErrIsDir       = errors.New("path is a directory")
 	ErrInvalidURL  = errors.New("invalid url")
+
+	// Setting Supported Detectors
+	Detectors = []getter.Detector{
+		new(getter.GitHubDetector),
+		new(getter.GitDetector),
+		new(getter.BitBucketDetector),
+		new(getter.S3Detector),
+		new(getter.GCSDetector),
+		new(getter.FileDetector),
+	}
 )
 
 //GzipFile takes the path to a file and returns a Gzip comppressed byte slice
@@ -335,11 +345,11 @@ func Getter(url, dst string) error {
 	//	If the destination is empty,
 	//	choose the current working directory.
 	if dst == "" {
-		dst, _ = os.Getwd()
+		dst = pwd
 	}
 
 	stashed := false
-	if Exists(dst + "/.git") {
+	if Exists(filepath.Join(dst, ".git")) {
 		cmd := exec.Command("git", "stash")
 		cmd.Dir = dst
 		cmd.Stderr = os.Stderr
@@ -350,13 +360,15 @@ func Getter(url, dst string) error {
 		}
 
 	}
+
 	client := &getter.Client{
-		Ctx:     context.TODO(),
-		Src:     url,
-		Dst:     dst,
-		Pwd:     pwd,
-		Mode:    getter.ClientModeDir,
-		Options: []getter.ClientOption{},
+		Ctx:       context.TODO(),
+		Src:       url,
+		Dst:       dst,
+		Pwd:       pwd,
+		Mode:      getter.ClientModeDir,
+		Options:   []getter.ClientOption{},
+		Detectors: Detectors,
 	}
 
 	logger.Infof("Downloading %s -> %s", url, dst)
@@ -384,60 +396,99 @@ func TempFileName(prefix, suffix string) string {
 //	If file location passed as argument is a valid,
 //	then it returns the contents of the file.
 //	Otherwise, an error.
-func ResolveFile(source string) (string, error) {
+func ResolveFile(file, destination string) (string, error) {
 
-	var payload string
+	//	Contents of the file that have to be returned.
+	var response string
 
-	//	Try to parse the file as a URL,
-	//	and go-get the file if it a valid URL.
-	//
-	//	For some reason, this inbuilt parser is broken
-	//	and it even matches relative paths that need not be URLs.
-	//	But we still need to parse the URL so that we can
-	//	validate the scheme to detect a URL.
+	var err error
+
+	//	Get the current working directory
+	pwd, _ := os.Getwd()
+
+	//	Detect turns a source string into another source string
+	//	if it is detected to be of a known pattern.
+	source, err := getter.Detect(file, pwd, Detectors)
+	if err != nil {
+		return response, err
+	}
+
+	//	If go-getter has detected it to be a local file,
+	//	it will return the source with `file://` scheme prefixed.
+	//	We can now parse the URI to judge the scheme.
 	url, err := url.ParseRequestURI(source)
-
-	//	Ensure the scheme is HTTP or HTTPS.
-	if err == nil &&
-		url.Scheme != "" &&
-		(strings.ToLower(url.Scheme) == "http" ||
-			strings.ToLower(url.Scheme) == "https") {
-
-		//	Try to go-get the file.
-		return payload, Getter(filepath.Dir(source), "")
-	}
-
-	//	Since, it is not a URL,
-	//	we must validate as a source in the filesystem.
-
-	//	Open the file in system.
-	file, err := os.Open(source)
 	if err != nil {
-		return payload, err
+		return response, err
 	}
 
-	defer file.Close()
+	//	If it is a local file i.e. with `file://` scheme,
+	//	then we can simply read and return the file.
+	if url.Scheme == "file" {
 
-	//	If it is a directory, return an error.
-	info, err := file.Stat()
-	if err != nil {
-		return payload, err
+		//	Read the contents of the file.
+		data, err := os.ReadFile(file)
+		if err != nil {
+			return response, err
+		}
+
+		//	Return the data.
+		return string(data), nil
 	}
 
-	if info.IsDir() {
-		return payload, ErrIsDir
+	//
+	//	If it is a remote file, we should go-get it.
+	//
+
+	//	If the destination is absent, initialize a temporary directory.
+	if destination == "" {
+
+		destination = filepath.Join(os.TempDir(), GetBaseName(file))
+		if err != nil {
+			return response, err
+		}
+
+		//	Issue deletion for the same path deferred to the end of the code.
+		//	This needs to run after go-getter has created the directory.
+		defer DeletePath(destination)
+
+	} else {
+
+		//	If it is not a valid directory path, return an error.
+		path, err := os.Open(destination)
+		if err != nil {
+			return response, err
+		}
+
+		defer path.Close()
+
+		info, err := path.Stat()
+		if err != nil {
+			return response, err
+		}
+
+		if !info.IsDir() {
+			return response, fmt.Errorf("%s is not a directory", destination)
+		}
 	}
+
+	//	go-get the file.
+	if err := Getter(filepath.Dir(source), destination); err != nil {
+		return response, err
+	}
+
+	//	Initialize the new filepath where the file has been cloned locally.
+	filepath := filepath.Join(destination, filepath.Base(source))
 
 	//	Finally, read the contents of the file.
-	data, err := os.ReadFile(source)
+	data, err := os.ReadFile(filepath)
 	if err != nil {
-		return payload, err
+		return response, err
 	}
 
-	//	Update the response payload.
-	payload = string(data)
+	//	Update the response response.
+	response = string(data)
 
-	return payload, nil
+	return response, nil
 }
 
 //	ResolveFiles
@@ -445,17 +496,22 @@ func ResolveFile(source string) (string, error) {
 //	Calls ResolveFile(filepath) function on an array of files.
 func ResolveFiles(files []string) (map[string]string, error) {
 
-	payload := make(map[string]string)
+	response := make(map[string]string)
 
 	for _, source := range files {
 
-		response, err := ResolveFile(source)
+		data, err := ResolveFile(source, "")
 		if err != nil {
 			return nil, errors.New(strings.Join([]string{source, err.Error()}, " : "))
 		}
 
-		payload[source] = response
+		response[source] = data
 	}
 
-	return payload, nil
+	return response, nil
+}
+
+//	Deletes a filesystem path. Be it a file or a directory.
+func DeletePath(source string) error {
+	return os.Remove(source)
 }
