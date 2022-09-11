@@ -328,13 +328,7 @@ func GetBaseName(filename string) string {
 
 // Getter gets a directory or file using the Hashicorp go-getter library
 // See https://github.com/hashicorp/go-getter
-func Getter(source, dst string) error {
-
-	//	Validate the URL first.
-	url, err := url.ParseRequestURI(source)
-	if err != nil {
-		return err
-	}
+func Getter(url, dst string) error {
 
 	pwd, _ := os.Getwd()
 
@@ -358,7 +352,7 @@ func Getter(source, dst string) error {
 	}
 	client := &getter.Client{
 		Ctx:     context.TODO(),
-		Src:     source,
+		Src:     url,
 		Dst:     dst,
 		Pwd:     pwd,
 		Mode:    getter.ClientModeDir,
@@ -366,7 +360,7 @@ func Getter(source, dst string) error {
 	}
 
 	logger.Infof("Downloading %s -> %s", url, dst)
-	err = client.Get()
+	err := client.Get()
 
 	if stashed {
 		cmd := exec.Command("git", "stash", "pop")
@@ -446,7 +440,7 @@ func ResolveFile(file string) (string, error) {
 //	Calls ResolveFile(filepath) function on an array of files.
 func ResolveFiles(files []string) (map[string]string, error) {
 
-	var payload map[string]string
+	payload := make(map[string]string)
 
 	for _, source := range files {
 
