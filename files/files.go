@@ -18,6 +18,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/hashicorp/go-getter"
@@ -442,7 +443,7 @@ func ResolveFile(file, destination string) (string, error) {
 	//	If the destination is absent, initialize a temporary directory.
 	if destination == "" {
 
-		destination = filepath.Join(os.TempDir(), GetBaseName(file))
+		destination = filepath.Join(os.TempDir(), fmt.Sprint(time.Now().Unix()))
 		if err != nil {
 			return response, err
 		}
