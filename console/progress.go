@@ -56,7 +56,7 @@ func NewTextProgress(name string, localTest *TestResults) Progress {
 func NewTerminalProgress(name string, localTest *TestResults, progress *mpb.Progress) Progress {
 	tp := &terminalProgress{test: localTest}
 	filler := mpb.NewSpinnerFiller(mpb.DefaultSpinnerStyle, mpb.SpinnerOnLeft)
-	completedFn := mpb.BarFillerFunc(func(w io.Writer, width int, st *decor.Statistics) {
+	completedFn := mpb.BarFillerFunc(func(w io.Writer, width int, st decor.Statistics) {
 		if st.Completed {
 			io.WriteString(w, strings.ReplaceAll(tp.test.String(), "\n", ""))
 		} else {
