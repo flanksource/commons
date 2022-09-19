@@ -79,7 +79,7 @@ require (
 	github.com/googleapis/gax-go/v2 v2.5.1 // indirect
 	github.com/gosimple/slug v1.12.0 // indirect
 	github.com/gosimple/unidecode v1.0.1 // indirect
-	github.com/hairyhenderson/go-fsimpl v0.0.0-20220919125758-ae1b1836a634 // indirect
+	github.com/hairyhenderson/go-fsimpl v0.0.0-20220919132154-dc606beb8e19 // indirect
 	github.com/hairyhenderson/toml v0.4.2-0.20210923231440-40456b8e66cf // indirect
 	github.com/hairyhenderson/yaml v0.0.0-20220618171115-2d35fca545ce // indirect
 	github.com/hashicorp/consul/api v1.14.0 // indirect
