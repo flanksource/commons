@@ -6,7 +6,7 @@ require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/antonmedv/expr v1.9.0
 	github.com/dustin/go-humanize v1.0.0
-	github.com/flanksource/gomplate/v3 v3.20.0
+	github.com/flanksource/gomplate/v3 v3.20.1
 	github.com/ghodss/yaml v1.0.0
 	github.com/hashicorp/go-getter v1.6.2
 	github.com/kr/pretty v0.3.0
@@ -110,7 +110,6 @@ require (
 	golang.org/x/sys v0.0.0-20220919091848-fb04ddd9f9c8 // indirect
 	golang.org/x/term v0.0.0-20220919170432-7a66f970e087 // indirect
 	golang.org/x/text v0.3.7 // indirect
-	golang.org/x/tools v0.1.12 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/api v0.96.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
@@ -124,4 +123,8 @@ require (
 	k8s.io/client-go v0.25.1 // indirect
 )
 
-replace golang.org/x/tools => golang.org/x/tools v0.1.12
+replace (
+	// github.com/flanksource/gomplate/v3 => ../gomplate
+	golang.org/x/tools => golang.org/x/tools v0.1.12
+	k8s.io/client-go => k8s.io/client-go v0.24.4
+)
