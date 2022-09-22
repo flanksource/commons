@@ -12,7 +12,7 @@ import (
 	"github.com/ghodss/yaml"
 
 	"github.com/flanksource/commons/files"
-	"github.com/hairyhenderson/gomplate/v3"
+	"github.com/flanksource/gomplate/v3"
 )
 
 // ToFile saves text as a temp file with an extension
