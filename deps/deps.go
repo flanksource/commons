@@ -351,7 +351,7 @@ func InstallDependencies(deps map[string]string, binDir string) error {
 
 func download(url, bin string) error {
 	if is.Archive(url) {
-		tmp, _ := os.TempDir("", "")
+		tmp, _ := os.MkdirTemp("", "")
 		file := path.Join(tmp, path.Base(url))
 		if err := net.Download(url, file); err != nil {
 			return fmt.Errorf("failed to download %s: %+v", url, err)

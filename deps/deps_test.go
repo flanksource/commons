@@ -3,13 +3,14 @@ package deps
 import (
 	"fmt"
 	"os"
+
 	"testing"
 
 	"github.com/flanksource/commons/files"
 )
 
 func TestInstallDependency(t *testing.T) {
-	dir, err := os.TempDir("", "commons-test-deps")
+	dir, err := os.MkdirTemp("", "commons-test-deps")
 	fmt.Printf("Created dir %s\n", dir)
 	if err != nil {
 		t.Errorf("failed to create temporary directory %v", err)
