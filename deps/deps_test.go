@@ -2,15 +2,15 @@ package deps
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
+
 	"testing"
 
 	"github.com/flanksource/commons/files"
 )
 
 func TestInstallDependency(t *testing.T) {
-	dir, err := ioutil.TempDir("", "commons-test-deps")
+	dir, err := os.MkdirTemp("", "commons-test-deps")
 	fmt.Printf("Created dir %s\n", dir)
 	if err != nil {
 		t.Errorf("failed to create temporary directory %v", err)
@@ -19,6 +19,7 @@ func TestInstallDependency(t *testing.T) {
 
 	for name, dependency := range dependencies {
 		t.Run(name, func(t *testing.T) {
+			t.Logf("Installing %s", name)
 			err := InstallDependency(name, dependency.Version, dir)
 			if err != nil {
 				t.Errorf("Failed to download %s: %v", name, err)

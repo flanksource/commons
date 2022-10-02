@@ -3,7 +3,7 @@ package text
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	gotemplate "text/template"
 
@@ -18,7 +18,7 @@ import (
 // ToFile saves text as a temp file with an extension
 func ToFile(text string, ext string) string {
 	tmp := files.TempFileName("", ext)
-	ioutil.WriteFile(tmp, []byte(text), 0644)
+	os.WriteFile(tmp, []byte(text), 0644)
 	return tmp
 }
 
