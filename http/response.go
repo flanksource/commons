@@ -3,10 +3,10 @@ package http
 import (
 	"bytes"
 	"fmt"
-	"github.com/pkg/errors"
 	"io"
-	"io/ioutil"
 	"net/http"
+
+	"github.com/pkg/errors"
 )
 
 // Response embeds the stdlib http.Response type and extends its functionality
@@ -61,7 +61,7 @@ func (resp *Response) AsBytes() ([]byte, error) {
 		return nil, errors.New("cannot read body from nil response")
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	defer resp.Body.Close()
 
 	if err != nil {

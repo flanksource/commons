@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strings"
 
@@ -215,7 +214,7 @@ func (r *Request) GetLoggableStrings() (string, error) {
 		return "", errors.New(fmt.Sprintf("Failed to close request body ReadCloser: err=%+v", err))
 	}
 	bodyString := buf
-	r.body = ioutil.NopCloser(bufio.NewReader(buf))
+	r.body = io.NopCloser(bufio.NewReader(buf))
 
 	return fmt.Sprintf("body=<%s>", bodyString), nil
 }

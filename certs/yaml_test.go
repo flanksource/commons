@@ -1,7 +1,6 @@
 package certs
 
 import (
-	"io/ioutil"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -66,7 +65,7 @@ func TestMarshalCertificate(t *testing.T) {
 }
 
 func loadConfig(path string) (*exampleConfig, error) {
-	cfgBytes, err := ioutil.ReadFile(path)
+	cfgBytes, err := io.ReadFile(path)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to read file %s", path)
 	}

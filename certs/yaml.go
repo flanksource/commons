@@ -1,7 +1,7 @@
 package certs
 
 import (
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -89,7 +89,7 @@ func loadCertificateBytes(certificate string) ([]byte, error) {
 			return nil, errors.Wrapf(err, "failed to download certificate from url %s", certificate)
 		}
 		defer resp.Body.Close()
-		certBytes, err := ioutil.ReadAll(resp.Body)
+		certBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to read response body from url %s", certificate)
 		}
@@ -102,7 +102,7 @@ func loadCertificateBytes(certificate string) ([]byte, error) {
 		return nil, errors.Wrap(err, "failed to expand path")
 	}
 
-	body, err := ioutil.ReadFile(fullPath)
+	body, err := os.ReadFile(fullPath)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to read certificate %s from disk", certificate)
 	}

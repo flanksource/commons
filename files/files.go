@@ -9,7 +9,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -27,7 +26,7 @@ func GzipFile(path string) ([]byte, error) {
 	var buf bytes.Buffer
 
 	w := gzip.NewWriter(&buf)
-	contents, err := ioutil.ReadFile(path)
+	contents, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -239,7 +238,7 @@ func UntarWithFilter(tarball, target string, filter FileFilter) error {
 
 //SafeRead reads a path and returns the text contents or nil
 func SafeRead(path string) string {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return ""
 	}
