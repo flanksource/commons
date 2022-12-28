@@ -21,7 +21,7 @@ import (
 	"github.com/ulikunitz/xz"
 )
 
-//GzipFile takes the path to a file and returns a Gzip comppressed byte slice
+// GzipFile takes the path to a file and returns a Gzip comppressed byte slice
 func GzipFile(path string) ([]byte, error) {
 	var buf bytes.Buffer
 
@@ -236,7 +236,7 @@ func UntarWithFilter(tarball, target string, filter FileFilter) error {
 	return nil
 }
 
-//SafeRead reads a path and returns the text contents or nil
+// SafeRead reads a path and returns the text contents or nil
 func SafeRead(path string) string {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -357,4 +357,43 @@ func TempFileName(prefix, suffix string) string {
 	randBytes := make([]byte, 16)
 	rand.Read(randBytes)
 	return filepath.Join(os.TempDir(), prefix+hex.EncodeToString(randBytes)+suffix)
+}
+
+// Zip src into dst
+func Zip(src, dst string) error {
+	f, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	w := zip.NewWriter(f)
+	defer w.Close()
+
+	walker := func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		file, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+
+		f, err := w.Create(path)
+		if err != nil {
+			return err
+		}
+
+		_, err = io.Copy(f, file)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+	return filepath.Walk(src, walker)
 }
