@@ -359,7 +359,7 @@ func TempFileName(prefix, suffix string) string {
 	return filepath.Join(os.TempDir(), prefix+hex.EncodeToString(randBytes)+suffix)
 }
 
-// Zip src into dst
+// Zip the source file/directory into the target destination
 func Zip(src, dst string) error {
 	f, err := os.Create(dst)
 	if err != nil {
