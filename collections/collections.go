@@ -41,16 +41,16 @@ func ToString(i interface{}) string {
 		return v.String()
 	case string:
 		return v
-	case interface{}:
-		if v == nil {
-			return ""
-		}
-		return fmt.Sprintf("%v", v)
 	case bool:
 		if v {
 			return "true"
 		}
 		return "false"
+	case interface{}:
+		if v == nil {
+			return ""
+		}
+		return fmt.Sprintf("%v", v)
 	default:
 		// panic(fmt.Sprintf("I don't know about type %T!\n", v))
 	}

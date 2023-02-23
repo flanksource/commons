@@ -32,10 +32,12 @@ func parsePrivateKey(der []byte) (*rsa.PrivateKey, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Failed to parse key in either PKCS#1 or PKCS#8 format")
 	}
-	switch rsaOrEcKey.(type) {
+
+	switch v := rsaOrEcKey.(type) {
 	case *rsa.PrivateKey:
-		return rsaOrEcKey.(*rsa.PrivateKey), nil
+		return v, nil
 	}
+
 	return nil, fmt.Errorf("Expecting RSA key, found: %v", reflect.TypeOf(rsaOrEcKey))
 }
 

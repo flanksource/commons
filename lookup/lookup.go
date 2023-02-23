@@ -225,7 +225,7 @@ func isMergeable(v reflect.Value) bool {
 }
 
 func hasIndex(s string) bool {
-	return strings.Index(s, IndexOpenChar) != -1
+	return strings.Contains(s, IndexOpenChar)
 }
 
 func parseIndex(s string) (string, int, error) {

@@ -77,13 +77,15 @@ func (resp *Response) TraceMessage() (string, error) {
 	if resp == nil {
 		return "", errors.New("cannot read response information from nil response")
 	}
-	traceMessage := fmt.Sprintf("status=%d, content-type=<%s>",
-		resp.StatusCode, resp.Header.Get(contentType))
+
+	traceMessage := fmt.Sprintf("status=%d, content-type=<%s>", resp.StatusCode, resp.Header.Get(contentType))
 	buf := new(bytes.Buffer)
 	_, readErr := buf.ReadFrom(resp.Body)
-	readErr = resp.Body.Close()
-	if readErr == nil {
-		traceMessage += fmt.Sprintf("\n%+v", buf)
+	if readErr != nil {
+		return traceMessage, nil
 	}
+	defer resp.Body.Close()
+	traceMessage += fmt.Sprintf("\n%+v", buf)
+
 	return traceMessage, nil
 }

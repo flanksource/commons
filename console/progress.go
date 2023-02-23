@@ -58,9 +58,9 @@ func NewTerminalProgress(name string, localTest *TestResults, progress *mpb.Prog
 	filler := mpb.NewSpinnerFiller(mpb.DefaultSpinnerStyle, mpb.SpinnerOnLeft)
 	completedFn := mpb.BarFillerFunc(func(w io.Writer, width int, st *decor.Statistics) {
 		if st.Completed {
-			io.WriteString(w, strings.ReplaceAll(tp.test.String(), "\n", ""))
+			io.WriteString(w, strings.ReplaceAll(tp.test.String(), "\n", "")) //nolint:errcheck
 		} else {
-			io.WriteString(w, tp.status)
+			io.WriteString(w, tp.status) //nolint:errcheck
 			filler.Fill(w, 27, st)
 		}
 	})

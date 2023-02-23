@@ -18,14 +18,10 @@ func (t Timer) Elapsed() float64 {
 }
 
 func (t Timer) Millis() int64 {
-	since := t.End
-	if since.IsZero() {
-		since = time.Now()
-	}
 	return time.Since(t.Start).Milliseconds()
 }
 
-func (t Timer) Stop() {
+func (t *Timer) Stop() {
 	t.End = time.Now()
 }
 

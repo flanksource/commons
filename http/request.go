@@ -207,11 +207,11 @@ func (r *Request) GetLoggableStrings() (string, error) {
 	buf := new(bytes.Buffer)
 	_, err := buf.ReadFrom(r.body)
 	if err != nil {
-		return "", errors.New(fmt.Sprintf("Failed to read request body: err=%+v", err))
+		return "", fmt.Errorf("Failed to read request body: err=%+v", err)
 	}
 	err = r.body.Close()
 	if err != nil {
-		return "", errors.New(fmt.Sprintf("Failed to close request body ReadCloser: err=%+v", err))
+		return "", fmt.Errorf("Failed to close request body ReadCloser: err=%+v", err)
 	}
 	bodyString := buf
 	r.body = io.NopCloser(bufio.NewReader(buf))
