@@ -27,9 +27,9 @@ type zapVerbose struct {
 }
 
 func GetZapLogger() *ZapLogger {
-	switch currentLogger.(type) {
+	switch v := currentLogger.(type) {
 	case ZapLogger:
-		zapLogger := currentLogger.(ZapLogger)
+		zapLogger := v
 		return &zapLogger
 	}
 	return nil

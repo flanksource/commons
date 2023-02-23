@@ -17,11 +17,11 @@ type logrusVerbose struct {
 }
 
 func NewLogrusLogger(existing logrusapi.Ext1FieldLogger) Logger {
-	switch existing.(type) {
+	switch v := existing.(type) {
 	case *logrusapi.Entry:
-		return logrusLogger{Entry: existing.(*logrusapi.Entry)}
+		return logrusLogger{Entry: v}
 	case *logrusapi.Logger:
-		return logrusLogger{Entry: logrusapi.NewEntry(existing.(*logrusapi.Logger))}
+		return logrusLogger{Entry: logrusapi.NewEntry(v)}
 	default:
 		return logrusLogger{Entry: logrusapi.NewEntry(logrusapi.StandardLogger())}
 	}
@@ -63,12 +63,12 @@ func (logrus logrusLogger) Infof(format string, args ...interface{}) {
 	logrus.Entry.Infof(format, args...)
 }
 
-//Secretf is like Tracef, but attempts to strip any secrets from the text
+// Secretf is like Tracef, but attempts to strip any secrets from the text
 func (logrus logrusLogger) Secretf(format string, args ...interface{}) {
 	logrus.Entry.Tracef(stripSecrets(fmt.Sprintf(format, args...)))
 }
 
-//Prettyf is like Tracef, but pretty prints the entire struct
+// Prettyf is like Tracef, but pretty prints the entire struct
 func (logrus logrusLogger) Prettyf(msg string, obj interface{}) {
 	pretty.Print(obj)
 }

@@ -6,10 +6,10 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"io"
-	"math/rand"
 	"os"
 	"os/exec"
 	"path"
@@ -141,7 +141,9 @@ func Unzip(src, dest string) error {
 
 		fpath := filepath.Join(dest, f.Name)
 		if f.FileInfo().IsDir() {
-			os.MkdirAll(fpath, f.Mode())
+			if err := os.MkdirAll(fpath, f.Mode()); err != nil {
+				return fmt.Errorf("failed to create directory %s: %w", fpath, err)
+			}
 		} else {
 			var fdir string
 			if lastIndex := strings.LastIndex(fpath, string(os.PathSeparator)); lastIndex > -1 {
@@ -347,7 +349,7 @@ func Getter(url, dst string) error {
 		cmd.Dir = dst
 		cmd.Stderr = os.Stderr
 		cmd.Stdout = os.Stdout
-		cmd.Run()
+		return cmd.Run()
 	}
 	return err
 }
@@ -355,7 +357,7 @@ func Getter(url, dst string) error {
 // TempFileName generates a temporary filename for
 func TempFileName(prefix, suffix string) string {
 	randBytes := make([]byte, 16)
-	rand.Read(randBytes)
+	rand.Read(randBytes) //nolint:errCheck
 	return filepath.Join(os.TempDir(), prefix+hex.EncodeToString(randBytes)+suffix)
 }
 

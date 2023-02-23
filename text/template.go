@@ -18,7 +18,7 @@ import (
 // ToFile saves text as a temp file with an extension
 func ToFile(text string, ext string) string {
 	tmp := files.TempFileName("", ext)
-	os.WriteFile(tmp, []byte(text), 0644)
+	os.WriteFile(tmp, []byte(text), 0644) //nolint:errcheck
 	return tmp
 }
 
@@ -75,7 +75,7 @@ func GetTemplateFuncs() gotemplate.FuncMap {
 	funcs["humanizeDuration"] = HumanizeDuration
 	funcs["ftoa"] = humanize.Ftoa
 	sprigFuncs := sprig.TxtFuncMap()
-	for funcName, _ := range sprigFuncs {
+	for funcName := range sprigFuncs {
 		if _, ok := funcs[funcName]; !ok {
 			funcs[funcName] = sprigFuncs[funcName]
 		}

@@ -2,10 +2,11 @@ package http
 
 import (
 	"fmt"
-	"github.com/flanksource/commons/logger"
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/flanksource/commons/logger"
 )
 
 const contentType = "Content-Type"
@@ -174,9 +175,9 @@ func (c *Client) logResponse(verb string, logFunc func(message string, args ...i
 		return
 	}
 
-	traceMessage, err := response.TraceMessage()
-	if err != nil {
-		message += fmt.Sprintf("content-type='%s', err=%+v", bodyContentTypeString, err)
+	traceMessage, trcMsgErr := response.TraceMessage()
+	if trcMsgErr != nil {
+		message += fmt.Sprintf("content-type='%s', err=%+v", bodyContentTypeString, trcMsgErr)
 		logFunc(message)
 		return
 	}

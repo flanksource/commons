@@ -63,7 +63,9 @@ func BinaryWithEnv(name, ver string, binDir string, env map[string]string) Binar
 	return func(msg string, args ...interface{}) error {
 		bin := fmt.Sprintf("%s/%s", binDir, name)
 		if !files.Exists(binDir) {
-			os.MkdirAll(binDir, 0755)
+			if err := os.MkdirAll(binDir, 0755); err != nil {
+				return fmt.Errorf("failed to create directory %s: %w", binDir, err)
+			}
 		}
 		if err := InstallDependency(name, ver, binDir); err != nil {
 			return err
