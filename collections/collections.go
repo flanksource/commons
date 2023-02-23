@@ -187,3 +187,31 @@ func Contains(a []string, x string) bool {
 	}
 	return false
 }
+
+// MergeMap will merge map b into a.
+// On key collision, map b takes precedence.
+func MergeMap[T1 comparable, T2 any](a, b map[T1]T2) map[T1]T2 {
+	for k, v := range b {
+		a[k] = v
+	}
+
+	return a
+}
+
+// KeyValueSliceToMap takes in a list of strings in a=b format
+// and returns a map from it.
+//
+// Any string that's not in a=b format will be ignored.
+func KeyValueSliceToMap(in []string) map[string]string {
+	sanitized := make(map[string]string, len(in))
+	for _, item := range in {
+		splits := strings.SplitN(item, "=", 2)
+		if len(splits) == 1 {
+			continue // ignore this item. not in a=b format
+		}
+
+		sanitized[strings.TrimSpace(splits[0])] = strings.TrimSpace(splits[1])
+	}
+
+	return sanitized
+}
