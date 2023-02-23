@@ -36,6 +36,7 @@ func DecryptCertificate(cert []byte, privateKey []byte, password []byte) (*Certi
 	var key *rsa.PrivateKey
 	block, _ := pem.Decode(privateKey)
 
+	// TODO: x509.DecryptPEMBlock is deprecated.
 	var decrypted []byte
 	if decrypted, err = x509.DecryptPEMBlock(block, password); err != nil { //nolint:staticcheck
 		return nil, err
