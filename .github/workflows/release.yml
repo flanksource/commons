@@ -6,17 +6,13 @@ on:
       - main
 jobs:
   semantic-release:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     outputs:
       release-version: ${{ steps.semantic.outputs.release-version }}
       new-release-published: ${{ steps.semantic.outputs.new-release-published }}
     steps:
-      - uses: actions/checkout@v2
-      - name: Setup Node.js
-        uses: actions/setup-node@v1
-        with:
-          node-version: '16.x'
-      - name: Release
+      - uses: actions/checkout@v3
+      - uses: codfish/semantic-release-action@v1
+        id: semantic
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx semantic-release
