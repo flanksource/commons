@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"os"
@@ -108,4 +109,19 @@ func NormalizeVersion(version string) string {
 		return "v" + version
 	}
 	return version
+}
+
+// Stringify converts the given value to a string.
+// If the value is already a string, it is returned as is.
+func Stringify(val any) (string, error) {
+	switch v := val.(type) {
+	case string:
+		return v, nil
+	default:
+		b, err := json.Marshal(v)
+		if err != nil {
+			return "", err
+		}
+		return string(b), nil
+	}
 }
