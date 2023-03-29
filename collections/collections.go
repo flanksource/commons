@@ -191,6 +191,14 @@ func Contains(a []string, x string) bool {
 // MergeMap will merge map b into a.
 // On key collision, map b takes precedence.
 func MergeMap[T1 comparable, T2 any](a, b map[T1]T2) map[T1]T2 {
+	if a == nil {
+		a = make(map[T1]T2)
+	}
+
+	if b == nil {
+		b = make(map[T1]T2)
+	}
+
 	for k, v := range b {
 		a[k] = v
 	}
