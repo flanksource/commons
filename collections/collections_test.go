@@ -59,6 +59,36 @@ func Test_MergeMap(t *testing.T) {
 				"foo":  "bar",
 			},
 		},
+		{
+			name: "nil a",
+			args: args{
+				a: nil,
+				b: map[string]string{"name": "flanksource", "foo": "bar"},
+			},
+			want: map[string]string{
+				"name": "flanksource",
+				"foo":  "bar",
+			},
+		},
+		{
+			name: "nil b",
+			args: args{
+				a: map[string]string{"name": "flanksource", "foo": "bar"},
+				b: nil,
+			},
+			want: map[string]string{
+				"name": "flanksource",
+				"foo":  "bar",
+			},
+		},
+		{
+			name: "both nil",
+			args: args{
+				a: nil,
+				b: nil,
+			},
+			want: map[string]string{},
+		},
 	}
 
 	for _, tt := range tests {
