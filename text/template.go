@@ -7,7 +7,6 @@ import (
 	"strings"
 	gotemplate "text/template"
 
-	"github.com/Masterminds/sprig"
 	"github.com/dustin/go-humanize"
 	"github.com/ghodss/yaml"
 
@@ -74,11 +73,5 @@ func GetTemplateFuncs() gotemplate.FuncMap {
 	funcs["humanizeTime"] = humanize.Time
 	funcs["humanizeDuration"] = HumanizeDuration
 	funcs["ftoa"] = humanize.Ftoa
-	sprigFuncs := sprig.TxtFuncMap()
-	for funcName := range sprigFuncs {
-		if _, ok := funcs[funcName]; !ok {
-			funcs[funcName] = sprigFuncs[funcName]
-		}
-	}
 	return funcs
 }
