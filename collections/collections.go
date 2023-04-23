@@ -2,6 +2,7 @@ package collections
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -72,6 +73,15 @@ func StructToMap(s interface{}) map[string]interface{} {
 		}
 	}
 	return values
+}
+
+// StructToJSON takes an object and returns its json form
+func StructToJSON(v any) (string, error) {
+	b, err := json.Marshal(&v)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
 
 // StructToIni takes an object and serializes it's fields in INI format
@@ -179,7 +189,7 @@ func Find(a []string, x string) int {
 }
 
 // Contains tells whether a contains x.
-func Contains(a []string, x string) bool {
+func Contains[T comparable](a []T, x T) bool {
 	for _, n := range a {
 		if x == n {
 			return true
