@@ -228,6 +228,13 @@ var dependencies = map[string]Dependency{
 		Windows: "https://github.com/weaveworks/eksctl/releases/download/{{.version}}/eksctl_Windows_amd64.tar.gz",
 		Macosx:  "https://github.com/weaveworks/eksctl/releases/download/{{.version}}/eksctl_Darwin_amd64.tar.gz",
 	},
+	"trivy": {
+		Version: "0.40.0", // without the "v" prefix
+		Linux:   "https://github.com/aquasecurity/trivy/releases/download/v{{.version}}/trivy_{{.version}}_Linux-64bit.tar.gz",
+		Windows: "https://github.com/aquasecurity/trivy/releases/download/v{{.version}}/trivy_{{.version}}_windows-64bit.zip",
+		Macosx:  "https://github.com/aquasecurity/trivy/releases/download/v{{.version}}/trivy_{{.version}}_macOS-64bit.tar.gz",
+		// BinaryName: "trivy-{{.version}}", // Custom name not supported right now. https://github.com/flanksource/commons/issues/68
+	},
 }
 
 // InstallDependency installs a binary to binDir, if ver is nil then the default version is used
@@ -271,13 +278,13 @@ func InstallDependency(name, ver string, binDir string) error {
 		if err != nil {
 			return err
 		}
-		log.Infof("Installing %s (%s) -> %s", name, ver, url)
+		log.Infof("Installing %s@%s (from=%s, to:%s)", name, ver, url, bin)
 		err = download(url, bin)
 		if err != nil {
 			return fmt.Errorf("failed to download %s: %+v", name, err)
 		}
 		if err := os.Chmod(bin, 0755); err != nil {
-			return fmt.Errorf("failed to make %s executable", name)
+			return fmt.Errorf("failed to make %s executable: %w", name, err)
 		}
 	} else if dependency.Go != "" {
 		//FIXME this only works if the PWD is in the GOPATH
