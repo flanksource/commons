@@ -1,5 +1,9 @@
 package set
 
+import (
+	"encoding/json"
+)
+
 type Set[E comparable] map[E]struct{}
 
 func New[T comparable](elems ...T) Set[T] {
@@ -45,4 +49,17 @@ func (s Set[T]) Intersection(s2 Set[T]) Set[T] {
 		}
 	}
 	return i
+}
+
+func (s Set[T]) MarshalJSON() ([]byte, error) {
+	return json.Marshal(s.ToSlice())
+}
+
+func (s *Set[T]) UnmarshalJSON(data []byte) error {
+	var raw []T
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	*s = New(raw...)
+	return nil
 }

@@ -1,6 +1,7 @@
 package set
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -48,4 +49,23 @@ func Test_IntSet(t *testing.T) {
 	assert.ElementsMatch(t, s.Union(s2).ToSlice(), []int{1, 4, 5, 6, 7, 8})
 
 	assert.ElementsMatch(t, s.Intersection(s2).ToSlice(), []int{4, 5})
+}
+
+func Test_JSON(t *testing.T) {
+	type Fruits struct {
+		Names Set[string] `json:"names"`
+	}
+
+	f := Fruits{Names: New("orange", "apple", "orange", "banana", "mango")}
+
+	b, err := json.Marshal(f)
+	assert.NoError(t, err)
+
+	assert.Equal(t, len(`{"names":["banana","mango","orange","apple"]}`), len(string(b)))
+
+	var jsonFruits Fruits
+	err = json.Unmarshal(b, &jsonFruits)
+	assert.NoError(t, err)
+
+	assert.ElementsMatch(t, f.Names.ToSlice(), jsonFruits.Names.ToSlice())
 }
