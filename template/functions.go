@@ -1,6 +1,7 @@
 package template
 
 import (
+	"context"
 	"text/template"
 
 	"github.com/flanksource/commons/text"
@@ -17,7 +18,7 @@ func NewFunctions() *Functions {
 }
 
 func (f *Functions) FuncMap() template.FuncMap {
-	fm := gomplate.Funcs(nil)
+	fm := gomplate.CreateFuncs(context.TODO())
 	fm["jsonPath"] = f.JSONPath
 	for k, v := range f.Custom {
 		fm[k] = v
