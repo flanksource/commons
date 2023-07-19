@@ -17,7 +17,7 @@ func NewFunctions() *Functions {
 }
 
 func (f *Functions) FuncMap() template.FuncMap {
-	fm := gomplate.Funcs(nil)
+	fm := gomplate.CreateFuncs(nil)
 	fm["jsonPath"] = f.JSONPath
 	for k, v := range f.Custom {
 		fm[k] = v

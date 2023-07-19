@@ -68,7 +68,7 @@ func TemplateWithDelims(template, openingDelims, closingDelims string, vars inte
 }
 
 func GetTemplateFuncs() gotemplate.FuncMap {
-	funcs := gomplate.Funcs(nil)
+	funcs := gomplate.CreateFuncs(nil)
 	funcs["humanizeBytes"] = HumanizeBytes
 	funcs["humanizeTime"] = humanize.Time
 	funcs["humanizeDuration"] = HumanizeDuration
