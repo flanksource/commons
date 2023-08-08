@@ -15,6 +15,22 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+func Ptr[T any](value T) *T {
+	return &value
+}
+
+// Coalesce returns the first non-zero element
+func Coalesce[T comparable](arr ...T) T {
+	var zeroVal T
+	for _, item := range arr {
+		if item != zeroVal {
+			return item
+		}
+	}
+
+	return zeroVal
+}
+
 // GetEnvOrDefault returns the first non-empty environment variable
 func GetEnvOrDefault(names ...string) string {
 	for _, name := range names {
