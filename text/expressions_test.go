@@ -21,7 +21,7 @@ var fixtures = Fixtures{
 
 var Results = map[string]interface{}{
 	"result": map[string]interface{}{
-		"started_at":  "2020-09-21T10:02:05Z",
+		"started_at":  "2021-09-21T10:02:05Z",
 		"size_string": "1024",
 		"size_int":    1024,
 	},
