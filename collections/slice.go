@@ -1,6 +1,8 @@
 package collections
 
-import "strings"
+import (
+	"strings"
+)
 
 func Dedup[T comparable](arr []T) []T {
 	set := make(map[T]bool)
@@ -51,9 +53,29 @@ func Contains[T comparable](a []T, x T) bool {
 	return false
 }
 
-// matchItems returns true if any of the items in the list match the item
-// negative matches are supported by prefixing the item with a !
+// Append concatenates multiple slices of strings into a single slice.
+func Append[T any](slices ...[]T) []T {
+	if len(slices) == 0 {
+		return nil
+	}
+
+	var totalLen int
+	for _, s := range slices {
+		totalLen += len(s)
+	}
+
+	output := make([]T, 0, totalLen)
+	for _, s := range slices {
+		output = append(output, s...)
+	}
+
+	return output
+}
+
+// matchItems returns true if any of the items in the list match the item.
+// negative matches are supported by prefixing the item with a "!".
 // * matches everything
+// to match prefix and suffix use "*" accordingly.
 func MatchItems(item string, items ...string) bool {
 	if len(items) == 0 {
 		return true
@@ -64,17 +86,27 @@ func MatchItems(item string, items ...string) bool {
 			if item == strings.TrimPrefix(i, "!") {
 				return false
 			}
-		}
-	}
 
-	for _, i := range items {
-		if strings.HasPrefix(i, "!") {
 			continue
 		}
+
 		if i == "*" || item == i {
 			return true
 		}
+
+		if strings.HasPrefix(i, "*") {
+			if strings.HasSuffix(item, strings.TrimPrefix(i, "*")) {
+				return true
+			}
+		}
+
+		if strings.HasSuffix(i, "*") {
+			if strings.HasPrefix(item, strings.TrimSuffix(i, "*")) {
+				return true
+			}
+		}
 	}
+
 	return false
 }
 
