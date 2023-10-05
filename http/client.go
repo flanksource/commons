@@ -1,12 +1,15 @@
 package http
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
 	"github.com/flanksource/commons/logger"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const contentType = "Content-Type"
@@ -21,6 +24,7 @@ var contentTypesToLog = []string{
 type Client struct {
 	httpClient *http.Client
 	config     *Config
+	tracer     trace.Tracer
 }
 
 // NewClient configures a new HTTP client using given configuration
@@ -38,6 +42,7 @@ func NewClient(config *Config) *Client {
 	}
 
 	return &Client{
+		tracer:     otel.GetTracerProvider().Tracer("http-client"),
 		httpClient: createHTTPClient(config),
 		config:     config,
 	}
@@ -53,55 +58,56 @@ func createHTTPClient(config *Config) *http.Client {
 }
 
 // Get sends an HTTP GET request
-func (c *Client) Get(url string) (*Response, error) {
+func (c *Client) Get(ctx context.Context, url string) (*Response, error) {
 	request := NewGetRequest(c.config, url)
-	c.logRequest(request.Request, c.config.Logger.Tracef)
-	response, err := request.Send(c.httpClient, c.config.Logger)
+	c.logRequest(ctx, request.Request, c.config.Logger.Tracef)
+
+	response, err := request.Send(ctx, c.httpClient, c.config.Logger)
 	c.logResponse(request.verb, c.config.Logger.Tracef, url, response, err)
 	return response, err
 }
 
 // Post sends an HTTP POST request
-func (c *Client) Post(url string, contentType string, body io.ReadCloser) (*Response, error) {
+func (c *Client) Post(ctx context.Context, url string, contentType string, body io.ReadCloser) (*Response, error) {
 	request := NewPostRequest(c.config, url, contentType, body)
-	c.logRequest(request.Request, c.config.Logger.Debugf)
+	c.logRequest(ctx, request.Request, c.config.Logger.Debugf)
 
-	response, err := request.Send(c.httpClient, c.config.Logger)
+	response, err := request.Send(ctx, c.httpClient, c.config.Logger)
 	c.logResponse(request.verb, c.config.Logger.Debugf, url, response, err)
 	return response, err
 }
 
 // Patch sends an HTTP PATCH request
-func (c *Client) Patch(url string, body io.ReadCloser) (*Response, error) {
+func (c *Client) Patch(ctx context.Context, url string, body io.ReadCloser) (*Response, error) {
 	request := NewPatchRequest(c.config, url, body)
-	c.logRequest(request.Request, c.config.Logger.Debugf)
+	c.logRequest(ctx, request.Request, c.config.Logger.Debugf)
 
-	response, err := request.Send(c.httpClient, c.config.Logger)
+	response, err := request.Send(ctx, c.httpClient, c.config.Logger)
 	c.logResponse(request.verb, c.config.Logger.Debugf, url, response, err)
 	return response, err
 }
 
 // Put sends an HTTP PUT request
-func (c *Client) Put(url string, body io.ReadCloser) (*Response, error) {
+func (c *Client) Put(ctx context.Context, url string, body io.ReadCloser) (*Response, error) {
 	request := NewPutRequest(c.config, url, body)
-	c.logRequest(request.Request, c.config.Logger.Debugf)
+	c.logRequest(ctx, request.Request, c.config.Logger.Debugf)
 
-	response, err := request.Send(c.httpClient, c.config.Logger)
+	response, err := request.Send(ctx, c.httpClient, c.config.Logger)
 	c.logResponse(request.verb, c.config.Logger.Debugf, url, response, err)
 	return response, err
 }
 
 // Delete sends an HTTP DELETE request
-func (c *Client) Delete(url string) (*Response, error) {
+func (c *Client) Delete(ctx context.Context, url string) (*Response, error) {
 	request := NewDeleteRequest(c.config, url)
-	c.logRequest(request.Request, c.config.Logger.Infof)
+	c.logRequest(ctx, request.Request, c.config.Logger.Infof)
 
-	response, err := request.Send(c.httpClient, c.config.Logger)
+	response, err := request.Send(ctx, c.httpClient, c.config.Logger)
 	c.logResponse(request.verb, c.config.Logger.Infof, url, response, err)
 	return response, err
 }
 
-func (c *Client) logRequest(request *Request, logFunc func(message string, args ...interface{})) {
+func (c *Client) logRequest(ctx context.Context, request *Request, logFunc func(message string, args ...interface{})) {
 	if !c.config.Trace {
 		return
 	}
@@ -139,6 +145,7 @@ func (c *Client) logRequest(request *Request, logFunc func(message string, args 
 		logFunc(message)
 		return
 	}
+
 	message += fmt.Sprintf("\nBody: %s", loggableString)
 	logFunc(message)
 }

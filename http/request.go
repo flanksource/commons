@@ -118,54 +118,54 @@ func NewDeleteRequest(config *Config, endpoint string) *DeleteRequest {
 }
 
 // Send the HTTP GET request
-func (r *GetRequest) Send(client *http.Client, logger logger.Logger) (*Response, error) {
+func (r *GetRequest) Send(ctx context.Context, client *http.Client, logger logger.Logger) (*Response, error) {
 	// GET requests are idempotent so can have retries
 	var retries uint
 	if r.config.Retries != nil {
 		retries = r.config.Retries.Total
 	}
 
-	return r.sendRequest(client, logger, retries)
+	return r.sendRequest(ctx, client, logger, retries)
 }
 
 // Send the HTTP POST request
-func (r *PostRequest) Send(client *http.Client, logger logger.Logger) (*Response, error) {
+func (r *PostRequest) Send(ctx context.Context, client *http.Client, logger logger.Logger) (*Response, error) {
 	r.config.Headers["Content-Type"] = r.contentType
 
 	// POST is non-idempotent so can have no retries
 	var retries uint = 0
-	return r.sendRequest(client, logger, retries)
+	return r.sendRequest(ctx, client, logger, retries)
 }
 
 // Send the HTTP PUT request
-func (r *PutRequest) Send(client *http.Client, logger logger.Logger) (*Response, error) {
+func (r *PutRequest) Send(ctx context.Context, client *http.Client, logger logger.Logger) (*Response, error) {
 	// PUT is non-idempotent so can have no retries
 	var retries uint = 0
-	return r.sendRequest(client, logger, retries)
+	return r.sendRequest(ctx, client, logger, retries)
 }
 
 // Send the HTTP PATCH request
-func (r *PatchRequest) Send(client *http.Client, logger logger.Logger) (*Response, error) {
+func (r *PatchRequest) Send(ctx context.Context, client *http.Client, logger logger.Logger) (*Response, error) {
 	// PATCH is non-idempotent so can have no retries
 	var retries uint = 0
-	return r.sendRequest(client, logger, retries)
+	return r.sendRequest(ctx, client, logger, retries)
 }
 
 // Send the HTTP DELETE request
-func (r *DeleteRequest) Send(client *http.Client, logger logger.Logger) (*Response, error) {
+func (r *DeleteRequest) Send(ctx context.Context, client *http.Client, logger logger.Logger) (*Response, error) {
 	// DELETE is non-idempotent so can have no retries
 	var retries uint = 0
-	return r.sendRequest(client, logger, retries)
+	return r.sendRequest(ctx, client, logger, retries)
 }
 
 // createHTTPRequest configures an HTTP request with the configured values
-func (r *Request) createHTTPRequest() (*http.Request, error) {
+func (r *Request) createHTTPRequest(ctx context.Context) (*http.Request, error) {
 	requestURL := r.url.String()
 	if baseURL := strings.TrimSpace(r.config.BaseURL); baseURL != "" {
 		requestURL = fmt.Sprintf("%s/%s", baseURL, r.url.String())
 	}
 
-	request, err := http.NewRequest(r.verb, requestURL, r.body)
+	request, err := http.NewRequestWithContext(ctx, r.verb, requestURL, r.body)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +179,7 @@ func (r *Request) createHTTPRequest() (*http.Request, error) {
 }
 
 // sendRequest sends the request using the given HTTP client
-func (r *Request) sendRequest(client *http.Client, logger logger.Logger, retriesRemaining uint) (*Response, error) {
+func (r *Request) sendRequest(ctx context.Context, client *http.Client, logger logger.Logger, retriesRemaining uint) (*Response, error) {
 	if r.config.ConnectTo == "" {
 		r.config.ConnectTo = r.url.Hostname()
 	} else if r.config.ConnectTo != r.url.Hostname() {
@@ -200,7 +200,7 @@ func (r *Request) sendRequest(client *http.Client, logger logger.Logger, retries
 	}
 
 	if r.config.ConnectTo == "" && r.config.DNSCache {
-		ips, err := dns.CacheLookup(context.TODO(), "A", r.url.Hostname())
+		ips, err := dns.CacheLookup(ctx, "A", r.url.Hostname())
 		if len(ips) == 0 {
 			return nil, err
 		}
@@ -208,7 +208,7 @@ func (r *Request) sendRequest(client *http.Client, logger logger.Logger, retries
 		r.config.ConnectTo = ips[0].String()
 	}
 
-	request, err := r.createHTTPRequest()
+	request, err := r.createHTTPRequest(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +228,7 @@ func (r *Request) sendRequest(client *http.Client, logger logger.Logger, retries
 			logger.Warnf("backing off for %v before next retry", backoffTime)
 		}
 
-		return r.sendRequest(client, logger, retriesRemaining)
+		return r.sendRequest(ctx, client, logger, retriesRemaining)
 	}
 
 	return &Response{Response: response}, nil
