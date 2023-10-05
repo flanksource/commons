@@ -52,7 +52,7 @@ type DeleteRequest struct {
 func NewGetRequest(config *Config, url string) *GetRequest {
 	return &GetRequest{
 		&Request{
-			verb:   "GET",
+			verb:   http.MethodGet,
 			url:    url,
 			config: config,
 		},
@@ -63,7 +63,7 @@ func NewGetRequest(config *Config, url string) *GetRequest {
 func NewPostRequest(config *Config, url string, contentType string, body io.ReadCloser) *PostRequest {
 	return &PostRequest{
 		&Request{
-			verb:   "POST",
+			verb:   http.MethodPost,
 			url:    url,
 			body:   body,
 			config: config,
@@ -78,7 +78,7 @@ func NewPostRequest(config *Config, url string, contentType string, body io.Read
 func NewPutRequest(config *Config, url string, body io.ReadCloser) *PutRequest {
 	return &PutRequest{
 		&Request{
-			verb:   "PUT",
+			verb:   http.MethodPut,
 			url:    url,
 			body:   body,
 			config: config,
@@ -90,7 +90,7 @@ func NewPutRequest(config *Config, url string, body io.ReadCloser) *PutRequest {
 func NewPatchRequest(config *Config, url string, body io.ReadCloser) *PatchRequest {
 	return &PatchRequest{
 		&Request{
-			verb:   "PATCH",
+			verb:   http.MethodPatch,
 			url:    url,
 			body:   body,
 			config: config,
@@ -102,7 +102,7 @@ func NewPatchRequest(config *Config, url string, body io.ReadCloser) *PatchReque
 func NewDeleteRequest(config *Config, url string) *DeleteRequest {
 	return &DeleteRequest{
 		&Request{
-			verb:   "DELETE",
+			verb:   http.MethodDelete,
 			url:    url,
 			config: config,
 		},
@@ -112,7 +112,11 @@ func NewDeleteRequest(config *Config, url string) *DeleteRequest {
 // Send the HTTP GET request
 func (r *GetRequest) Send(client *http.Client, logger logger.Logger) (*Response, error) {
 	// GET requests are idempotent so can have retries
-	var retries uint = r.config.Retries
+	var retries uint
+	if r.config.Retries != nil {
+		retries = r.config.Retries.Total
+	}
+
 	return r.sendRequest(client, logger, retries)
 }
 
@@ -183,13 +187,15 @@ func (r *Request) sendRequest(client *http.Client, logger logger.Logger, retries
 
 		retriesRemaining--
 
-		backoffTime := exponentialBackoff(r.config, retriesRemaining)
-		logger.Warnf("backing off for %v before next retry", backoffTime)
+		if r.config.Retries != nil {
+			backoffTime := exponentialBackoff(r.config.Retries, retriesRemaining)
+			logger.Warnf("backing off for %v before next retry", backoffTime)
+		}
 
 		return r.sendRequest(client, logger, retriesRemaining)
 	}
 
-	return &Response{response}, nil
+	return &Response{Response: response}, nil
 }
 
 type RequestLoggableStrings struct {
@@ -207,12 +213,14 @@ func (r *Request) GetLoggableStrings() (string, error) {
 	buf := new(bytes.Buffer)
 	_, err := buf.ReadFrom(r.body)
 	if err != nil {
-		return "", fmt.Errorf("Failed to read request body: err=%+v", err)
+		return "", fmt.Errorf("failed to read request body: err=%+v", err)
 	}
+
 	err = r.body.Close()
 	if err != nil {
-		return "", fmt.Errorf("Failed to close request body ReadCloser: err=%+v", err)
+		return "", fmt.Errorf("failed to close request body ReadCloser: err=%+v", err)
 	}
+
 	bodyString := buf
 	r.body = io.NopCloser(bufio.NewReader(buf))
 

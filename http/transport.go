@@ -17,15 +17,23 @@ func createHTTPTransport(config *Config) *http.Transport {
 		transport.Proxy = proxy
 	}
 
-	// configure TLS certificate verification skipping
-	if config.InsecureSkipVerify {
-		transport.TLSClientConfig = &tls.Config{
-			InsecureSkipVerify: true,
+	if config.Transport != nil {
+		if config.Transport.TLS != nil {
+			if transport.TLSClientConfig == nil {
+				transport.TLSClientConfig = &tls.Config{}
+			}
+
+			transport.TLSClientConfig.InsecureSkipVerify = config.Transport.TLS.InsecureSkipVerify
+
+			transport.TLSClientConfig.ServerName = config.Transport.TLS.ServerName
+		}
+
+		transport.DisableKeepAlives = config.Transport.DisableKeepAlives
+
+		if config.Transport.DialContext != nil {
+			transport.DialContext = config.Transport.DialContext
 		}
 	}
-
-	// configure dial context
-	transport.DialContext = config.DialContext
 
 	return transport
 }

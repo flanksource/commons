@@ -12,15 +12,26 @@ import (
 // Response embeds the stdlib http.Response type and extends its functionality
 type Response struct {
 	*http.Response
+	Error error
 }
 
 // IsOK is a convenience method to determine if the response returned a 200 OK
-func (resp *Response) IsOK() bool {
-	if resp == nil {
+func (resp *Response) IsOK(responseCodes ...int) bool {
+	if resp.Error != nil {
 		return false
 	}
 
-	return resp.StatusCode == http.StatusOK
+	if len(responseCodes) == 0 {
+		return resp.StatusCode >= 200 && resp.StatusCode < 299
+	}
+
+	for _, valid := range responseCodes {
+		if resp.StatusCode == valid {
+			return true
+		}
+	}
+
+	return false
 }
 
 // AsError returns an error with details of the response
