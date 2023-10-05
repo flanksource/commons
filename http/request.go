@@ -3,19 +3,22 @@ package http
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
+	"github.com/flanksource/commons/dns"
 	"github.com/flanksource/commons/logger"
 )
 
 type Request struct {
 	config *Config
 	verb   string
-	url    string
+	url    *url.URL
 	body   io.ReadCloser
 }
 
@@ -49,22 +52,24 @@ type DeleteRequest struct {
 }
 
 // NewGetRequest creates a new HTTP GET request
-func NewGetRequest(config *Config, url string) *GetRequest {
+func NewGetRequest(config *Config, endpoint string) *GetRequest {
+	parsedURL, _ := url.Parse(endpoint)
 	return &GetRequest{
 		&Request{
 			verb:   http.MethodGet,
-			url:    url,
+			url:    parsedURL,
 			config: config,
 		},
 	}
 }
 
 // NewPostRequest creates a new HTTP POST request
-func NewPostRequest(config *Config, url string, contentType string, body io.ReadCloser) *PostRequest {
+func NewPostRequest(config *Config, endpoint string, contentType string, body io.ReadCloser) *PostRequest {
+	parsedURL, _ := url.Parse(endpoint)
 	return &PostRequest{
 		&Request{
 			verb:   http.MethodPost,
-			url:    url,
+			url:    parsedURL,
 			body:   body,
 			config: config,
 		},
@@ -75,11 +80,12 @@ func NewPostRequest(config *Config, url string, contentType string, body io.Read
 }
 
 // NewPutRequest creates a new HTTP PUT request
-func NewPutRequest(config *Config, url string, body io.ReadCloser) *PutRequest {
+func NewPutRequest(config *Config, endpoint string, body io.ReadCloser) *PutRequest {
+	parsedURL, _ := url.Parse(endpoint)
 	return &PutRequest{
 		&Request{
 			verb:   http.MethodPut,
-			url:    url,
+			url:    parsedURL,
 			body:   body,
 			config: config,
 		},
@@ -87,11 +93,12 @@ func NewPutRequest(config *Config, url string, body io.ReadCloser) *PutRequest {
 }
 
 // NewPatchRequest creates a new HTTP PATCH request
-func NewPatchRequest(config *Config, url string, body io.ReadCloser) *PatchRequest {
+func NewPatchRequest(config *Config, endpoint string, body io.ReadCloser) *PatchRequest {
+	parsedURL, _ := url.Parse(endpoint)
 	return &PatchRequest{
 		&Request{
 			verb:   http.MethodPatch,
-			url:    url,
+			url:    parsedURL,
 			body:   body,
 			config: config,
 		},
@@ -99,11 +106,12 @@ func NewPatchRequest(config *Config, url string, body io.ReadCloser) *PatchReque
 }
 
 // NewDeleteRequest creates a new HTTP DELETE request
-func NewDeleteRequest(config *Config, url string) *DeleteRequest {
+func NewDeleteRequest(config *Config, endpoint string) *DeleteRequest {
+	parsedURL, _ := url.Parse(endpoint)
 	return &DeleteRequest{
 		&Request{
 			verb:   http.MethodDelete,
-			url:    url,
+			url:    parsedURL,
 			config: config,
 		},
 	}
@@ -152,9 +160,9 @@ func (r *DeleteRequest) Send(client *http.Client, logger logger.Logger) (*Respon
 
 // createHTTPRequest configures an HTTP request with the configured values
 func (r *Request) createHTTPRequest() (*http.Request, error) {
-	requestURL := r.url
+	requestURL := r.url.String()
 	if baseURL := strings.TrimSpace(r.config.BaseURL); baseURL != "" {
-		requestURL = fmt.Sprintf("%s/%s", baseURL, r.url)
+		requestURL = fmt.Sprintf("%s/%s", baseURL, r.url.String())
 	}
 
 	request, err := http.NewRequest(r.verb, requestURL, r.body)
@@ -172,6 +180,34 @@ func (r *Request) createHTTPRequest() (*http.Request, error) {
 
 // sendRequest sends the request using the given HTTP client
 func (r *Request) sendRequest(client *http.Client, logger logger.Logger, retriesRemaining uint) (*Response, error) {
+	if r.config.ConnectTo == "" {
+		r.config.ConnectTo = r.url.Hostname()
+	} else if r.config.ConnectTo != r.url.Hostname() {
+		// If specified, replace the hostname in the URL, with the actual host/IP
+		// and move the Virtual Hostname to a Header
+		r.url.Host = r.config.ConnectTo
+	}
+
+	if r.config.Headers["Host"] != "" {
+		r.config.ConnectTo = r.url.Hostname()
+		r.url.Host = r.config.Headers["Host"]
+		port := r.url.Port()
+		if port != "" {
+			r.url.Host += ":" + port
+		}
+
+		delete(r.config.Headers, "Host")
+	}
+
+	if r.config.ConnectTo == "" && r.config.DNSCache {
+		ips, err := dns.CacheLookup(context.TODO(), "A", r.url.Hostname())
+		if len(ips) == 0 {
+			return nil, err
+		}
+
+		r.config.ConnectTo = ips[0].String()
+	}
+
 	request, err := r.createHTTPRequest()
 	if err != nil {
 		return nil, err
