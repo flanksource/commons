@@ -9,10 +9,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Response embeds the stdlib http.Response type and extends its functionality
-type Response struct {
-	*http.Response
-}
+// Response extends the stdlib http.Response type and extends its functionality
+type Response http.Response
 
 // IsOK is a convenience method to determine if the response returned a 200 OK
 func (resp *Response) IsOK(responseCodes ...int) bool {

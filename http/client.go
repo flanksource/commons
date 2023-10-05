@@ -8,8 +8,6 @@ import (
 	"strings"
 
 	"github.com/flanksource/commons/logger"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
 )
 
 const contentType = "Content-Type"
@@ -24,7 +22,6 @@ var contentTypesToLog = []string{
 type Client struct {
 	httpClient *http.Client
 	config     *Config
-	tracer     trace.Tracer
 }
 
 // NewClient configures a new HTTP client using given configuration
@@ -42,7 +39,6 @@ func NewClient(config *Config) *Client {
 	}
 
 	return &Client{
-		tracer:     otel.GetTracerProvider().Tracer("http-client"),
 		httpClient: createHTTPClient(config),
 		config:     config,
 	}
@@ -108,7 +104,7 @@ func (c *Client) Delete(ctx context.Context, url string) (*Response, error) {
 }
 
 func (c *Client) logRequest(ctx context.Context, request *Request, logFunc func(message string, args ...interface{})) {
-	if !c.config.Trace {
+	if !c.config.Log {
 		return
 	}
 
@@ -151,7 +147,7 @@ func (c *Client) logRequest(ctx context.Context, request *Request, logFunc func(
 }
 
 func (c *Client) logResponse(verb string, logFunc func(message string, args ...interface{}), url string, response *Response, err error) {
-	if !c.config.Trace {
+	if !c.config.Log {
 		return
 	}
 

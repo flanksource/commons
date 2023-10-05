@@ -13,6 +13,7 @@ import (
 
 	"github.com/flanksource/commons/dns"
 	"github.com/flanksource/commons/logger"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 type Request struct {
@@ -130,7 +131,7 @@ func (r *GetRequest) Send(ctx context.Context, client *http.Client, logger logge
 
 // Send the HTTP POST request
 func (r *PostRequest) Send(ctx context.Context, client *http.Client, logger logger.Logger) (*Response, error) {
-	r.config.Headers["Content-Type"] = r.contentType
+	r.config.Headers[contentType] = r.contentType
 
 	// POST is non-idempotent so can have no retries
 	var retries uint = 0
@@ -180,6 +181,11 @@ func (r *Request) createHTTPRequest(ctx context.Context) (*http.Request, error) 
 
 // sendRequest sends the request using the given HTTP client
 func (r *Request) sendRequest(ctx context.Context, client *http.Client, logger logger.Logger, retriesRemaining uint) (*Response, error) {
+	ctx, span := tracer.Start(ctx, r.url.Hostname()) // TODO: Decide on how to name this span
+	defer span.End()
+
+	span.SetAttributes(attribute.String("method", r.verb))
+
 	if r.config.ConnectTo == "" {
 		r.config.ConnectTo = r.url.Hostname()
 	} else if r.config.ConnectTo != r.url.Hostname() {
@@ -209,13 +215,12 @@ func (r *Request) sendRequest(ctx context.Context, client *http.Client, logger l
 	}
 
 	request, err := r.createHTTPRequest(ctx)
-	if err != nil {
+	if Error(span, err) {
 		return nil, err
 	}
 
 	response, err := client.Do(request)
-	if err != nil {
-
+	if Error(span, err) {
 		// if the retries have been exhausted (or not configured), bail out
 		if retriesRemaining <= 0 {
 			return nil, err
@@ -231,7 +236,18 @@ func (r *Request) sendRequest(ctx context.Context, client *http.Client, logger l
 		return r.sendRequest(ctx, client, logger, retriesRemaining)
 	}
 
-	return &Response{Response: response}, nil
+	if r.config.TraceBody {
+		body, err := io.ReadAll(response.Body)
+		if Error(span, err) {
+			return nil, err
+		}
+
+		response.Body = io.NopCloser(bytes.NewBuffer(body))
+		span.SetAttributes(attribute.String("body", string(body)))
+	}
+
+	res := Response(*response)
+	return &res, nil
 }
 
 type RequestLoggableStrings struct {
