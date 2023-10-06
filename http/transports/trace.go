@@ -6,10 +6,13 @@ import (
 	"net/http"
 
 	"github.com/flanksource/commons/bitmask"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 )
+
+const tracerName = "commons-http-client"
 
 type TraceMode bitmask.Bits
 
@@ -20,9 +23,9 @@ const (
 	// ... Add more
 )
 
-func NewTracedTransport(tracer trace.Tracer) *traceTransport {
+func NewTracedTransport(traceProvider trace.TracerProvider) *traceTransport {
 	return &traceTransport{
-		tracer: tracer,
+		tracer: otel.GetTracerProvider().Tracer(tracerName),
 	}
 }
 
@@ -39,6 +42,11 @@ func (t *traceTransport) Wrap(next http.RoundTripper) http.RoundTripper {
 
 func (t *traceTransport) Mode(m TraceMode) *traceTransport {
 	t.mode = m
+	return t
+}
+
+func (t *traceTransport) TraceProvider(provider trace.TracerProvider) *traceTransport {
+	t.tracer = provider.Tracer(tracerName)
 	return t
 }
 
