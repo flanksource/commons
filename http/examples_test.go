@@ -7,23 +7,26 @@ import (
 	"testing"
 
 	"github.com/flanksource/commons/http"
+	"github.com/flanksource/commons/http/transports"
 	"github.com/flanksource/commons/logger"
 )
 
 // TODO: This will be removed or we can keep it as exaples as well
 // Contains some examples
 func TestExample(t *testing.T) {
+	ctx := context.Background()
+
 	client := http.NewClient().
-		SetBaseURL("https://dummyjson.com").
-		SetBasicAuth("username", "password").
-		SetHost("dummyjson.com").
-		SetHeader("Name", "Aditya")
+		BaseURL("https://dummyjson.com").
+		BasicAuth("username", "password").
+		Host("dummyjson.com").
+		Header("API-KEY", "123456")
 
 	{
 		body := &bytes.Buffer{}
 		body.WriteString(`{"title": "test"}`)
-		postReq := client.R().SetContext(context.TODO()).SetBody(body).SetHeader("Scope", "request")
-		response, err := postReq.Post("products/add")
+		postReq := client.R().Header("Scope", "request")
+		response, err := postReq.Post(ctx, "products/add", body)
 		if err != nil {
 			logger.Fatalf("error: %v", err)
 		}
@@ -36,8 +39,8 @@ func TestExample(t *testing.T) {
 	}
 
 	{
-		req := client.R().SetContext(context.TODO())
-		response, err := req.Get("products/1")
+		req := client.R()
+		response, err := req.Get(ctx, "products/1")
 		if err != nil {
 			logger.Fatalf("error: %v", err)
 		}
@@ -48,18 +51,17 @@ func TestExample(t *testing.T) {
 
 	{
 		// To use tracing
-		// tracedTransport := transports.NewTracedTransport(otel.GetTracerProvider().Tracer("http-client")).
-		// 	Mode(transports.TraceResponse | transports.TraceBody)
+		tracedTransport := transports.NewTracedTransport().
+			Mode(transports.TraceResponse | transports.TraceBody)
 
-		// client := http.NewClient().WrapTransport(tracedTransport)
+		client := http.NewClient().WrapTransport(tracedTransport)
 
-		// req := client.R().SetContext(context.TODO())
-		// response, err := req.Get("products/1")
-		// if err != nil {
-		// 	logger.Fatalf("error: %v", err)
-		// }
+		req := client.R()
+		response, err := req.Get(ctx, "https://flanksource.com")
+		if err != nil {
+			logger.Fatalf("error: %v", err)
+		}
 
-		// b, _ := io.ReadAll(response.Body)
-		// logger.Infof("GET body: %s %v", string(b), response.IsOK())
+		logger.Infof("Status OK: %v", response.IsOK())
 	}
 }

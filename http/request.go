@@ -27,35 +27,37 @@ func (r *Request) getHeader(key string) string {
 	return r.headers.Get(key)
 }
 
-func (r *Request) SetContext(ctx context.Context) *Request {
-	r.ctx = ctx
-	return r
-}
-
-// SetHeader set a header for the request.
-func (r *Request) SetHeader(key, value string) *Request {
+// Header set a header for the request.
+func (r *Request) Header(key, value string) *Request {
 	r.headers.Set(key, value)
 	return r
 }
 
-func (r *Request) Get(url string) (*Response, error) {
-	return r.Send(http.MethodGet, url)
+func (r *Request) Get(ctx context.Context, url string) (*Response, error) {
+	return r.Send(ctx, http.MethodGet, url)
 }
 
-func (r *Request) Post(url string) (*Response, error) {
-	return r.Send(http.MethodPost, url)
+func (r *Request) Post(ctx context.Context, url string, body any) (*Response, error) {
+	r.setBody(body)
+	return r.Send(ctx, http.MethodPost, url)
 }
 
-func (r *Request) Put(url string) (*Response, error) {
-	return r.Send(http.MethodPut, url)
+func (r *Request) Put(ctx context.Context, url string, body any) (*Response, error) {
+	r.setBody(body)
+	return r.Send(ctx, http.MethodPut, url)
 }
 
-func (r *Request) Delete(url string) (*Response, error) {
-	return r.Send(http.MethodDelete, url)
+func (r *Request) Patch(ctx context.Context, url string, body any) (*Response, error) {
+	r.setBody(body)
+	return r.Send(ctx, http.MethodPatch, url)
+}
+
+func (r *Request) Delete(ctx context.Context, url string) (*Response, error) {
+	return r.Send(ctx, http.MethodDelete, url)
 }
 
 // TODO: Make this accept more types ([]byte, string, ...)
-func (r *Request) SetBody(v any) *Request {
+func (r *Request) setBody(v any) *Request {
 	switch t := v.(type) {
 	case io.Reader:
 		r.body = t
@@ -68,7 +70,8 @@ func (r *Request) SetBody(v any) *Request {
 	return r
 }
 
-func (r *Request) Send(method, reqURL string) (resp *Response, err error) {
+func (r *Request) Send(ctx context.Context, method, reqURL string) (resp *Response, err error) {
+	r.ctx = ctx
 	r.method = method
 	r.rawURL = reqURL
 
@@ -83,7 +86,7 @@ func (r *Request) Send(method, reqURL string) (resp *Response, err error) {
 			tempURL = "/" + tempURL
 		}
 
-		r.url, err = url.Parse(r.client.BaseURL + tempURL)
+		r.url, err = url.Parse(r.client.baseURL + tempURL)
 		if err != nil {
 			return nil, err
 		}

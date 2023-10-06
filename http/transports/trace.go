@@ -23,7 +23,7 @@ const (
 	// ... Add more
 )
 
-func NewTracedTransport(traceProvider trace.TracerProvider) *traceTransport {
+func NewTracedTransport() *traceTransport {
 	return &traceTransport{
 		tracer: otel.GetTracerProvider().Tracer(tracerName),
 	}

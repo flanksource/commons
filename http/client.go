@@ -16,9 +16,6 @@ type Client struct {
 	// Auth specifies the authentication configuration
 	Auth *AuthConfig
 
-	// Transport specifies the transport configuration
-	Transport *TransportConfig
-
 	// Retries specifies the configuration for retries.
 	Retries *RetryConfig
 
@@ -26,11 +23,11 @@ type Client struct {
 	// Might be different from the host specified in the URL.
 	ConnectTo string
 
-	// Headers are automatically added to all requests
-	Headers http.Header
+	// headers are automatically added to all requests
+	headers http.Header
 
-	// BaseURL is added as a prefix to all URLs
-	BaseURL string
+	// baseURL is added as a prefix to all URLs
+	baseURL string
 
 	// Specify if response body should be logged
 	TraceBody bool
@@ -67,7 +64,7 @@ func NewClient() *Client {
 
 	return &Client{
 		httpClient: client,
-		Headers:    http.Header{},
+		headers:    http.Header{},
 		Logger:     logger.StandardLogger(),
 	}
 }
@@ -81,27 +78,27 @@ func (c *Client) R() *Request {
 	}
 }
 
-func (c *Client) SetBaseURL(url string) *Client {
-	c.BaseURL = url
+func (c *Client) BaseURL(url string) *Client {
+	c.baseURL = url
 	return c
 }
 
-func (c *Client) SetHeader(key, val string) *Client {
-	c.Headers.Set(key, val)
+func (c *Client) Header(key, val string) *Client {
+	c.headers.Set(key, val)
 	return c
 }
 
-func (c *Client) SetHost(host string) *Client {
+func (c *Client) Host(host string) *Client {
 	c.ConnectTo = host
 	return c
 }
 
-func (c *Client) SetTransport(rt http.RoundTripper) *Client {
+func (c *Client) Transport(rt http.RoundTripper) *Client {
 	c.httpClient.Transport = rt
 	return c
 }
 
-func (c *Client) SetBasicAuth(username, password string) *Client {
+func (c *Client) BasicAuth(username, password string) *Client {
 	if c.Auth == nil {
 		c.Auth = &AuthConfig{}
 	}
