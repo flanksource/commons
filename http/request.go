@@ -206,7 +206,7 @@ func (r *Request) sendRequest(ctx context.Context, client *http.Client, logger l
 	}
 
 	if r.config.ConnectTo == "" && r.config.DNSCache {
-		ips, err := dns.CacheLookup(ctx, "A", r.url.Hostname())
+		ips, err := dns.CacheLookup("A", r.url.Hostname())
 		if len(ips) == 0 {
 			return nil, err
 		}

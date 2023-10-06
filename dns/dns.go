@@ -1,41 +1,24 @@
 package dns
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"net/url"
 	"time"
 
-	bigcache "github.com/allegro/bigcache/v3"
-	"github.com/eko/gocache/lib/v4/marshaler"
-	bcstore "github.com/eko/gocache/store/bigcache/v4"
+	"github.com/patrickmn/go-cache"
 )
 
-type Cache struct {
-	*marshaler.Marshaler
-}
+// dnsCache serves as the global cache for dns queries
+var dnsCache = cache.New(time.Hour, time.Hour)
 
-var cache *Cache
-
-func newCache() (*Cache, error) {
-	bigcacheClient, _ := bigcache.NewBigCache(bigcache.DefaultConfig(60 * time.Minute))
-	bigcacheStore := bcstore.NewBigcache(bigcacheClient)
-	return &Cache{marshaler.New(bigcacheStore)}, nil
-}
-
-func init() {
-	cache, _ = newCache()
-}
-
-type IPs []net.IP
-
-func CacheLookup(ctx context.Context, recordType, hostname string) ([]net.IP, error) {
-	var ips IPs
+func CacheLookup(recordType, hostname string) ([]net.IP, error) {
 	key := fmt.Sprintf("%s:%s", recordType, hostname)
 
-	if _, err := cache.Get(ctx, key, &ips); err == nil {
-		return ips, nil
+	if val, ok := dnsCache.Get(key); ok {
+		if ips, ok := val.([]net.IP); ok {
+			return ips, nil
+		}
 	}
 
 	ips, err := Lookup(recordType, hostname)
@@ -43,8 +26,8 @@ func CacheLookup(ctx context.Context, recordType, hostname string) ([]net.IP, er
 		return nil, err
 	}
 
-	err = cache.Set(ctx, key, ips, nil)
-	return ips, err
+	dnsCache.SetDefault(key, ips)
+	return ips, nil
 }
 
 // Lookup looksup the record using Go's default resolver
