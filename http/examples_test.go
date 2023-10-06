@@ -10,9 +10,9 @@ import (
 	"github.com/flanksource/commons/logger"
 )
 
-// TODO: This will be removed
+// TODO: This will be removed or we can keep it as exaples as well
 // Contains some examples
-func TestHey(t *testing.T) {
+func TestExample(t *testing.T) {
 	client := http.NewClient().
 		SetBaseURL("https://dummyjson.com").
 		SetBasicAuth("username", "password").
@@ -44,5 +44,22 @@ func TestHey(t *testing.T) {
 
 		b, _ := io.ReadAll(response.Body)
 		logger.Infof("GET body: %s %v", string(b), response.IsOK())
+	}
+
+	{
+		// To use tracing
+		// tracedTransport := transports.NewTracedTransport(otel.GetTracerProvider().Tracer("http-client")).
+		// 	Mode(transports.TraceResponse | transports.TraceBody)
+
+		// client := http.NewClient().WrapTransport(tracedTransport)
+
+		// req := client.R().SetContext(context.TODO())
+		// response, err := req.Get("products/1")
+		// if err != nil {
+		// 	logger.Fatalf("error: %v", err)
+		// }
+
+		// b, _ := io.ReadAll(response.Body)
+		// logger.Infof("GET body: %s %v", string(b), response.IsOK())
 	}
 }

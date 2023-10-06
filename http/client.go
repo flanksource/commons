@@ -5,22 +5,13 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/logger"
-	"go.opentelemetry.io/otel/trace"
 )
 
 const contentType = "Content-Type"
 
-var contentTypesToLog = []string{
-	"text",
-	"json",
-	"yml",
-}
-
 // Client is a type that represents an HTTP client
 type Client struct {
 	httpClient *http.Client
-
-	tracer trace.Tracer
 
 	// Auth specifies the authentication configuration
 	Auth *AuthConfig
@@ -105,8 +96,8 @@ func (c *Client) SetHost(host string) *Client {
 	return c
 }
 
-func (c *Client) SetTracer(tracer trace.Tracer) *Client {
-	c.tracer = tracer
+func (c *Client) SetTransport(rt http.RoundTripper) *Client {
+	c.httpClient.Transport = rt
 	return c
 }
 
@@ -147,4 +138,20 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 		Response: httpResponse,
 	}
 	return response, nil
+}
+
+type RoundTripWrapper interface {
+	Wrap(rt http.RoundTripper) http.RoundTripper
+}
+
+func (c *Client) WrapTransport(wrappers ...RoundTripWrapper) *Client {
+	if c.httpClient.Transport == nil {
+		c.httpClient.Transport = http.DefaultTransport
+	}
+
+	for _, wrapper := range wrappers {
+		c.httpClient.Transport = wrapper.Wrap(c.httpClient.Transport)
+	}
+
+	return c
 }

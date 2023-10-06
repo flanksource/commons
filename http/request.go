@@ -6,8 +6,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-
-	"go.opentelemetry.io/otel/attribute"
 )
 
 type Request struct {
@@ -102,11 +100,6 @@ func (r *Request) Send(method, reqURL string) (resp *Response, err error) {
 }
 
 func (r *Request) Do() (resp *Response, err error) {
-	_, span := r.client.tracer.Start(r.ctx, r.url.Hostname()) // TODO:
-	defer span.End()
-
-	span.SetAttributes(attribute.String("name", "daisy"))
-
 	for {
 		// TODO: Retry
 
