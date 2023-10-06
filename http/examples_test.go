@@ -51,8 +51,7 @@ func TestExample(t *testing.T) {
 
 	{
 		// To use tracing
-		tracedTransport := transports.NewTracedTransport().
-			Mode(transports.TraceResponse | transports.TraceBody)
+		tracedTransport := transports.NewTracedTransport().TraceBody(true).TraceResponse(true)
 
 		client := http.NewClient().WrapTransport(tracedTransport)
 

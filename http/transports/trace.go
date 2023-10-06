@@ -5,7 +5,6 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/flanksource/commons/bitmask"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -14,15 +13,6 @@ import (
 
 const tracerName = "commons-http-client"
 
-type TraceMode bitmask.Bits
-
-const (
-	TraceBody TraceMode = 1 << iota
-	TraceResponse
-	TracerQueryParam
-	// ... Add more
-)
-
 func NewTracedTransport() *traceTransport {
 	return &traceTransport{
 		tracer: otel.GetTracerProvider().Tracer(tracerName),
@@ -30,9 +20,26 @@ func NewTracedTransport() *traceTransport {
 }
 
 type traceTransport struct {
-	rt     http.RoundTripper
+	// rt is the transport to trace
+	rt http.RoundTripper
+
+	// tracer is the creator of spans
 	tracer trace.Tracer
-	mode   TraceMode
+
+	// body controls whether the request body is traced
+	body bool
+
+	// response controls whether the response body is traced
+	response bool
+
+	// responseHeaders controls whether the response headers are traced
+	responseHeaders bool
+
+	// queryParam controls whether the query parameters are traced
+	queryParam bool
+
+	// headers controls whether the headers are traced
+	headers bool
 }
 
 func (t *traceTransport) Wrap(next http.RoundTripper) http.RoundTripper {
@@ -40,8 +47,37 @@ func (t *traceTransport) Wrap(next http.RoundTripper) http.RoundTripper {
 	return t
 }
 
-func (t *traceTransport) Mode(m TraceMode) *traceTransport {
-	t.mode = m
+func (t *traceTransport) TraceAll(val bool) *traceTransport {
+	t.body = true
+	t.response = true
+	t.responseHeaders = true
+	t.queryParam = true
+	t.headers = true
+	return t
+}
+
+func (t *traceTransport) TraceBody(val bool) *traceTransport {
+	t.body = val
+	return t
+}
+
+func (t *traceTransport) TraceResponse(val bool) *traceTransport {
+	t.response = val
+	return t
+}
+
+func (t *traceTransport) TraceResponseHeaders(val bool) *traceTransport {
+	t.responseHeaders = val
+	return t
+}
+
+func (t *traceTransport) TraceQueryParam(val bool) *traceTransport {
+	t.queryParam = val
+	return t
+}
+
+func (t *traceTransport) TraceHeaders(val bool) *traceTransport {
+	t.headers = val
 	return t
 }
 
@@ -54,18 +90,31 @@ func (t *traceTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	_, span := t.tracer.Start(req.Context(), req.URL.Host)
 	defer span.End()
 
-	span.SetAttributes(attribute.String("request.method", req.Method))
-	span.SetAttributes(attribute.String("request.host", req.Host))
+	span.SetAttributes(
+		attribute.String("request.method", req.Method),
+		attribute.String("request.url", req.URL.String()),
+		attribute.String("request.host", req.Host),
+	)
 
-	if req.Body != nil && bitmask.Has(bitmask.Bits(t.mode), bitmask.Bits(TraceBody)) {
-		b, _ := io.ReadAll(req.Body)
-		span.SetAttributes(attribute.String("request.body", string(b)))
-
-		req.Body = io.NopCloser(bytes.NewBuffer(b))
+	if t.headers {
+		for key, values := range req.Header {
+			for _, value := range values {
+				span.SetAttributes(attribute.String("request.header."+key, value))
+			}
+		}
 	}
 
-	if bitmask.Has(bitmask.Bits(t.mode), bitmask.Bits(TracerQueryParam)) {
-		span.SetAttributes(attribute.String("request.query", req.URL.RawQuery))
+	if req.Body != nil && t.body {
+		if b, err := io.ReadAll(req.Body); err == nil {
+			span.SetAttributes(attribute.String("request.body", string(b)))
+			req.Body = io.NopCloser(bytes.NewBuffer(b))
+		}
+	}
+
+	if t.queryParam && req.URL.RawQuery != "" {
+		for q, val := range req.URL.Query() {
+			span.SetAttributes(attribute.StringSlice("request.query."+q, val))
+		}
 	}
 
 	resp, err := t.rt.RoundTrip(req)
@@ -75,11 +124,19 @@ func (t *traceTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 
-	if bitmask.Has(bitmask.Bits(t.mode), bitmask.Bits(TraceResponse)) {
-		b, _ := io.ReadAll(resp.Body)
-		span.SetAttributes(attribute.String("response.body", string(b)))
+	if t.responseHeaders {
+		for key, values := range resp.Header {
+			for _, value := range values {
+				span.SetAttributes(attribute.String("response.header."+key, value))
+			}
+		}
+	}
 
-		resp.Body = io.NopCloser(bytes.NewBuffer(b))
+	if t.response {
+		if b, err := io.ReadAll(resp.Body); err == nil {
+			span.SetAttributes(attribute.String("response.body", string(b)))
+			resp.Body = io.NopCloser(bytes.NewBuffer(b))
+		}
 	}
 
 	span.SetAttributes(attribute.String("response.status", resp.Status))
