@@ -1,13 +1,11 @@
 package http
 
 import (
-	"context"
-	"fmt"
-	"io"
 	"net/http"
-	"strings"
+	"time"
 
 	"github.com/flanksource/commons/logger"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const contentType = "Content-Type"
@@ -21,189 +19,132 @@ var contentTypesToLog = []string{
 // Client is a type that represents an HTTP client
 type Client struct {
 	httpClient *http.Client
-	config     *Config
+
+	tracer trace.Tracer
+
+	// Auth specifies the authentication configuration
+	Auth *AuthConfig
+
+	// Transport specifies the transport configuration
+	Transport *TransportConfig
+
+	// Retries specifies the configuration for retries.
+	Retries *RetryConfig
+
+	// ConnectTo specifies the host to connect to.
+	// Might be different from the host specified in the URL.
+	ConnectTo string
+
+	// Headers are automatically added to all requests
+	Headers http.Header
+
+	// BaseURL is added as a prefix to all URLs
+	BaseURL string
+
+	// Specify if response body should be logged
+	TraceBody bool
+
+	// TraceResponse controls if the response needs to be traced.
+	// This doesn't include the response body.
+	TraceResponse bool
+
+	// Log controls whether the request response should be logged or not
+	Log bool
+
+	// GET's are on TRACE, PUT/PATCH/POST are on Debug, and DELETE are on Info
+	Logger logger.Logger
+
+	// Timeout specifies a time limit for requests made by this Client.
+	//  Default: 2 minutes
+	Timeout time.Duration
+
+	// ProxyHost specifies a proxy
+	ProxyHost string
+
+	// ProxyPort specifies the proxy's port
+	ProxyPort uint16
+
+	// DNSCache specifies whether to cache DNS lookups
+	DNSCache bool
 }
 
 // NewClient configures a new HTTP client using given configuration
-func NewClient(config *Config) *Client {
-	if config == nil {
-		return nil
-	}
-
-	if config.Headers == nil {
-		config.Headers = map[string]string{}
-	}
-
-	if config.Logger == nil {
-		config.Logger = logger.StandardLogger()
+func NewClient() *Client {
+	client := &http.Client{
+		Timeout: time.Minute * 2,
 	}
 
 	return &Client{
-		httpClient: createHTTPClient(config),
-		config:     config,
+		httpClient: client,
+		Headers:    http.Header{},
+		Logger:     logger.StandardLogger(),
 	}
 }
 
-func createHTTPClient(config *Config) *http.Client {
-	client := &http.Client{
-		Timeout:   config.Timeout,
-		Transport: createHTTPTransport(config),
+// R create a new request.
+func (c *Client) R() *Request {
+	return &Request{
+		client:      c,
+		headers:     make(http.Header),
+		retryConfig: c.Retries,
 	}
-
-	return client
 }
 
-// Get sends an HTTP GET request
-func (c *Client) Get(ctx context.Context, url string) (*Response, error) {
-	request := NewGetRequest(c.config, url)
-	c.logRequest(ctx, request.Request, c.config.Logger.Tracef)
-
-	response, err := request.Send(ctx, c.httpClient, c.config.Logger)
-	c.logResponse(request.verb, c.config.Logger.Tracef, url, response, err)
-	return response, err
+func (c *Client) SetBaseURL(url string) *Client {
+	c.BaseURL = url
+	return c
 }
 
-// Post sends an HTTP POST request
-func (c *Client) Post(ctx context.Context, url string, contentType string, body io.ReadCloser) (*Response, error) {
-	request := NewPostRequest(c.config, url, contentType, body)
-	c.logRequest(ctx, request.Request, c.config.Logger.Debugf)
-
-	response, err := request.Send(ctx, c.httpClient, c.config.Logger)
-	c.logResponse(request.verb, c.config.Logger.Debugf, url, response, err)
-	return response, err
+func (c *Client) SetHeader(key, val string) *Client {
+	c.Headers.Set(key, val)
+	return c
 }
 
-// Patch sends an HTTP PATCH request
-func (c *Client) Patch(ctx context.Context, url string, body io.ReadCloser) (*Response, error) {
-	request := NewPatchRequest(c.config, url, body)
-	c.logRequest(ctx, request.Request, c.config.Logger.Debugf)
-
-	response, err := request.Send(ctx, c.httpClient, c.config.Logger)
-	c.logResponse(request.verb, c.config.Logger.Debugf, url, response, err)
-	return response, err
+func (c *Client) SetHost(host string) *Client {
+	c.ConnectTo = host
+	return c
 }
 
-// Put sends an HTTP PUT request
-func (c *Client) Put(ctx context.Context, url string, body io.ReadCloser) (*Response, error) {
-	request := NewPutRequest(c.config, url, body)
-	c.logRequest(ctx, request.Request, c.config.Logger.Debugf)
-
-	response, err := request.Send(ctx, c.httpClient, c.config.Logger)
-	c.logResponse(request.verb, c.config.Logger.Debugf, url, response, err)
-	return response, err
+func (c *Client) SetTracer(tracer trace.Tracer) *Client {
+	c.tracer = tracer
+	return c
 }
 
-// Delete sends an HTTP DELETE request
-func (c *Client) Delete(ctx context.Context, url string) (*Response, error) {
-	request := NewDeleteRequest(c.config, url)
-	c.logRequest(ctx, request.Request, c.config.Logger.Infof)
+func (c *Client) SetBasicAuth(username, password string) *Client {
+	if c.Auth == nil {
+		c.Auth = &AuthConfig{}
+	}
 
-	response, err := request.Send(ctx, c.httpClient, c.config.Logger)
-	c.logResponse(request.verb, c.config.Logger.Infof, url, response, err)
-	return response, err
+	c.Auth.Username = username
+	c.Auth.Password = password
+	return c
 }
 
-func (c *Client) logRequest(ctx context.Context, request *Request, logFunc func(message string, args ...interface{})) {
-	if !c.config.Log {
-		return
+func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
+	// setup url and host
+	var host string
+	if r.client.ConnectTo != "" {
+		host = r.client.ConnectTo
+	} else if h := r.getHeader("Host"); h != "" {
+		host = h // Host header override
+	} else {
+		host = r.url.Host
 	}
 
-	if request == nil {
-		c.config.Logger.Tracef("Empty request. Nothing to log: request=%s", request)
-		return
-	}
-
-	message := fmt.Sprintf("Request: verb=%s, url=%s", request.verb, request.url)
-	if !c.config.TraceBody {
-		logFunc(message)
-		return
-	}
-
-	var bodyContentType string
-	if c.config.Headers != nil {
-		bodyContentType = c.config.Headers[contentType]
-	}
-
-	if !shouldLogBody(bodyContentType) {
-		message += fmt.Sprintf("\nBody Content Type: <%s>", bodyContentType)
-		logFunc(message)
-		return
-	}
-
-	if request.body == nil {
-		logFunc(message)
-		return
-	}
-
-	loggableString, err := request.GetLoggableStrings()
+	req, err := http.NewRequestWithContext(r.ctx, r.method, r.url.String(), r.body)
 	if err != nil {
-		message += fmt.Sprintf(", err=%+v", err)
-		logFunc(message)
-		return
+		return nil, err
+	}
+	req.Header = r.headers.Clone()
+	req.Host = host
+
+	httpResponse, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
 	}
 
-	message += fmt.Sprintf("\nBody: %s", loggableString)
-	logFunc(message)
-}
-
-func (c *Client) logResponse(verb string, logFunc func(message string, args ...interface{}), url string, response *Response, err error) {
-	if !c.config.Log {
-		return
+	response := &Response{
+		Response: httpResponse,
 	}
-
-	if !c.config.TraceResponse {
-		return
-	}
-
-	message := fmt.Sprintf("Response: verb=%s Response: url=%s", verb, url)
-	if response == nil {
-		logFunc(message)
-		return
-	}
-
-	if !c.config.TraceBody {
-		logFunc(message)
-		return
-	}
-
-	bodyContentType := response.Header[contentType]
-	var bodyContentTypeString string
-	if len(bodyContentType) > 0 {
-		bodyContentTypeString = bodyContentType[0]
-	}
-
-	if !shouldLogBody(bodyContentTypeString) {
-		message += fmt.Sprintf("\nBody=<%s>", bodyContentTypeString)
-		logFunc(message)
-		return
-	}
-
-	traceMessage, trcMsgErr := response.TraceMessage()
-	if trcMsgErr != nil {
-		message += fmt.Sprintf("content-type='%s', err=%+v", bodyContentTypeString, trcMsgErr)
-		logFunc(message)
-		return
-	}
-
-	message += fmt.Sprintf("\nBody: %s", traceMessage)
-	logFunc(message)
-}
-
-func isContentTypeLoggable(contentType string) bool {
-	for _, contentTypeToLog := range contentTypesToLog {
-		if strings.Contains(contentType, contentTypeToLog) {
-			return true
-		}
-	}
-	return false
-}
-
-func shouldLogBody(bodyContentType string) bool {
-	if bodyContentType == "" {
-		return false
-	}
-	if len(bodyContentType) < 1 {
-		return false
-	}
-	return isContentTypeLoggable(bodyContentType)
+	return response, nil
 }
