@@ -14,8 +14,8 @@ const contentType = "Content-Type"
 type Client struct {
 	httpClient *http.Client
 
-	// Auth specifies the authentication configuration
-	Auth *AuthConfig
+	// authConfig specifies the authentication configuration
+	authConfig *AuthConfig
 
 	// transportMiddlewares are like http middlewares for transport
 	transportMiddlewares []Middleware
@@ -107,12 +107,12 @@ func (c *Client) Transport(rt http.RoundTripper) *Client {
 }
 
 func (c *Client) BasicAuth(username, password string) *Client {
-	if c.Auth == nil {
-		c.Auth = &AuthConfig{}
+	if c.authConfig == nil {
+		c.authConfig = &AuthConfig{}
 	}
 
-	c.Auth.Username = username
-	c.Auth.Password = password
+	c.authConfig.Username = username
+	c.authConfig.Password = password
 	return c
 }
 
@@ -133,6 +133,9 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 	}
 	req.Header = r.headers.Clone()
 	req.Host = host
+	if r.client.authConfig != nil {
+		req.SetBasicAuth(r.client.authConfig.Username, r.client.authConfig.Password)
+	}
 
 	roundTripper := applyMiddleware(RoundTripperFunc(r.client.httpClient.Do), r.client.transportMiddlewares...)
 	httpResponse, err := roundTripper.RoundTrip(req)

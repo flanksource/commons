@@ -13,7 +13,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-const tracerName = "commons-http-client"
+const tracerName = "github.com/flanksource/commons/http"
 
 func NewTracedTransport() *traceTransport {
 	return &traceTransport{
