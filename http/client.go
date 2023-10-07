@@ -20,8 +20,8 @@ type Client struct {
 	// transportMiddlewares are like http middlewares for transport
 	transportMiddlewares []Middleware
 
-	// Retries specifies the configuration for retries.
-	Retries *RetryConfig
+	// retryConfig specifies the configuration for retries.
+	retryConfig RetryConfig
 
 	// ConnectTo specifies the host to connect to.
 	// Might be different from the host specified in the URL.
@@ -72,8 +72,18 @@ func (c *Client) R(ctx context.Context) *Request {
 		ctx:         ctx,
 		client:      c,
 		headers:     make(http.Header),
-		retryConfig: c.Retries,
+		retryConfig: c.retryConfig,
 	}
+}
+
+// Retry configuration retrying on failure with exponential backoff.
+//
+// Base duration of a second & an exponent of 2 is a good option.
+func (c *Client) Retry(maxRetries uint, baseDuration time.Duration, exponent float64) *Client {
+	c.retryConfig.MaxRetries = maxRetries
+	c.retryConfig.RetryWait = baseDuration
+	c.retryConfig.Factor = exponent
+	return c
 }
 
 func (c *Client) BaseURL(url string) *Client {

@@ -6,9 +6,10 @@ import (
 	"io"
 	netHTTP "net/http"
 	"testing"
+	"time"
 
 	"github.com/flanksource/commons/http"
-	"github.com/flanksource/commons/http/transports"
+	"github.com/flanksource/commons/http/middlewares"
 	"github.com/flanksource/commons/logger"
 )
 
@@ -22,6 +23,7 @@ func TestExample(t *testing.T) {
 		BasicAuth("username", "password").
 		Host("dummyjson.com").
 		Use(loggerMiddlware).
+		Retry(2, time.Second, 2.0).
 		Header("API-KEY", "123456")
 
 	{
@@ -53,9 +55,9 @@ func TestExample(t *testing.T) {
 
 	{
 		// To use tracing
-		tracedTransport := transports.NewTracedTransport().TraceBody(true).TraceResponse(true)
+		tracedTransport := middlewares.NewTracedTransport().TraceBody(true).TraceResponse(true)
 
-		client := http.NewClient().Use(loggerMiddlware, tracedTransport.Middleware)
+		client := http.NewClient().Use(loggerMiddlware, tracedTransport.RoundTripper)
 
 		req := client.R(ctx)
 		response, err := req.Get("https://flanksource.com")
@@ -64,6 +66,32 @@ func TestExample(t *testing.T) {
 		}
 
 		logger.Infof("Status OK: %v", response.IsOK())
+	}
+
+	{
+		// To use pretty logger
+		// tracedTransport := transports.NewTracedTransport().TraceBody(true).TraceResponse(true)
+
+		// httPrettyLogger := &httpretty.Logger{
+		// 	Time:           true,
+		// 	TLS:            true,
+		// 	RequestHeader:  true,
+		// 	RequestBody:    true,
+		// 	ResponseHeader: true,
+		// 	ResponseBody:   true,
+		// 	Colors:         true,
+		// 	Formatters:     []httpretty.Formatter{&httpretty.JSONFormatter{}},
+		// }
+
+		// client := http.NewClient().Use(loggerMiddlware, tracedTransport.RoundTripper, httPrettyLogger.RoundTripper)
+
+		// req := client.R(ctx)
+		// response, err := req.Get("https://flanksource.com")
+		// if err != nil {
+		// 	logger.Fatalf("error: %v", err)
+		// }
+
+		// logger.Infof("Status OK: %v", response.IsOK())
 	}
 }
 

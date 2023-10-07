@@ -1,4 +1,4 @@
-package transports
+package middlewares
 
 import (
 	"bytes"
@@ -80,7 +80,7 @@ func (t *traceTransport) TraceProvider(provider trace.TracerProvider) *traceTran
 	return t
 }
 
-func (t *traceTransport) Middleware(rt netHttp.RoundTripper) netHttp.RoundTripper {
+func (t *traceTransport) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundTripper {
 	return http.RoundTripperFunc(func(req *netHttp.Request) (*netHttp.Response, error) {
 		_, span := t.tracer.Start(req.Context(), req.URL.Host)
 		defer span.End()

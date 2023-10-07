@@ -18,8 +18,6 @@ type Response struct {
 
 	// Request is the Response's related Request.
 	Request *Request
-
-	Err error
 }
 
 // IsOK is a convenience method to determine if the response returned a 200 OK
@@ -38,10 +36,6 @@ func (resp *Response) IsOK(responseCodes ...int) bool {
 }
 
 func (r *Response) Into(dest any) error {
-	if r.Err != nil {
-		return r.Err
-	}
-
 	contentType := r.Header.Get(contentType)
 	if strings.Contains(contentType, "json") {
 		return json.NewDecoder(r.Body).Decode(dest)

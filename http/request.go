@@ -6,12 +6,13 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 type Request struct {
 	ctx         context.Context
 	client      *Client
-	retryConfig *RetryConfig
+	retryConfig RetryConfig
 	method      string
 	rawURL      string
 	url         *url.URL
@@ -56,6 +57,16 @@ func (r *Request) Delete(url string) (*Response, error) {
 	return r.Send(http.MethodDelete, url)
 }
 
+// Retry configuration retrying on failure with exponential backoff.
+//
+// Base duration of a second & an exponent of 2 is a good option.
+func (r *Request) Retry(maxRetries uint, baseDuration time.Duration, exponent float64) *Request {
+	r.retryConfig.MaxRetries = maxRetries
+	r.retryConfig.RetryWait = baseDuration
+	r.retryConfig.Factor = exponent
+	return r
+}
+
 // TODO: Make this accept more types ([]byte, string, ...)
 func (r *Request) setBody(v any) *Request {
 	switch t := v.(type) {
@@ -94,20 +105,23 @@ func (r *Request) Send(method, reqURL string) (resp *Response, err error) {
 	resp, err = r.Do()
 	if err != nil {
 		return nil, err
-	} else if resp.Err != nil {
-		return nil, resp.Err
 	}
 
 	return resp, nil
 }
 
 func (r *Request) Do() (resp *Response, err error) {
+	var retriesRemaining = r.retryConfig.MaxRetries
 	for {
-		// TODO: Retry
-
 		response, err := r.client.roundTrip(r)
 		if err != nil {
-			return nil, err
+			if retriesRemaining <= 0 {
+				return nil, err
+			}
+
+			retriesRemaining--
+			exponentialBackoff(r.retryConfig, retriesRemaining)
+			continue
 		}
 
 		return response, nil
