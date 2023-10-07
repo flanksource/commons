@@ -1,5 +1,15 @@
 package http
 
+import "net/http"
+
+type Middleware func(http.RoundTripper) http.RoundTripper
+
+type RoundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f RoundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
 // createHTTPTransport creates an HTTP transport from the given configuration
 // func createHTTPTransport(config *Config) *http.Transport {
 // 	transport := http.DefaultTransport.(*http.Transport)

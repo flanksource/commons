@@ -3,7 +3,9 @@ package transports
 import (
 	"bytes"
 	"io"
-	"net/http"
+	netHttp "net/http"
+
+	"github.com/flanksource/commons/http"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -20,9 +22,6 @@ func NewTracedTransport() *traceTransport {
 }
 
 type traceTransport struct {
-	// rt is the transport to trace
-	rt http.RoundTripper
-
 	// tracer is the creator of spans
 	tracer trace.Tracer
 
@@ -40,11 +39,6 @@ type traceTransport struct {
 
 	// headers controls whether the headers are traced
 	headers bool
-}
-
-func (t *traceTransport) Wrap(next http.RoundTripper) http.RoundTripper {
-	t.rt = next
-	return t
 }
 
 func (t *traceTransport) TraceAll(val bool) *traceTransport {
@@ -86,60 +80,62 @@ func (t *traceTransport) TraceProvider(provider trace.TracerProvider) *traceTran
 	return t
 }
 
-func (t *traceTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	_, span := t.tracer.Start(req.Context(), req.URL.Host)
-	defer span.End()
+func (t *traceTransport) Middleware(rt netHttp.RoundTripper) netHttp.RoundTripper {
+	return http.RoundTripperFunc(func(req *netHttp.Request) (*netHttp.Response, error) {
+		_, span := t.tracer.Start(req.Context(), req.URL.Host)
+		defer span.End()
 
-	span.SetAttributes(
-		attribute.String("request.method", req.Method),
-		attribute.String("request.url", req.URL.String()),
-		attribute.String("request.host", req.Host),
-	)
+		span.SetAttributes(
+			attribute.String("request.method", req.Method),
+			attribute.String("request.url", req.URL.String()),
+			attribute.String("request.host", req.Host),
+		)
 
-	if t.headers {
-		for key, values := range req.Header {
-			for _, value := range values {
-				span.SetAttributes(attribute.String("request.header."+key, value))
+		if t.headers {
+			for key, values := range req.Header {
+				for _, value := range values {
+					span.SetAttributes(attribute.String("request.header."+key, value))
+				}
 			}
 		}
-	}
 
-	if req.Body != nil && t.body {
-		if b, err := io.ReadAll(req.Body); err == nil {
-			span.SetAttributes(attribute.String("request.body", string(b)))
-			req.Body = io.NopCloser(bytes.NewBuffer(b))
-		}
-	}
-
-	if t.queryParam && req.URL.RawQuery != "" {
-		for q, val := range req.URL.Query() {
-			span.SetAttributes(attribute.StringSlice("request.query."+q, val))
-		}
-	}
-
-	resp, err := t.rt.RoundTrip(req)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
-	}
-
-	if t.responseHeaders {
-		for key, values := range resp.Header {
-			for _, value := range values {
-				span.SetAttributes(attribute.String("response.header."+key, value))
+		if req.Body != nil && t.body {
+			if b, err := io.ReadAll(req.Body); err == nil {
+				span.SetAttributes(attribute.String("request.body", string(b)))
+				req.Body = io.NopCloser(bytes.NewBuffer(b))
 			}
 		}
-	}
 
-	if t.response {
-		if b, err := io.ReadAll(resp.Body); err == nil {
-			span.SetAttributes(attribute.String("response.body", string(b)))
-			resp.Body = io.NopCloser(bytes.NewBuffer(b))
+		if t.queryParam && req.URL.RawQuery != "" {
+			for q, val := range req.URL.Query() {
+				span.SetAttributes(attribute.StringSlice("request.query."+q, val))
+			}
 		}
-	}
 
-	span.SetAttributes(attribute.String("response.status", resp.Status))
+		resp, err := rt.RoundTrip(req)
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+			return nil, err
+		}
 
-	return resp, nil
+		if t.responseHeaders {
+			for key, values := range resp.Header {
+				for _, value := range values {
+					span.SetAttributes(attribute.String("response.header."+key, value))
+				}
+			}
+		}
+
+		if t.response {
+			if b, err := io.ReadAll(resp.Body); err == nil {
+				span.SetAttributes(attribute.String("response.body", string(b)))
+				resp.Body = io.NopCloser(bytes.NewBuffer(b))
+			}
+		}
+
+		span.SetAttributes(attribute.String("response.status", resp.Status))
+
+		return resp, nil
+	})
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	netHTTP "net/http"
 	"testing"
 
 	"github.com/flanksource/commons/http"
@@ -20,6 +21,7 @@ func TestExample(t *testing.T) {
 		BaseURL("https://dummyjson.com").
 		BasicAuth("username", "password").
 		Host("dummyjson.com").
+		Use(loggerMiddlware).
 		Header("API-KEY", "123456")
 
 	{
@@ -53,7 +55,7 @@ func TestExample(t *testing.T) {
 		// To use tracing
 		tracedTransport := transports.NewTracedTransport().TraceBody(true).TraceResponse(true)
 
-		client := http.NewClient().WrapTransport(tracedTransport)
+		client := http.NewClient().Use(loggerMiddlware, tracedTransport.Middleware)
 
 		req := client.R()
 		response, err := req.Get(ctx, "https://flanksource.com")
@@ -63,4 +65,13 @@ func TestExample(t *testing.T) {
 
 		logger.Infof("Status OK: %v", response.IsOK())
 	}
+}
+
+func loggerMiddlware(next netHTTP.RoundTripper) netHTTP.RoundTripper {
+	x := func(req *netHTTP.Request) (*netHTTP.Response, error) {
+		logger.Infof("request: %v", req.URL.String())
+		return next.RoundTrip(req)
+	}
+
+	return http.RoundTripperFunc(x)
 }

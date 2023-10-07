@@ -16,6 +16,9 @@ type Client struct {
 	// Auth specifies the authentication configuration
 	Auth *AuthConfig
 
+	// transportMiddlewares are like http middlewares for transport
+	transportMiddlewares []Middleware
+
 	// Retries specifies the configuration for retries.
 	Retries *RetryConfig
 
@@ -28,13 +31,6 @@ type Client struct {
 
 	// baseURL is added as a prefix to all URLs
 	baseURL string
-
-	// Specify if response body should be logged
-	TraceBody bool
-
-	// TraceResponse controls if the response needs to be traced.
-	// This doesn't include the response body.
-	TraceResponse bool
 
 	// Log controls whether the request response should be logged or not
 	Log bool
@@ -126,7 +122,8 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 	req.Header = r.headers.Clone()
 	req.Host = host
 
-	httpResponse, err := c.httpClient.Do(req)
+	roundTripper := applyMiddleware(RoundTripperFunc(r.client.httpClient.Do), r.client.transportMiddlewares...)
+	httpResponse, err := roundTripper.RoundTrip(req)
 	if err != nil {
 		return nil, err
 	}
@@ -137,18 +134,16 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 	return response, nil
 }
 
-type RoundTripWrapper interface {
-	Wrap(rt http.RoundTripper) http.RoundTripper
+// Use adds middleware to the client that wraps the client's transport
+func (c *Client) Use(middlewares ...Middleware) *Client {
+	c.transportMiddlewares = append(c.transportMiddlewares, middlewares...)
+	return c
 }
 
-func (c *Client) WrapTransport(wrappers ...RoundTripWrapper) *Client {
-	if c.httpClient.Transport == nil {
-		c.httpClient.Transport = http.DefaultTransport
+func applyMiddleware(h http.RoundTripper, middleware ...Middleware) http.RoundTripper {
+	for i := len(middleware) - 1; i >= 0; i-- {
+		h = middleware[i](h)
 	}
 
-	for _, wrapper := range wrappers {
-		c.httpClient.Transport = wrapper.Wrap(c.httpClient.Transport)
-	}
-
-	return c
+	return h
 }
