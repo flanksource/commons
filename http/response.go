@@ -37,21 +37,21 @@ func (resp *Response) IsOK(responseCodes ...int) bool {
 	return false
 }
 
-func (r *Response) Into(v any) error {
+func (r *Response) Into(dest any) error {
 	if r.Err != nil {
 		return r.Err
 	}
 
 	contentType := r.Header.Get(contentType)
 	if strings.Contains(contentType, "json") {
-		return json.NewDecoder(r.Body).Decode(v)
+		return json.NewDecoder(r.Body).Decode(dest)
 	}
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return err
 	}
-	v = body
+	dest = body //nolint:ineffassign // Cannot enforce dest to be a pointer
 
 	return nil
 }

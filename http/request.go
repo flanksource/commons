@@ -33,27 +33,27 @@ func (r *Request) Header(key, value string) *Request {
 	return r
 }
 
-func (r *Request) Get(ctx context.Context, url string) (*Response, error) {
-	return r.Send(ctx, http.MethodGet, url)
+func (r *Request) Get(url string) (*Response, error) {
+	return r.Send(http.MethodGet, url)
 }
 
-func (r *Request) Post(ctx context.Context, url string, body any) (*Response, error) {
+func (r *Request) Post(url string, body any) (*Response, error) {
 	r.setBody(body)
-	return r.Send(ctx, http.MethodPost, url)
+	return r.Send(http.MethodPost, url)
 }
 
-func (r *Request) Put(ctx context.Context, url string, body any) (*Response, error) {
+func (r *Request) Put(url string, body any) (*Response, error) {
 	r.setBody(body)
-	return r.Send(ctx, http.MethodPut, url)
+	return r.Send(http.MethodPut, url)
 }
 
-func (r *Request) Patch(ctx context.Context, url string, body any) (*Response, error) {
+func (r *Request) Patch(url string, body any) (*Response, error) {
 	r.setBody(body)
-	return r.Send(ctx, http.MethodPatch, url)
+	return r.Send(http.MethodPatch, url)
 }
 
-func (r *Request) Delete(ctx context.Context, url string) (*Response, error) {
-	return r.Send(ctx, http.MethodDelete, url)
+func (r *Request) Delete(url string) (*Response, error) {
+	return r.Send(http.MethodDelete, url)
 }
 
 // TODO: Make this accept more types ([]byte, string, ...)
@@ -70,8 +70,7 @@ func (r *Request) setBody(v any) *Request {
 	return r
 }
 
-func (r *Request) Send(ctx context.Context, method, reqURL string) (resp *Response, err error) {
-	r.ctx = ctx
+func (r *Request) Send(method, reqURL string) (resp *Response, err error) {
 	r.method = method
 	r.rawURL = reqURL
 

@@ -27,8 +27,8 @@ func TestExample(t *testing.T) {
 	{
 		body := &bytes.Buffer{}
 		body.WriteString(`{"title": "test"}`)
-		postReq := client.R().Header("Scope", "request")
-		response, err := postReq.Post(ctx, "products/add", body)
+		postReq := client.R(ctx).Header("Scope", "request")
+		response, err := postReq.Post("products/add", body)
 		if err != nil {
 			logger.Fatalf("error: %v", err)
 		}
@@ -41,8 +41,8 @@ func TestExample(t *testing.T) {
 	}
 
 	{
-		req := client.R()
-		response, err := req.Get(ctx, "products/1")
+		req := client.R(ctx)
+		response, err := req.Get("products/1")
 		if err != nil {
 			logger.Fatalf("error: %v", err)
 		}
@@ -57,8 +57,8 @@ func TestExample(t *testing.T) {
 
 		client := http.NewClient().Use(loggerMiddlware, tracedTransport.Middleware)
 
-		req := client.R()
-		response, err := req.Get(ctx, "https://flanksource.com")
+		req := client.R(ctx)
+		response, err := req.Get("https://flanksource.com")
 		if err != nil {
 			logger.Fatalf("error: %v", err)
 		}

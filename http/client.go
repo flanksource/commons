@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -66,8 +67,9 @@ func NewClient() *Client {
 }
 
 // R create a new request.
-func (c *Client) R() *Request {
+func (c *Client) R(ctx context.Context) *Request {
 	return &Request{
+		ctx:         ctx,
 		client:      c,
 		headers:     make(http.Header),
 		retryConfig: c.Retries,
