@@ -18,13 +18,22 @@ const tracerName = "github.com/flanksource/commons/http"
 
 func NewTracedTransport() *traceTransport {
 	return &traceTransport{
-		tracer: otel.GetTracerProvider().Tracer(tracerName),
+		maxBodyLength: 4096,
+		tracer:        otel.GetTracerProvider().Tracer(tracerName),
+		queryParam:    true,
+		headers:       true,
 	}
 }
 
 type traceTransport struct {
 	// tracer is the creator of spans
 	tracer trace.Tracer
+
+	// maxBodyLength is the max size of the body, in bytes, that will be traced.
+	// If the response body is larger than this, it will not be traced at all.
+	//
+	//  Default: 4096 (4MB)
+	maxBodyLength int64
 
 	// body controls whether the request body is traced
 	body bool
@@ -73,6 +82,11 @@ func (t *traceTransport) TraceQueryParam(val bool) *traceTransport {
 
 func (t *traceTransport) TraceHeaders(val bool) *traceTransport {
 	t.headers = val
+	return t
+}
+
+func (t *traceTransport) MaxBodyLength(val int64) *traceTransport {
+	t.maxBodyLength = val
 	return t
 }
 
@@ -135,7 +149,7 @@ func (t *traceTransport) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundTrip
 		}
 
 		if t.response {
-			if b, err := io.ReadAll(resp.Body); err == nil {
+			if b, err := io.ReadAll(io.LimitReader(resp.Body, t.maxBodyLength)); err == nil {
 				span.SetAttributes(attribute.String("response.body", string(b)))
 				resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			}
