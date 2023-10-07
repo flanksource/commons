@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -81,7 +82,13 @@ func (t *traceTransport) TraceProvider(provider trace.TracerProvider) *traceTran
 }
 
 func (t *traceTransport) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundTripper {
-	return http.RoundTripperFunc(func(req *netHttp.Request) (*netHttp.Response, error) {
+	return http.RoundTripperFunc(func(ogRequest *netHttp.Request) (*netHttp.Response, error) {
+		// According to RoundTripper spec, we shouldn't modify the origin request.
+		req := ogRequest.Clone(ogRequest.Context())
+
+		propagator := propagation.TraceContext{}
+		propagator.Inject(req.Context(), propagation.HeaderCarrier(req.Header))
+
 		_, span := t.tracer.Start(req.Context(), req.URL.Host)
 		defer span.End()
 
