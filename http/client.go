@@ -55,11 +55,8 @@ type Client struct {
 	// baseURL is added as a prefix to all URLs
 	baseURL string
 
-	// ProxyHost specifies a proxy
-	ProxyHost string
-
-	// ProxyPort specifies the proxy's port
-	ProxyPort uint16
+	// proxyURL is the url to use as a proxy
+	proxyURL string
 
 	// DNSCache specifies whether to cache DNS lookups
 	DNSCache bool
@@ -153,9 +150,19 @@ func (c *Client) InsecureSkipVerify(val bool) *Client {
 	return c
 }
 
-func (c *Client) Transport(rt http.RoundTripper) *Client {
-	c.httpClient.Transport = rt
+func (c *Client) Proxy(url string) *Client {
+	c.proxyURL = url
 	return c
+}
+
+func (c *Client) setProxy(proxyURL *url.URL) {
+	if c.httpClient.Transport == nil {
+		c.httpClient.Transport = http.DefaultTransport
+	}
+
+	customTransport := c.httpClient.Transport.(*http.Transport).Clone()
+	customTransport.Proxy = http.ProxyURL(proxyURL)
+	c.httpClient.Transport = customTransport
 }
 
 func (c *Client) BasicAuth(username, password string) *Client {
@@ -203,6 +210,15 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 	req.Host = host
 	if r.client.authConfig != nil {
 		req.SetBasicAuth(r.client.authConfig.Username, r.client.authConfig.Password)
+	}
+
+	if c.proxyURL != "" {
+		proxyURL, err := url.Parse(c.proxyURL)
+		if err != nil {
+			return nil, err
+		}
+
+		c.setProxy(proxyURL)
 	}
 
 	roundTripper := applyMiddleware(RoundTripperFunc(r.client.httpClient.Do), r.client.transportMiddlewares...)

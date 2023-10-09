@@ -21,10 +21,21 @@ func TestExample(t *testing.T) {
 		req := http.NewClient().InsecureSkipVerify(true).R(ctx)
 		response, err := req.Get("https://expired.badssl.com/")
 		if err != nil {
-			logger.Fatalf("error: %v", err)
+			t.Errorf("error: %v", err)
 		}
 
 		logger.Infof("GET body: %v", response.IsOK())
+	}
+
+	{
+		// Use a proxy
+		// req := http.NewClient().Timeout(time.Second * 5).Proxy("http://my-proxy.local:1337").R(ctx)
+		// response, err := req.Get("https://flanksource.com/")
+		// if err != nil {
+		// 	logger.Fatalf("error: %v", err)
+		// }
+
+		// logger.Infof("GET body: %v", response.IsOK())
 	}
 
 	client := http.NewClient().
