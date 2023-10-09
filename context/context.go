@@ -10,13 +10,17 @@ import (
 )
 
 type Context interface {
+	gocontext.Context
+	WithGoContext(c gocontext.Context) Context
 	Errorf(err error)
-	StartSpan(tracer trace.Tracer, spanName string) trace.Span
+	StartSpan(tracer trace.Tracer, spanName string) (Context, trace.Span)
 	SetSpanAttributes(key string, val any)
 }
 
-func NewContext() Context {
-	return &context{}
+func NewContext(ctx gocontext.Context) Context {
+	return &context{
+		Context: ctx,
+	}
 }
 
 // context implements Context
@@ -24,10 +28,15 @@ type context struct {
 	gocontext.Context
 }
 
-func (c *context) StartSpan(tracer trace.Tracer, spanName string) trace.Span {
+func (c context) WithGoContext(cx gocontext.Context) Context {
+	c.Context = cx
+	return &c
+}
+
+func (c context) StartSpan(tracer trace.Tracer, spanName string) (Context, trace.Span) {
 	traceCtx, span := tracer.Start(c.Context, spanName)
 	c.Context = traceCtx
-	return span
+	return &c, span
 }
 
 func (c *context) SetSpanAttributes(key string, val any) {
