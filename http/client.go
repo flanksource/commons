@@ -24,9 +24,9 @@ type Client struct {
 	// retryConfig specifies the configuration for retries.
 	retryConfig RetryConfig
 
-	// ConnectTo specifies the host to connect to.
+	// connectTo specifies the host to connect to.
 	// Might be different from the host specified in the URL.
-	ConnectTo string
+	connectTo string
 
 	// headers are automatically added to all requests
 	headers http.Header
@@ -98,8 +98,10 @@ func (c *Client) Header(key, val string) *Client {
 	return c
 }
 
-func (c *Client) Host(host string) *Client {
-	c.ConnectTo = host
+// ConnectTo specifies the host:port on which the URL is sought.
+// If empty, the URL's host is used.
+func (c *Client) ConnectTo(host string) *Client {
+	c.connectTo = host
 	return c
 }
 
@@ -121,8 +123,8 @@ func (c *Client) BasicAuth(username, password string) *Client {
 func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 	// setup url and host
 	var host string
-	if r.client.ConnectTo != "" {
-		host = r.client.ConnectTo
+	if r.client.connectTo != "" {
+		host = r.client.connectTo
 	} else if h := r.getHeader("Host"); h != "" {
 		host = h // Host header override
 	} else {

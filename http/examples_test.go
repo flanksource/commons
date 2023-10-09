@@ -21,7 +21,7 @@ func TestExample(t *testing.T) {
 	client := http.NewClient().
 		BaseURL("https://dummyjson.com").
 		BasicAuth("username", "password").
-		Host("dummyjson.com").
+		ConnectTo("dummyjson.com").
 		Use(loggerMiddlware).
 		Retry(2, time.Second, 2.0).
 		Header("API-KEY", "123456")
