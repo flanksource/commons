@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flanksource/commons/dns"
 	httpntlm "github.com/vadimi/go-http-ntlm"
 	httpntlmv2 "github.com/vadimi/go-http-ntlm/v2"
 )
@@ -60,8 +61,8 @@ type Client struct {
 	// proxyURL is the url to use as a proxy
 	proxyURL string
 
-	// DNSCache specifies whether to cache DNS lookups
-	DNSCache bool
+	// cacheDNS specifies whether to cache DNS lookups
+	cacheDNS bool
 }
 
 // NewClient configures a new HTTP client using given configuration
@@ -111,6 +112,11 @@ func (c *Client) Header(key, val string) *Client {
 // If empty, the URL's host is used.
 func (c *Client) ConnectTo(host string) *Client {
 	c.connectTo = host
+	return c
+}
+
+func (c *Client) CacheDNS(val bool) *Client {
+	c.cacheDNS = val
 	return c
 }
 
@@ -197,14 +203,17 @@ func (c *Client) NTLMV2(val bool) *Client {
 }
 
 func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
-	// setup url and host
 	var host string
 	if r.client.connectTo != "" {
 		host = r.client.connectTo
 	} else if h := r.getHeader("Host"); h != "" {
-		host = h // Host header override
+		host = h
 	} else {
 		host = r.url.Host
+	}
+
+	if ips, _ := dns.CacheLookup("A", host); len(ips) > 0 {
+		host = ips[0].String()
 	}
 
 	req, err := http.NewRequestWithContext(r.ctx, r.method, r.url.String(), r.body)
