@@ -29,6 +29,10 @@ type traceTransport struct {
 	// tracer is the creator of spans
 	tracer trace.Tracer
 
+	// spanName is an optional name for the span.
+	// If not provided, the hostname of the requesting URL will be used.
+	spanName string
+
 	// A list of patterns for headers which should be redacted in the trace.
 	redactedHeaders []string
 
@@ -98,6 +102,13 @@ func (t *traceTransport) MaxBodyLength(val int64) *traceTransport {
 	return t
 }
 
+// SpanName sets the name of the span.
+// If not provided, the hostname of the requesting URL will be used.
+func (t *traceTransport) SpanName(val string) *traceTransport {
+	t.spanName = val
+	return t
+}
+
 func (t *traceTransport) TraceProvider(provider trace.TracerProvider) *traceTransport {
 	t.tracer = provider.Tracer(tracerName)
 	return t
@@ -111,7 +122,12 @@ func (t *traceTransport) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundTrip
 		propagator := propagation.TraceContext{}
 		propagator.Inject(req.Context(), propagation.HeaderCarrier(req.Header))
 
-		_, span := t.tracer.Start(req.Context(), req.URL.Host)
+		spanName := t.spanName
+		if spanName == "" {
+			spanName = req.URL.Host
+		}
+
+		_, span := t.tracer.Start(req.Context(), spanName)
 		defer span.End()
 
 		span.SetAttributes(
