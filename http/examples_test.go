@@ -13,10 +13,19 @@ import (
 	"github.com/flanksource/commons/logger"
 )
 
-// TODO: This will be removed or we can keep it as exaples as well
-// Contains some examples
 func TestExample(t *testing.T) {
 	ctx := context.Background()
+
+	{
+		// Skip SSL verification
+		req := http.NewClient().InsecureSkipVerify(true).R(ctx)
+		response, err := req.Get("https://expired.badssl.com/")
+		if err != nil {
+			logger.Fatalf("error: %v", err)
+		}
+
+		logger.Infof("GET body: %v", response.IsOK())
+	}
 
 	client := http.NewClient().
 		BaseURL("https://dummyjson.com").

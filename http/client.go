@@ -2,14 +2,35 @@ package http
 
 import (
 	"context"
+	"crypto/tls"
 	"net/http"
 	"net/url"
 	"time"
-
-	"github.com/flanksource/commons/logger"
 )
 
 const contentType = "Content-Type"
+
+type Middleware func(http.RoundTripper) http.RoundTripper
+
+type RoundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f RoundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+type AuthConfig struct {
+	// Username for basic Auth
+	Username string
+
+	// Password for basic Auth
+	Password string
+
+	// Ntlm controls whether to use NTLM
+	Ntlm bool
+
+	// Ntlmv2 controls whether to use NTLMv2
+	Ntlmv2 bool
+}
 
 // Client is a type that represents an HTTP client
 type Client struct {
@@ -34,16 +55,6 @@ type Client struct {
 	// baseURL is added as a prefix to all URLs
 	baseURL string
 
-	// Log controls whether the request response should be logged or not
-	Log bool
-
-	// GET's are on TRACE, PUT/PATCH/POST are on Debug, and DELETE are on Info
-	Logger logger.Logger
-
-	// Timeout specifies a time limit for requests made by this Client.
-	//  Default: 2 minutes
-	Timeout time.Duration
-
 	// ProxyHost specifies a proxy
 	ProxyHost string
 
@@ -63,7 +74,6 @@ func NewClient() *Client {
 	return &Client{
 		httpClient: client,
 		headers:    http.Header{},
-		Logger:     logger.StandardLogger(),
 	}
 }
 
@@ -102,6 +112,44 @@ func (c *Client) Header(key, val string) *Client {
 // If empty, the URL's host is used.
 func (c *Client) ConnectTo(host string) *Client {
 	c.connectTo = host
+	return c
+}
+
+// Timeout specifies a time limit for requests made by this Client.
+//
+//	Default: 2 minutes
+func (c *Client) Timeout(d time.Duration) *Client {
+	c.httpClient.Timeout = d
+	return c
+}
+
+// DisableKeepAlives prevents reuse of TCP connections
+func (c *Client) DisableKeepAlive(val bool) *Client {
+	if c.httpClient.Transport == nil {
+		c.httpClient.Transport = http.DefaultTransport
+	}
+
+	customTransport := c.httpClient.Transport.(*http.Transport).Clone()
+	customTransport.DisableKeepAlives = val
+	c.httpClient.Transport = customTransport
+	return c
+}
+
+// InsecureSkipVerify controls whether a client verifies the server's
+// certificate chain and host name
+func (c *Client) InsecureSkipVerify(val bool) *Client {
+	if c.httpClient.Transport == nil {
+		c.httpClient.Transport = http.DefaultTransport
+	}
+
+	customTransport := c.httpClient.Transport.(*http.Transport).Clone()
+
+	if customTransport.TLSClientConfig == nil {
+		customTransport.TLSClientConfig = &tls.Config{}
+	}
+
+	customTransport.TLSClientConfig.InsecureSkipVerify = val
+	c.httpClient.Transport = customTransport
 	return c
 }
 
