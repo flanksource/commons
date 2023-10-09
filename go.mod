@@ -20,6 +20,8 @@ require (
 	github.com/stretchr/testify v1.8.4
 	github.com/tidwall/gjson v1.14.4
 	github.com/ulikunitz/xz v0.5.11
+	github.com/vadimi/go-http-ntlm v1.0.3
+	github.com/vadimi/go-http-ntlm/v2 v2.4.1
 	go.opentelemetry.io/otel v1.19.0
 	go.opentelemetry.io/otel/trace v1.19.0
 	go.uber.org/zap v1.24.0
@@ -78,6 +80,7 @@ require (
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/ugorji/go/codec v1.2.11 // indirect
+	github.com/vadimi/go-ntlm v1.2.1 // indirect
 	github.com/yuin/gopher-lua v1.1.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/otel/metric v1.19.0 // indirect

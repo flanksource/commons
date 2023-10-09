@@ -5,7 +5,11 @@ import (
 	"crypto/tls"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
+
+	httpntlm "github.com/vadimi/go-http-ntlm"
+	httpntlmv2 "github.com/vadimi/go-http-ntlm/v2"
 )
 
 type Middleware func(http.RoundTripper) http.RoundTripper
@@ -163,13 +167,32 @@ func (c *Client) setProxy(proxyURL *url.URL) {
 	c.httpClient.Transport = customTransport
 }
 
-func (c *Client) BasicAuth(username, password string) *Client {
+// Auth sets up the username & password for basic auth or NTLM.
+func (c *Client) Auth(username, password string) *Client {
 	if c.authConfig == nil {
 		c.authConfig = &AuthConfig{}
 	}
 
 	c.authConfig.Username = username
 	c.authConfig.Password = password
+	return c
+}
+
+func (c *Client) NTLM(val bool) *Client {
+	if c.authConfig == nil {
+		c.authConfig = &AuthConfig{}
+	}
+
+	c.authConfig.Ntlm = val
+	return c
+}
+
+func (c *Client) NTLMV2(val bool) *Client {
+	if c.authConfig == nil {
+		c.authConfig = &AuthConfig{}
+	}
+
+	c.authConfig.Ntlmv2 = val
 	return c
 }
 
@@ -217,6 +240,29 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 		}
 
 		c.setProxy(proxyURL)
+	}
+
+	if c.authConfig != nil {
+		parts := strings.Split(c.authConfig.Username, "@")
+		domain := ""
+		if len(parts) > 1 {
+			domain = parts[1]
+		}
+
+		if c.authConfig.Ntlmv2 {
+			r.client.httpClient.Transport = &httpntlmv2.NtlmTransport{
+				Domain:       domain,
+				User:         parts[0],
+				Password:     c.authConfig.Password,
+				RoundTripper: r.client.httpClient.Transport,
+			}
+		} else if c.authConfig.Ntlm {
+			r.client.httpClient.Transport = &httpntlm.NtlmTransport{
+				Domain:   domain,
+				User:     parts[0],
+				Password: c.authConfig.Password,
+			}
+		}
 	}
 
 	roundTripper := applyMiddleware(RoundTripperFunc(r.client.httpClient.Do), r.client.transportMiddlewares...)

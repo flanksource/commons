@@ -39,7 +39,7 @@ func TestExample(t *testing.T) {
 	t.Run("example GET & POST with basic logging middleware", func(t *testing.T) {
 		client := http.NewClient().
 			BaseURL("https://dummyjson.com").
-			BasicAuth("username", "password").
+			Auth("username", "password").
 			ConnectTo("dummyjson.com").
 			Use(loggerMiddlware).
 			Retry(2, time.Second, 2.0).
