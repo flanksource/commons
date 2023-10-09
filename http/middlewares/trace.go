@@ -29,6 +29,9 @@ type traceTransport struct {
 	// tracer is the creator of spans
 	tracer trace.Tracer
 
+	// A list of patterns for headers which should be redacted in the trace.
+	redactedHeaders []string
+
 	// maxBodyLength is the max size of the body, in bytes, that will be traced.
 	// If the response body is larger than this, it will not be traced at all.
 	//
@@ -85,6 +88,11 @@ func (t *traceTransport) TraceHeaders(val bool) *traceTransport {
 	return t
 }
 
+func (t *traceTransport) RedactHeaders(patterns []string) *traceTransport {
+	t.redactedHeaders = patterns
+	return t
+}
+
 func (t *traceTransport) MaxBodyLength(val int64) *traceTransport {
 	t.maxBodyLength = val
 	return t
@@ -113,7 +121,7 @@ func (t *traceTransport) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundTrip
 		)
 
 		if t.headers {
-			for key, values := range req.Header {
+			for key, values := range SanitizeHeaders(req.Header, t.redactedHeaders...) {
 				for _, value := range values {
 					span.SetAttributes(attribute.String("request.header."+key, value))
 				}
@@ -141,7 +149,7 @@ func (t *traceTransport) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundTrip
 		}
 
 		if t.responseHeaders {
-			for key, values := range resp.Header {
+			for key, values := range SanitizeHeaders(resp.Header, t.redactedHeaders...) {
 				for _, value := range values {
 					span.SetAttributes(attribute.String("response.header."+key, value))
 				}
