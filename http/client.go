@@ -8,8 +8,6 @@ import (
 	"time"
 )
 
-const contentType = "Content-Type"
-
 type Middleware func(http.RoundTripper) http.RoundTripper
 
 type RoundTripperFunc func(*http.Request) (*http.Response, error)

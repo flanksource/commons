@@ -1,9 +1,7 @@
 package http_test
 
 import (
-	"bytes"
 	"context"
-	"io"
 	netHTTP "net/http"
 	"testing"
 	"time"
@@ -16,65 +14,68 @@ import (
 func TestExample(t *testing.T) {
 	ctx := context.Background()
 
-	{
-		// Skip SSL verification
+	t.Run("Skip SSL Verification", func(t *testing.T) {
 		req := http.NewClient().InsecureSkipVerify(true).R(ctx)
 		response, err := req.Get("https://expired.badssl.com/")
 		if err != nil {
 			t.Errorf("error: %v", err)
 		}
 
-		logger.Infof("GET body: %v", response.IsOK())
-	}
+		if !response.IsOK() {
+			t.Errorf("Got bad response: %d", response.StatusCode)
+		}
+	})
 
-	{
-		// Use a proxy
-		// req := http.NewClient().Timeout(time.Second * 5).Proxy("http://my-proxy.local:1337").R(ctx)
-		// response, err := req.Get("https://flanksource.com/")
-		// if err != nil {
-		// 	logger.Fatalf("error: %v", err)
-		// }
+	// t.Run("Use a proxy", func(t *testing.T) {
+	// req := http.NewClient().Timeout(time.Second * 5).Proxy("http://my-proxy.local:1337").R(ctx)
+	// response, err := req.Get("https://flanksource.com/")
+	// if err != nil {
+	// 	logger.Fatalf("error: %v", err)
+	// }
 
-		// logger.Infof("GET body: %v", response.IsOK())
-	}
+	// logger.Infof("GET body: %v", response.IsOK())
+	// })
 
-	client := http.NewClient().
-		BaseURL("https://dummyjson.com").
-		BasicAuth("username", "password").
-		ConnectTo("dummyjson.com").
-		Use(loggerMiddlware).
-		Retry(2, time.Second, 2.0).
-		Header("API-KEY", "123456")
+	t.Run("example GET & POST with basic logging middleware", func(t *testing.T) {
+		client := http.NewClient().
+			BaseURL("https://dummyjson.com").
+			BasicAuth("username", "password").
+			ConnectTo("dummyjson.com").
+			Use(loggerMiddlware).
+			Retry(2, time.Second, 2.0).
+			Header("API-KEY", "123456")
 
-	{
-		body := &bytes.Buffer{}
-		body.WriteString(`{"title": "test"}`)
-		postReq := client.R(ctx).Header("Scope", "request")
-		response, err := postReq.Post("products/add", body)
-		if err != nil {
-			logger.Fatalf("error: %v", err)
+		{
+			postReq := client.R(ctx).Header("Scope", "request")
+			response, err := postReq.Post("products/add", map[string]string{"title": "test"})
+			if err != nil {
+				t.Errorf("error: %v", err)
+			}
+
+			var bodyResponse = map[string]any{}
+			if err := response.AsJSON(&bodyResponse); err != nil {
+				t.Errorf("error: %v", err)
+			}
+
+			if !response.IsOK() {
+				t.Errorf("Got bad response: %d", response.StatusCode)
+			}
 		}
 
-		var bodyResponse = map[string]any{}
-		if err := response.Into(&bodyResponse); err != nil {
-			logger.Fatalf("error: %v", err)
+		{
+			req := client.R(ctx)
+			response, err := req.Get("products/1")
+			if err != nil {
+				t.Errorf("error: %v", err)
+			}
+
+			if !response.IsOK() {
+				t.Errorf("Got bad response: %d", response.StatusCode)
+			}
 		}
-		logger.Infof("body: %v %v", bodyResponse, response.IsOK())
-	}
+	})
 
-	{
-		req := client.R(ctx)
-		response, err := req.Get("products/1")
-		if err != nil {
-			logger.Fatalf("error: %v", err)
-		}
-
-		b, _ := io.ReadAll(response.Body)
-		logger.Infof("GET body: %s %v", string(b), response.IsOK())
-	}
-
-	{
-		// To use tracing
+	t.Run("Tracing & logging middleware", func(t *testing.T) {
 		tracedTransport := middlewares.NewTracedTransport().TraceBody(true).TraceResponse(true)
 
 		client := http.NewClient().Use(loggerMiddlware, tracedTransport.RoundTripper)
@@ -82,11 +83,13 @@ func TestExample(t *testing.T) {
 		req := client.R(ctx)
 		response, err := req.Get("https://flanksource.com")
 		if err != nil {
-			logger.Fatalf("error: %v", err)
+			t.Errorf("error: %v", err)
 		}
 
-		logger.Infof("Status OK: %v", response.IsOK())
-	}
+		if !response.IsOK() {
+			t.Errorf("Got bad response: %d", response.StatusCode)
+		}
+	})
 
 	{
 		// To use pretty logger
