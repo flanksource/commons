@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/flanksource/commons/logger"
@@ -72,6 +73,7 @@ func (c *Client) R(ctx context.Context) *Request {
 		ctx:         ctx,
 		client:      c,
 		headers:     make(http.Header),
+		queryParams: make(url.Values),
 		retryConfig: c.retryConfig,
 	}
 }
@@ -131,7 +133,23 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header = r.headers.Clone()
+
+	// use the headers from the client & add/overwrite them with headers from the request
+	req.Header = c.headers.Clone()
+	for k, v := range r.headers.Clone() {
+		for _, vv := range v {
+			req.Header.Set(k, vv)
+		}
+	}
+
+	queryParam := req.URL.Query()
+	for k, v := range r.queryParams {
+		for _, vv := range v {
+			queryParam.Set(k, vv)
+		}
+	}
+	req.URL.RawQuery = queryParam.Encode()
+
 	req.Host = host
 	if r.client.authConfig != nil {
 		req.SetBasicAuth(r.client.authConfig.Username, r.client.authConfig.Password)

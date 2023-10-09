@@ -3,9 +3,12 @@ package http
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -18,6 +21,7 @@ type Request struct {
 	url         *url.URL
 	body        io.Reader
 	headers     http.Header
+	queryParams url.Values
 }
 
 func (r *Request) getHeader(key string) string {
@@ -34,22 +38,34 @@ func (r *Request) Header(key, value string) *Request {
 	return r
 }
 
+// QueryParam sets query params
+func (r *Request) QueryParam(key, value string) *Request {
+	r.queryParams.Set(key, value)
+	return r
+}
+
 func (r *Request) Get(url string) (*Response, error) {
 	return r.Send(http.MethodGet, url)
 }
 
 func (r *Request) Post(url string, body any) (*Response, error) {
-	r.setBody(body)
+	if err := r.setBody(body); err != nil {
+		return nil, fmt.Errorf("error setting body: %w", err)
+	}
 	return r.Send(http.MethodPost, url)
 }
 
 func (r *Request) Put(url string, body any) (*Response, error) {
-	r.setBody(body)
+	if err := r.setBody(body); err != nil {
+		return nil, fmt.Errorf("error setting body: %w", err)
+	}
 	return r.Send(http.MethodPut, url)
 }
 
 func (r *Request) Patch(url string, body any) (*Response, error) {
-	r.setBody(body)
+	if err := r.setBody(body); err != nil {
+		return nil, fmt.Errorf("error setting body: %w", err)
+	}
 	return r.Send(http.MethodPatch, url)
 }
 
@@ -67,8 +83,7 @@ func (r *Request) Retry(maxRetries uint, baseDuration time.Duration, exponent fl
 	return r
 }
 
-// TODO: Make this accept more types ([]byte, string, ...)
-func (r *Request) setBody(v any) *Request {
+func (r *Request) setBody(v any) error {
 	switch t := v.(type) {
 	case io.Reader:
 		r.body = t
@@ -76,9 +91,17 @@ func (r *Request) setBody(v any) *Request {
 		buf := bytes.Buffer{}
 		buf.Write(t)
 		r.body = &buf
+	case string:
+		r.body = strings.NewReader(t)
+	default:
+		b, err := json.Marshal(v)
+		if err != nil {
+			return err
+		}
+		return r.setBody(b)
 	}
 
-	return r
+	return nil
 }
 
 func (r *Request) Send(method, reqURL string) (resp *Response, err error) {
