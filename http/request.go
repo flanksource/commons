@@ -45,32 +45,32 @@ func (r *Request) QueryParam(key, value string) *Request {
 }
 
 func (r *Request) Get(url string) (*Response, error) {
-	return r.Send(http.MethodGet, url)
+	return r.Do(http.MethodGet, url)
 }
 
 func (r *Request) Post(url string, body any) (*Response, error) {
-	if err := r.setBody(body); err != nil {
+	if err := r.Body(body); err != nil {
 		return nil, fmt.Errorf("error setting body: %w", err)
 	}
-	return r.Send(http.MethodPost, url)
+	return r.Do(http.MethodPost, url)
 }
 
 func (r *Request) Put(url string, body any) (*Response, error) {
-	if err := r.setBody(body); err != nil {
+	if err := r.Body(body); err != nil {
 		return nil, fmt.Errorf("error setting body: %w", err)
 	}
-	return r.Send(http.MethodPut, url)
+	return r.Do(http.MethodPut, url)
 }
 
 func (r *Request) Patch(url string, body any) (*Response, error) {
-	if err := r.setBody(body); err != nil {
+	if err := r.Body(body); err != nil {
 		return nil, fmt.Errorf("error setting body: %w", err)
 	}
-	return r.Send(http.MethodPatch, url)
+	return r.Do(http.MethodPatch, url)
 }
 
 func (r *Request) Delete(url string) (*Response, error) {
-	return r.Send(http.MethodDelete, url)
+	return r.Do(http.MethodDelete, url)
 }
 
 // Retry configuration retrying on failure with exponential backoff.
@@ -83,7 +83,8 @@ func (r *Request) Retry(maxRetries uint, baseDuration time.Duration, exponent fl
 	return r
 }
 
-func (r *Request) setBody(v any) error {
+// Body sets the request body
+func (r *Request) Body(v any) error {
 	switch t := v.(type) {
 	case io.Reader:
 		r.body = t
@@ -98,13 +99,14 @@ func (r *Request) setBody(v any) error {
 		if err != nil {
 			return err
 		}
-		return r.setBody(b)
+		return r.Body(b)
 	}
 
 	return nil
 }
 
-func (r *Request) Send(method, reqURL string) (resp *Response, err error) {
+// Do performs an HTTP request with the specified method and URL.
+func (r *Request) Do(method, reqURL string) (resp *Response, err error) {
 	r.method = method
 	r.rawURL = reqURL
 
@@ -125,7 +127,7 @@ func (r *Request) Send(method, reqURL string) (resp *Response, err error) {
 		}
 	}
 
-	resp, err = r.Do()
+	resp, err = r.do()
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +135,7 @@ func (r *Request) Send(method, reqURL string) (resp *Response, err error) {
 	return resp, nil
 }
 
-func (r *Request) Do() (resp *Response, err error) {
+func (r *Request) do() (resp *Response, err error) {
 	var retriesRemaining = r.retryConfig.MaxRetries
 	for {
 		response, err := r.client.roundTrip(r)
