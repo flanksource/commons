@@ -36,10 +36,10 @@ func TestContext(t *testing.T) {
 	RegisterTestingT(t)
 	ctx := NewContext(
 		WithTracer(tracer),
-		WithDebugFn(func(any) bool {
+		WithDebugFn(func(*Context) bool {
 			return true
 		}),
-		WithTraceFn(func(any) bool {
+		WithTraceFn(func(*Context) bool {
 			return true
 		}),
 	)
