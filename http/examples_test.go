@@ -72,7 +72,7 @@ func testExample(t *testing.T) {
 			}
 
 			var bodyResponse = map[string]any{}
-			if err := response.AsJSON(&bodyResponse); err != nil {
+			if err := response.Into(&bodyResponse); err != nil {
 				t.Errorf("error: %v", err)
 			}
 
