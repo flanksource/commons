@@ -115,8 +115,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.3.0 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
-
-require (
-	github.com/go-logr/stdr v1.2.2 // indirect
-	go.opentelemetry.io/otel/metric v1.19.0 // indirect
-)
