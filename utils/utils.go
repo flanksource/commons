@@ -19,6 +19,15 @@ func Ptr[T any](value T) *T {
 	return &value
 }
 
+func Deref[T any](v *T) T {
+	if v == nil {
+		var zero T
+		return zero
+	}
+
+	return *v
+}
+
 // Coalesce returns the first non-zero element
 func Coalesce[T comparable](arr ...T) T {
 	var zeroVal T

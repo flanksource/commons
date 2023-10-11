@@ -1,91 +1,85 @@
 package http
 
 import (
-	"bytes"
-	"fmt"
+	"encoding/json"
 	"io"
 	"net/http"
-
-	"github.com/pkg/errors"
+	"strings"
+	"time"
 )
 
-// Response embeds the stdlib http.Response type and extends its functionality
+// Response extends the stdlib http.Response type and extends its functionality
 type Response struct {
+	// The underlying http.Response is embed into Response.
 	*http.Response
+
+	// Request is the Response's related Request.
+	Request *Request
 }
 
 // IsOK is a convenience method to determine if the response returned a 200 OK
-func (resp *Response) IsOK() bool {
-	if resp == nil {
-		return false
+func (r *Response) IsOK(responseCodes ...int) bool {
+	if len(responseCodes) == 0 {
+		return r.StatusCode >= 200 && r.StatusCode < 299
 	}
 
-	return resp.StatusCode == http.StatusOK
+	for _, valid := range responseCodes {
+		if r.StatusCode == valid {
+			return true
+		}
+	}
+
+	return false
 }
 
-// AsError returns an error with details of the response
-func (resp *Response) AsError() error {
-	if resp == nil {
-		return errors.New("http client did not return a response")
-	}
-
-	return errors.Errorf("http client received error response: %v", resp.StatusCode)
+func (r *Response) Into(dest any) error {
+	return json.NewDecoder(r.Response.Body).Decode(dest)
 }
 
-// AsString returns the body of the response as a string, or returns an error if this is not possible
-func (resp *Response) AsString() (string, error) {
-	if resp == nil {
-		return "", errors.New("cannot read body from nil response")
+func (h *Response) AsJSON() (map[string]any, error) {
+	var result map[string]any
+	if err := h.Into(&result); err != nil {
+		return nil, err
 	}
 
-	body, err := resp.AsBytes()
+	return result, nil
+}
+
+func (r *Response) AsString() (string, error) {
+	res, err := io.ReadAll(r.Response.Body)
 	if err != nil {
 		return "", err
 	}
+	defer r.Response.Body.Close()
 
-	return string(body), nil
+	return string(res), nil
 }
 
-// AsReader returns the response body as an io.Reader, or returns an error if this is not possible
-func (resp *Response) AsReader() (io.Reader, error) {
-	if resp == nil {
-		return nil, errors.New("cannot return reader from nil response")
+func (h *Response) GetSSLAge() *time.Duration {
+	if h.Response == nil || h.Response.TLS == nil {
+		return nil
 	}
 
-	return resp.Body, nil
+	certificates := h.Response.TLS.PeerCertificates
+	if len(certificates) == 0 {
+		return nil
+	}
+
+	age := time.Until(certificates[0].NotAfter)
+	return &age
 }
 
-// AsBytes returns the body of the response as a byte slice, or returns an error if this is not possible
-func (resp *Response) AsBytes() ([]byte, error) {
-	if resp == nil {
-		return nil, errors.New("cannot read body from nil response")
+func (h *Response) IsJSON() bool {
+	contentType := h.Header["Content-Type"]
+	if len(contentType) == 0 {
+		return false
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	defer resp.Body.Close()
-
-	if err != nil {
-		return nil, errors.Wrap(err, "cannot read response body")
+	for _, ct := range contentType {
+		if strings.Contains(strings.ToLower(ct), "application/json") {
+			return true
+		}
 	}
 
-	return body, nil
-}
-
-// TraceMessage returns the Headers, StatusCode and Body of the response as strings that can be logged while
-// maintaining the response body's readability
-func (resp *Response) TraceMessage() (string, error) {
-	if resp == nil {
-		return "", errors.New("cannot read response information from nil response")
-	}
-
-	traceMessage := fmt.Sprintf("status=%d, content-type=<%s>", resp.StatusCode, resp.Header.Get(contentType))
-	buf := new(bytes.Buffer)
-	_, readErr := buf.ReadFrom(resp.Body)
-	if readErr != nil {
-		return traceMessage, nil
-	}
-	defer resp.Body.Close()
-	traceMessage += fmt.Sprintf("\n%+v", buf)
-
-	return traceMessage, nil
+	return false
 }

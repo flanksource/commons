@@ -1,206 +1,301 @@
 package http
 
 import (
-	"fmt"
-	"io"
+	"context"
+	"crypto/tls"
 	"net/http"
+	"net/url"
 	"strings"
+	"time"
 
-	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/commons/dns"
+	httpntlm "github.com/vadimi/go-http-ntlm"
+	httpntlmv2 "github.com/vadimi/go-http-ntlm/v2"
 )
 
-const contentType = "Content-Type"
+type Middleware func(http.RoundTripper) http.RoundTripper
 
-var contentTypesToLog = []string{
-	"text",
-	"json",
-	"yml",
+type RoundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f RoundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+type AuthConfig struct {
+	// Username for basic Auth
+	Username string
+
+	// Password for basic Auth
+	Password string
+
+	// Ntlm controls whether to use NTLM
+	Ntlm bool
+
+	// Ntlmv2 controls whether to use NTLMv2
+	Ntlmv2 bool
 }
 
 // Client is a type that represents an HTTP client
 type Client struct {
 	httpClient *http.Client
-	config     *Config
+
+	// authConfig specifies the authentication configuration
+	authConfig *AuthConfig
+
+	// transportMiddlewares are like http middlewares for transport
+	transportMiddlewares []Middleware
+
+	// retryConfig specifies the configuration for retries.
+	retryConfig RetryConfig
+
+	// connectTo specifies the host to connect to.
+	// Might be different from the host specified in the URL.
+	connectTo string
+
+	// headers are automatically added to all requests
+	headers http.Header
+
+	// baseURL is added as a prefix to all URLs
+	baseURL string
+
+	// proxyURL is the url to use as a proxy
+	proxyURL string
+
+	// cacheDNS specifies whether to cache DNS lookups
+	cacheDNS bool
 }
 
 // NewClient configures a new HTTP client using given configuration
-func NewClient(config *Config) *Client {
-	if config == nil {
-		return nil
-	}
-
-	if config.Headers == nil {
-		config.Headers = map[string]string{}
-	}
-
-	if config.Logger == nil {
-		config.Logger = logger.StandardLogger()
+func NewClient() *Client {
+	client := &http.Client{
+		Timeout: time.Minute * 2,
 	}
 
 	return &Client{
-		httpClient: createHTTPClient(config),
-		config:     config,
+		httpClient: client,
+		headers:    http.Header{},
 	}
 }
 
-func createHTTPClient(config *Config) *http.Client {
-	client := &http.Client{
-		Timeout:   config.Timeout,
-		Transport: createHTTPTransport(config),
+// R create a new request.
+func (c *Client) R(ctx context.Context) *Request {
+	return &Request{
+		ctx:         ctx,
+		client:      c,
+		headers:     make(http.Header),
+		queryParams: make(url.Values),
+		retryConfig: c.retryConfig,
 	}
-
-	return client
 }
 
-// Get sends an HTTP GET request
-func (c *Client) Get(url string) (*Response, error) {
-	request := NewGetRequest(c.config, url)
-	c.logRequest(request.Request, c.config.Logger.Tracef)
-	response, err := request.Send(c.httpClient, c.config.Logger)
-	c.logResponse(request.verb, c.config.Logger.Tracef, url, response, err)
-	return response, err
+// Retry configuration retrying on failure with exponential backoff.
+//
+// Base duration of a second & an exponent of 2 is a good option.
+func (c *Client) Retry(maxRetries uint, baseDuration time.Duration, exponent float64) *Client {
+	c.retryConfig.MaxRetries = maxRetries
+	c.retryConfig.RetryWait = baseDuration
+	c.retryConfig.Factor = exponent
+	return c
 }
 
-// Post sends an HTTP POST request
-func (c *Client) Post(url string, contentType string, body io.ReadCloser) (*Response, error) {
-	request := NewPostRequest(c.config, url, contentType, body)
-	c.logRequest(request.Request, c.config.Logger.Debugf)
-
-	response, err := request.Send(c.httpClient, c.config.Logger)
-	c.logResponse(request.verb, c.config.Logger.Debugf, url, response, err)
-	return response, err
+func (c *Client) BaseURL(url string) *Client {
+	c.baseURL = url
+	return c
 }
 
-// Patch sends an HTTP PATCH request
-func (c *Client) Patch(url string, body io.ReadCloser) (*Response, error) {
-	request := NewPatchRequest(c.config, url, body)
-	c.logRequest(request.Request, c.config.Logger.Debugf)
-
-	response, err := request.Send(c.httpClient, c.config.Logger)
-	c.logResponse(request.verb, c.config.Logger.Debugf, url, response, err)
-	return response, err
+func (c *Client) Header(key, val string) *Client {
+	c.headers.Set(key, val)
+	return c
 }
 
-// Put sends an HTTP PUT request
-func (c *Client) Put(url string, body io.ReadCloser) (*Response, error) {
-	request := NewPutRequest(c.config, url, body)
-	c.logRequest(request.Request, c.config.Logger.Debugf)
-
-	response, err := request.Send(c.httpClient, c.config.Logger)
-	c.logResponse(request.verb, c.config.Logger.Debugf, url, response, err)
-	return response, err
+// ConnectTo specifies the host:port on which the URL is sought.
+// If empty, the URL's host is used.
+func (c *Client) ConnectTo(host string) *Client {
+	c.connectTo = host
+	return c
 }
 
-// Delete sends an HTTP DELETE request
-func (c *Client) Delete(url string) (*Response, error) {
-	request := NewDeleteRequest(c.config, url)
-	c.logRequest(request.Request, c.config.Logger.Infof)
-
-	response, err := request.Send(c.httpClient, c.config.Logger)
-	c.logResponse(request.verb, c.config.Logger.Infof, url, response, err)
-	return response, err
+func (c *Client) CacheDNS(val bool) *Client {
+	c.cacheDNS = val
+	return c
 }
 
-func (c *Client) logRequest(request *Request, logFunc func(message string, args ...interface{})) {
-	if !c.config.Trace {
-		return
+// Timeout specifies a time limit for requests made by this Client.
+//
+//	Default: 2 minutes
+func (c *Client) Timeout(d time.Duration) *Client {
+	c.httpClient.Timeout = d
+	return c
+}
+
+// DisableKeepAlives prevents reuse of TCP connections
+func (c *Client) DisableKeepAlive(val bool) *Client {
+	if c.httpClient.Transport == nil {
+		c.httpClient.Transport = http.DefaultTransport
 	}
 
-	if request == nil {
-		c.config.Logger.Tracef("Empty request. Nothing to log: request=%s", request)
-		return
+	customTransport := c.httpClient.Transport.(*http.Transport).Clone()
+	customTransport.DisableKeepAlives = val
+	c.httpClient.Transport = customTransport
+	return c
+}
+
+// InsecureSkipVerify controls whether a client verifies the server's
+// certificate chain and host name
+func (c *Client) InsecureSkipVerify(val bool) *Client {
+	if c.httpClient.Transport == nil {
+		c.httpClient.Transport = http.DefaultTransport
 	}
 
-	message := fmt.Sprintf("Request: verb=%s, url=%s", request.verb, request.url)
-	if !c.config.TraceBody {
-		logFunc(message)
-		return
+	customTransport := c.httpClient.Transport.(*http.Transport).Clone()
+
+	if customTransport.TLSClientConfig == nil {
+		customTransport.TLSClientConfig = &tls.Config{}
 	}
 
-	var bodyContentType string
-	if c.config.Headers != nil {
-		bodyContentType = c.config.Headers[contentType]
+	customTransport.TLSClientConfig.InsecureSkipVerify = val
+	c.httpClient.Transport = customTransport
+	return c
+}
+
+func (c *Client) Proxy(url string) *Client {
+	c.proxyURL = url
+	return c
+}
+
+func (c *Client) setProxy(proxyURL *url.URL) {
+	if c.httpClient.Transport == nil {
+		c.httpClient.Transport = http.DefaultTransport
 	}
 
-	if !shouldLogBody(bodyContentType) {
-		message += fmt.Sprintf("\nBody Content Type: <%s>", bodyContentType)
-		logFunc(message)
-		return
+	customTransport := c.httpClient.Transport.(*http.Transport).Clone()
+	customTransport.Proxy = http.ProxyURL(proxyURL)
+	c.httpClient.Transport = customTransport
+}
+
+// Auth sets up the username & password for basic auth or NTLM.
+func (c *Client) Auth(username, password string) *Client {
+	if c.authConfig == nil {
+		c.authConfig = &AuthConfig{}
 	}
 
-	if request.body == nil {
-		logFunc(message)
-		return
+	c.authConfig.Username = username
+	c.authConfig.Password = password
+	return c
+}
+
+func (c *Client) NTLM(val bool) *Client {
+	if c.authConfig == nil {
+		c.authConfig = &AuthConfig{}
 	}
 
-	loggableString, err := request.GetLoggableStrings()
+	c.authConfig.Ntlm = val
+	return c
+}
+
+func (c *Client) NTLMV2(val bool) *Client {
+	if c.authConfig == nil {
+		c.authConfig = &AuthConfig{}
+	}
+
+	c.authConfig.Ntlmv2 = val
+	return c
+}
+
+func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
+	var host string
+	if r.client.connectTo != "" {
+		host = r.client.connectTo
+	} else if h := r.getHeader("Host"); h != "" {
+		host = h
+	} else {
+		host = r.url.Host
+	}
+
+	if ips, _ := dns.CacheLookup("A", host); len(ips) > 0 {
+		host = ips[0].String()
+	}
+
+	req, err := http.NewRequestWithContext(r.ctx, r.method, r.url.String(), r.body)
 	if err != nil {
-		message += fmt.Sprintf(", err=%+v", err)
-		logFunc(message)
-		return
-	}
-	message += fmt.Sprintf("\nBody: %s", loggableString)
-	logFunc(message)
-}
-
-func (c *Client) logResponse(verb string, logFunc func(message string, args ...interface{}), url string, response *Response, err error) {
-	if !c.config.Trace {
-		return
+		return nil, err
 	}
 
-	if !c.config.TraceResponse {
-		return
-	}
-
-	message := fmt.Sprintf("Response: verb=%s Response: url=%s", verb, url)
-	if response == nil {
-		logFunc(message)
-		return
-	}
-
-	if !c.config.TraceBody {
-		logFunc(message)
-		return
-	}
-
-	bodyContentType := response.Header[contentType]
-	var bodyContentTypeString string
-	if len(bodyContentType) > 0 {
-		bodyContentTypeString = bodyContentType[0]
-	}
-
-	if !shouldLogBody(bodyContentTypeString) {
-		message += fmt.Sprintf("\nBody=<%s>", bodyContentTypeString)
-		logFunc(message)
-		return
-	}
-
-	traceMessage, trcMsgErr := response.TraceMessage()
-	if trcMsgErr != nil {
-		message += fmt.Sprintf("content-type='%s', err=%+v", bodyContentTypeString, trcMsgErr)
-		logFunc(message)
-		return
-	}
-
-	message += fmt.Sprintf("\nBody: %s", traceMessage)
-	logFunc(message)
-}
-
-func isContentTypeLoggable(contentType string) bool {
-	for _, contentTypeToLog := range contentTypesToLog {
-		if strings.Contains(contentType, contentTypeToLog) {
-			return true
+	// use the headers from the client & add/overwrite them with headers from the request
+	req.Header = c.headers.Clone()
+	for k, v := range r.headers.Clone() {
+		for _, vv := range v {
+			req.Header.Set(k, vv)
 		}
 	}
-	return false
+
+	queryParam := req.URL.Query()
+	for k, v := range r.queryParams {
+		for _, vv := range v {
+			queryParam.Set(k, vv)
+		}
+	}
+	req.URL.RawQuery = queryParam.Encode()
+
+	req.Host = host
+	if r.client.authConfig != nil {
+		req.SetBasicAuth(r.client.authConfig.Username, r.client.authConfig.Password)
+	}
+
+	if c.proxyURL != "" {
+		proxyURL, err := url.Parse(c.proxyURL)
+		if err != nil {
+			return nil, err
+		}
+
+		c.setProxy(proxyURL)
+	}
+
+	if c.authConfig != nil {
+		parts := strings.Split(c.authConfig.Username, "@")
+		domain := ""
+		if len(parts) > 1 {
+			domain = parts[1]
+		}
+
+		if c.authConfig.Ntlmv2 {
+			r.client.httpClient.Transport = &httpntlmv2.NtlmTransport{
+				Domain:       domain,
+				User:         parts[0],
+				Password:     c.authConfig.Password,
+				RoundTripper: r.client.httpClient.Transport,
+			}
+		} else if c.authConfig.Ntlm {
+			r.client.httpClient.Transport = &httpntlm.NtlmTransport{
+				Domain:   domain,
+				User:     parts[0],
+				Password: c.authConfig.Password,
+			}
+		}
+	}
+
+	roundTripper := applyMiddleware(RoundTripperFunc(r.client.httpClient.Do), r.client.transportMiddlewares...)
+	httpResponse, err := roundTripper.RoundTrip(req)
+	if err != nil {
+		return nil, err
+	}
+
+	response := &Response{
+		Response: httpResponse,
+	}
+	return response, nil
 }
 
-func shouldLogBody(bodyContentType string) bool {
-	if bodyContentType == "" {
-		return false
+// Use adds middleware to the client that wraps the client's transport
+func (c *Client) Use(middlewares ...Middleware) *Client {
+	c.transportMiddlewares = append(c.transportMiddlewares, middlewares...)
+	return c
+}
+
+func applyMiddleware(h http.RoundTripper, middleware ...Middleware) http.RoundTripper {
+	for i := len(middleware) - 1; i >= 0; i-- {
+		h = middleware[i](h)
 	}
-	if len(bodyContentType) < 1 {
-		return false
-	}
-	return isContentTypeLoggable(bodyContentType)
+
+	return h
 }
