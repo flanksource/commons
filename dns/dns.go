@@ -30,7 +30,7 @@ func CacheLookup(recordType, hostname string) ([]net.IP, error) {
 	return ips, nil
 }
 
-// Lookup looksup the record using Go's default resolver
+// Lookup looks up the record using Go's default resolver
 func Lookup(recordType, hostname string) ([]net.IP, error) {
 	host := hostname
 	if url, err := url.Parse(hostname); err != nil {

@@ -209,11 +209,13 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 	} else if h := r.getHeader("Host"); h != "" {
 		host = h
 	} else {
-		host = r.url.Host
+		host = r.url.Hostname()
 	}
 
-	if ips, _ := dns.CacheLookup("A", host); len(ips) > 0 {
-		host = ips[0].String()
+	if c.cacheDNS {
+		if ips, _ := dns.CacheLookup("A", host); len(ips) > 0 {
+			host = ips[0].String()
+		}
 	}
 
 	req, err := http.NewRequestWithContext(r.ctx, r.method, r.url.String(), r.body)
