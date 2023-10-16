@@ -2,6 +2,7 @@ package http_test
 
 import (
 	"context"
+	"fmt"
 	netHTTP "net/http"
 	"testing"
 	"time"
@@ -16,8 +17,36 @@ import (
 // Responds with 403 & 421
 // https://github.com/flanksource/commons/actions/runs/6458930480/job/17533665387?pr=79
 // nolint:unused
-func testExample(t *testing.T) {
+func TestExample(t *testing.T) {
 	ctx := context.Background()
+
+	t.Run("OAuth", func(t *testing.T) {
+		t.SkipNow()
+
+		var (
+			clientID     = ""
+			clientSecret = ""
+			tenantID     = ""
+			tokenURL     = fmt.Sprintf("https://login.microsoftonline.com/%s/oauth2/v2.0/token", tenantID)
+			scopes       = []string{"https://graph.microsoft.com/.default"}
+		)
+
+		req := http.NewClient().OAuth(clientID, clientSecret, tokenURL, scopes...).R(ctx)
+		response, err := req.Get("https://graph.microsoft.com/v1.0/users")
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+
+		body, err := response.AsJSON()
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		t.Logf("body: %v", body)
+
+		if !response.IsOK() {
+			t.Fatalf("Got bad response: %d", response.StatusCode)
+		}
+	})
 
 	t.Run("Skip SSL Verification", func(t *testing.T) {
 		req := http.NewClient().InsecureSkipVerify(true).R(ctx)
@@ -34,7 +63,7 @@ func testExample(t *testing.T) {
 	t.Run("Cache DNS", func(t *testing.T) {
 		req := http.NewClient().CacheDNS(true).R(ctx)
 		for i := 0; i < 5; i++ {
-			response, err := req.Get("https://flanksource.com")
+			response, err := req.Get("https://github.com/")
 			if err != nil {
 				t.Errorf("error: %v", err)
 			}
@@ -144,5 +173,5 @@ func loggerMiddlware(next netHTTP.RoundTripper) netHTTP.RoundTripper {
 		return next.RoundTrip(req)
 	}
 
-	return http.RoundTripperFunc(x)
+	return middlewares.RoundTripperFunc(x)
 }

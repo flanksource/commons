@@ -9,17 +9,12 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/dns"
+	"github.com/flanksource/commons/http/middlewares"
 	httpntlm "github.com/vadimi/go-http-ntlm"
 	httpntlmv2 "github.com/vadimi/go-http-ntlm/v2"
 )
 
 type Middleware func(http.RoundTripper) http.RoundTripper
-
-type RoundTripperFunc func(*http.Request) (*http.Response, error)
-
-func (f RoundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
-	return f(req)
-}
 
 type AuthConfig struct {
 	// Username for basic Auth
@@ -184,6 +179,16 @@ func (c *Client) Auth(username, password string) *Client {
 	return c
 }
 
+func (c *Client) OAuth(clientID, clientSecret, tokenURL string, scopes ...string) *Client {
+	c.Use(middlewares.NewOauthTransport(clientID, clientSecret, tokenURL, scopes...).RoundTripper)
+	return c
+}
+
+func (c *Client) Trace() *Client {
+	c.Use(middlewares.NewTracedTransport().RoundTripper)
+	return c
+}
+
 func (c *Client) NTLM(val bool) *Client {
 	if c.authConfig == nil {
 		c.authConfig = &AuthConfig{}
@@ -276,7 +281,7 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 		}
 	}
 
-	roundTripper := applyMiddleware(RoundTripperFunc(r.client.httpClient.Do), r.client.transportMiddlewares...)
+	roundTripper := applyMiddleware(middlewares.RoundTripperFunc(r.client.httpClient.Do), r.client.transportMiddlewares...)
 	httpResponse, err := roundTripper.RoundTrip(req)
 	if err != nil {
 		return nil, err

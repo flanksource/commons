@@ -5,8 +5,6 @@ import (
 	"io"
 	netHttp "net/http"
 
-	"github.com/flanksource/commons/http"
-
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -115,7 +113,7 @@ func (t *traceTransport) TraceProvider(provider trace.TracerProvider) *traceTran
 }
 
 func (t *traceTransport) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundTripper {
-	return http.RoundTripperFunc(func(ogRequest *netHttp.Request) (*netHttp.Response, error) {
+	return RoundTripperFunc(func(ogRequest *netHttp.Request) (*netHttp.Response, error) {
 		// According to RoundTripper spec, we shouldn't modify the origin request.
 		req := ogRequest.Clone(ogRequest.Context())
 
