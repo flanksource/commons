@@ -1,6 +1,7 @@
 package context
 
 import (
+	gocontext "context"
 	"testing"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -35,11 +36,12 @@ var tracer trace.Tracer
 func TestContext(t *testing.T) {
 	RegisterTestingT(t)
 	ctx := NewContext(
+		gocontext.Background(),
 		WithTracer(tracer),
-		WithDebugFn(func(*Context) bool {
+		WithDebugFn(func(Context) bool {
 			return true
 		}),
-		WithTraceFn(func(*Context) bool {
+		WithTraceFn(func(Context) bool {
 			return true
 		}),
 	)
