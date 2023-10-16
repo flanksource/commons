@@ -5,8 +5,6 @@ import (
 	"io"
 	netHttp "net/http"
 
-	"github.com/flanksource/commons/http"
-
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -16,96 +14,97 @@ import (
 
 const tracerName = "github.com/flanksource/commons/http"
 
-func NewTracedTransport() *traceTransport {
+func NewTracedTransport(config TraceConfig) *traceTransport {
 	return &traceTransport{
-		maxBodyLength: 4096,
-		tracer:        otel.GetTracerProvider().Tracer(tracerName),
-		queryParam:    true,
-		headers:       true,
+		tracer: otel.GetTracerProvider().Tracer(tracerName),
+		Config: config,
 	}
 }
 
-type traceTransport struct {
-	// tracer is the creator of spans
-	tracer trace.Tracer
-
-	// spanName is an optional name for the span.
+type TraceConfig struct {
+	// SpanName is an optional name for the span.
 	// If not provided, the hostname of the requesting URL will be used.
-	spanName string
+	SpanName string
 
 	// A list of patterns for headers which should be redacted in the trace.
-	redactedHeaders []string
+	RedactedHeaders []string
 
-	// maxBodyLength is the max size of the body, in bytes, that will be traced.
+	// MaxBodyLength is the max size of the body, in bytes, that will be traced.
 	// If the response body is larger than this, it will not be traced at all.
 	//
 	//  Default: 4096 (4MB)
-	maxBodyLength int64
+	MaxBodyLength int64
 
-	// body controls whether the request body is traced
-	body bool
+	// Body controls whether the request Body is traced
+	Body bool
 
-	// response controls whether the response body is traced
-	response bool
+	// Response controls whether the Response body is traced
+	Response bool
 
-	// responseHeaders controls whether the response headers are traced
-	responseHeaders bool
+	// ResponseHeaders controls whether the response headers are traced
+	ResponseHeaders bool
 
-	// queryParam controls whether the query parameters are traced
-	queryParam bool
+	// QueryParam controls whether the query parameters are traced
+	QueryParam bool
 
-	// headers controls whether the headers are traced
-	headers bool
+	// Headers controls whether the Headers are traced
+	Headers bool
+}
+
+type traceTransport struct {
+	tracer trace.Tracer
+
+	Config TraceConfig
 }
 
 func (t *traceTransport) TraceAll(val bool) *traceTransport {
-	t.body = true
-	t.response = true
-	t.responseHeaders = true
-	t.queryParam = true
-	t.headers = true
+	t.Config.Body = true
+	t.Config.Response = true
+	t.Config.ResponseHeaders = true
+	t.Config.QueryParam = true
+	t.Config.Headers = true
 	return t
 }
 
 func (t *traceTransport) TraceBody(val bool) *traceTransport {
-	t.body = val
+	t.Config.Body = val
 	return t
 }
 
 func (t *traceTransport) TraceResponse(val bool) *traceTransport {
-	t.response = val
+	t.Config.Response = val
 	return t
 }
 
 func (t *traceTransport) TraceResponseHeaders(val bool) *traceTransport {
-	t.responseHeaders = val
+	t.Config.ResponseHeaders = val
 	return t
 }
 
 func (t *traceTransport) TraceQueryParam(val bool) *traceTransport {
-	t.queryParam = val
+	t.Config.QueryParam = val
 	return t
 }
 
 func (t *traceTransport) TraceHeaders(val bool) *traceTransport {
-	t.headers = val
+	t.Config.Headers = val
 	return t
 }
 
 func (t *traceTransport) RedactHeaders(patterns []string) *traceTransport {
-	t.redactedHeaders = patterns
+	t.Config.RedactedHeaders = patterns
 	return t
 }
 
 func (t *traceTransport) MaxBodyLength(val int64) *traceTransport {
-	t.maxBodyLength = val
+	t.Config.MaxBodyLength = val
 	return t
 }
 
 // SpanName sets the name of the span.
 // If not provided, the hostname of the requesting URL will be used.
 func (t *traceTransport) SpanName(val string) *traceTransport {
-	t.spanName = val
+	t.Config.SpanName = val
 	return t
 }
 
@@ -115,14 +114,14 @@ func (t *traceTransport) TraceProvider(provider trace.TracerProvider) *traceTran
 }
 
 func (t *traceTransport) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundTripper {
-	return http.RoundTripperFunc(func(ogRequest *netHttp.Request) (*netHttp.Response, error) {
+	return RoundTripperFunc(func(ogRequest *netHttp.Request) (*netHttp.Response, error) {
 		// According to RoundTripper spec, we shouldn't modify the origin request.
 		req := ogRequest.Clone(ogRequest.Context())
 
 		propagator := propagation.TraceContext{}
 		propagator.Inject(req.Context(), propagation.HeaderCarrier(req.Header))
 
-		spanName := t.spanName
+		spanName := t.Config.SpanName
 		if spanName == "" {
 			spanName = req.URL.Host
 		}
@@ -136,22 +135,22 @@ func (t *traceTransport) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundTrip
 			attribute.String("request.host", req.Host),
 		)
 
-		if t.headers {
-			for key, values := range SanitizeHeaders(req.Header, t.redactedHeaders...) {
+		if t.Config.Headers {
+			for key, values := range SanitizeHeaders(req.Header, t.Config.RedactedHeaders...) {
 				for _, value := range values {
 					span.SetAttributes(attribute.String("request.header."+key, value))
 				}
 			}
 		}
 
-		if req.Body != nil && t.body {
+		if req.Body != nil && t.Config.Body {
 			if b, err := io.ReadAll(req.Body); err == nil {
 				span.SetAttributes(attribute.String("request.body", string(b)))
 				req.Body = io.NopCloser(bytes.NewBuffer(b))
 			}
 		}
 
-		if t.queryParam && req.URL.RawQuery != "" {
+		if t.Config.QueryParam && req.URL.RawQuery != "" {
 			for q, val := range req.URL.Query() {
 				span.SetAttributes(attribute.StringSlice("request.query."+q, val))
 			}
@@ -164,16 +163,16 @@ func (t *traceTransport) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundTrip
 			return nil, err
 		}
 
-		if t.responseHeaders {
-			for key, values := range SanitizeHeaders(resp.Header, t.redactedHeaders...) {
+		if t.Config.ResponseHeaders {
+			for key, values := range SanitizeHeaders(resp.Header, t.Config.RedactedHeaders...) {
 				for _, value := range values {
 					span.SetAttributes(attribute.String("response.header."+key, value))
 				}
 			}
 		}
 
-		if t.response {
-			if b, err := io.ReadAll(io.LimitReader(resp.Body, t.maxBodyLength)); err == nil {
+		if t.Config.Response {
+			if b, err := io.ReadAll(io.LimitReader(resp.Body, t.Config.MaxBodyLength)); err == nil {
 				span.SetAttributes(attribute.String("response.body", string(b)))
 				resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			}
