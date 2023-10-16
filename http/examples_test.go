@@ -124,9 +124,11 @@ func TestExample(t *testing.T) {
 	})
 
 	t.Run("Tracing & logging middleware", func(t *testing.T) {
-		tracedTransport := middlewares.NewTracedTransport().TraceBody(true).TraceResponse(true)
-
-		client := http.NewClient().Use(loggerMiddlware, tracedTransport.RoundTripper)
+		client := http.NewClient().Trace(http.TraceConfig{
+			MaxBodyLength: 4096,
+			QueryParam:    true,
+			Headers:       true,
+		})
 
 		req := client.R(ctx)
 		response, err := req.Get("https://flanksource.com")

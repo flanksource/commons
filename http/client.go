@@ -16,6 +16,8 @@ import (
 
 type Middleware func(http.RoundTripper) http.RoundTripper
 
+type TraceConfig = middlewares.TraceConfig
+
 type AuthConfig struct {
 	// Username for basic Auth
 	Username string
@@ -184,8 +186,8 @@ func (c *Client) OAuth(clientID, clientSecret, tokenURL string, scopes ...string
 	return c
 }
 
-func (c *Client) Trace() *Client {
-	c.Use(middlewares.NewTracedTransport().RoundTripper)
+func (c *Client) Trace(config TraceConfig) *Client {
+	c.Use(middlewares.NewTracedTransport(config).RoundTripper)
 	return c
 }
 
