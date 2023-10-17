@@ -11,6 +11,10 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+var (
+	noopTracer = trace.NewNoopTracerProvider().Tracer("noop")
+)
+
 type ContextOptions func(*Context)
 
 func WithTraceFn(fn func(Context) bool) ContextOptions {
@@ -58,7 +62,7 @@ func NewContext(basectx gocontext.Context, opts ...ContextOptions) Context {
 		}
 	}
 	if ctx.tracer == nil {
-		ctx.tracer = trace.NewNoopTracerProvider().Tracer("noop")
+		ctx.tracer = noopTracer
 	}
 	return ctx
 }
@@ -83,6 +87,13 @@ func (c Context) WithValue(key, val interface{}) Context {
 		isTraceFn: c.isTraceFn,
 		tracer:    c.tracer,
 	}
+}
+
+func (c Context) GetTracer() trace.Tracer {
+	if c.tracer == nil {
+		return noopTracer
+	}
+	return c.tracer
 }
 
 func (c Context) WithTimeout(timeout time.Duration) (Context, gocontext.CancelFunc) {
