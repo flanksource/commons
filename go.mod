@@ -10,6 +10,7 @@ require (
 	github.com/google/go-cmp v0.5.9
 	github.com/google/uuid v1.3.0
 	github.com/hashicorp/go-getter v1.7.1
+	github.com/henvic/httpretty v0.1.2
 	github.com/kr/pretty v0.3.1
 	github.com/mitchellh/reflectwalk v1.0.2
 	github.com/onsi/gomega v1.27.6

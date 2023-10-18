@@ -7,3 +7,5 @@ type RoundTripperFunc func(*http.Request) (*http.Response, error)
 func (f RoundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req)
 }
+
+type Middleware func(http.RoundTripper) http.RoundTripper

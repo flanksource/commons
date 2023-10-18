@@ -17,6 +17,10 @@ type Response struct {
 	Request *Request
 }
 
+func (r *Response) GetHeaders() map[string]string {
+	return toMap(r.Header)
+}
+
 // IsOK is a convenience method to determine if the response returned a 200 OK
 func (r *Response) IsOK(responseCodes ...int) bool {
 	if len(responseCodes) == 0 {

@@ -17,6 +17,25 @@ import (
 type Middleware func(http.RoundTripper) http.RoundTripper
 
 type TraceConfig = middlewares.TraceConfig
+var TraceAll = TraceConfig{
+	MaxBodyLength:   4096,
+	Body:            true,
+	Response:        true,
+	QueryParam:      true,
+	Headers:         true,
+	ResponseHeaders: true,
+	TLS:             true,
+}
+
+var TraceHeaders = TraceConfig{
+	Body:            false,
+	Response:        false,
+	QueryParam:      true,
+	Headers:         true,
+	ResponseHeaders: true,
+	TLS:             false,
+}
+
 
 type AuthConfig struct {
 	// Username for basic Auth
@@ -190,6 +209,10 @@ func (c *Client) Trace(config TraceConfig) *Client {
 	c.Use(middlewares.NewTracedTransport(config).RoundTripper)
 	return c
 }
+func (c *Client) TraceToStdout(config TraceConfig) *Client {
+	c.Use(middlewares.NewLogger(config))
+	return c
+}
 
 func (c *Client) NTLM(val bool) *Client {
 	if c.authConfig == nil {
@@ -295,13 +318,21 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 	return response, nil
 }
 
+func toMap(h http.Header) map[string]string {
+	m := make(map[string]string)
+	for k, v := range h {
+		m[k] = strings.Join(v, " ")
+	}
+	return m
+}
+
 // Use adds middleware to the client that wraps the client's transport
-func (c *Client) Use(middlewares ...Middleware) *Client {
+func (c *Client) Use(middlewares ...middlewares.Middleware) *Client {
 	c.transportMiddlewares = append(c.transportMiddlewares, middlewares...)
 	return c
 }
 
-func applyMiddleware(h http.RoundTripper, middleware ...Middleware) http.RoundTripper {
+func applyMiddleware(h http.RoundTripper, middleware ...middlewares.Middleware) http.RoundTripper {
 	for i := len(middleware) - 1; i >= 0; i-- {
 		h = middleware[i](h)
 	}
