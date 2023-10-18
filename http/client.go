@@ -14,9 +14,8 @@ import (
 	httpntlmv2 "github.com/vadimi/go-http-ntlm/v2"
 )
 
-type Middleware func(http.RoundTripper) http.RoundTripper
-
 type TraceConfig = middlewares.TraceConfig
+
 var TraceAll = TraceConfig{
 	MaxBodyLength:   4096,
 	Body:            true,
@@ -36,6 +35,9 @@ var TraceHeaders = TraceConfig{
 	TLS:             false,
 }
 
+func (a *AuthConfig) IsEmpty() bool {
+	return a.Username == "" && a.Password == ""
+}
 
 type AuthConfig struct {
 	// Username for basic Auth
@@ -79,6 +81,7 @@ type Client struct {
 
 	// cacheDNS specifies whether to cache DNS lookups
 	cacheDNS bool
+
 	userAgent string
 }
 
@@ -104,6 +107,11 @@ func (c *Client) R(ctx context.Context) *Request {
 		queryParams: make(url.Values),
 		retryConfig: c.retryConfig,
 	}
+}
+
+func (c *Client) UserAgent(agent string) *Client {
+	c.userAgent = agent
+	return c
 }
 
 // Retry configuration retrying on failure with exponential backoff.
@@ -211,6 +219,7 @@ func (c *Client) Trace(config TraceConfig) *Client {
 	c.Use(middlewares.NewTracedTransport(config).RoundTripper)
 	return c
 }
+
 func (c *Client) TraceToStdout(config TraceConfig) *Client {
 	c.Use(middlewares.NewLogger(config))
 	return c
@@ -280,7 +289,7 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 	req.URL.RawQuery = queryParam.Encode()
 
 	req.Host = host
-	if r.client.authConfig != nil {
+	if r.client.authConfig != nil && !r.client.authConfig.IsEmpty() {
 		req.SetBasicAuth(r.client.authConfig.Username, r.client.authConfig.Password)
 	}
 

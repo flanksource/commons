@@ -123,6 +123,25 @@ func TestExample(t *testing.T) {
 		}
 	})
 
+	t.Run("No Auth", func(t *testing.T) {
+		resp, err := http.NewClient().R(context.Background()).Header("Hello", "World").Get("https://httpbin.demo.aws.flanksource.com/headers")
+		if err != nil {
+			t.Error(err)
+		}
+		var headers map[string]any
+		if body, err := resp.AsJSON(); err != nil {
+			t.Error(err)
+		} else {
+			headers = body["headers"].(map[string]any)
+		}
+		if headers["Hello"] != "World" {
+			t.Errorf("Expected response headers %s", headers)
+		}
+		if v, ok := headers["Authorization"]; ok {
+			t.Errorf("Expecting blank authentication got %s", v)
+		}
+	})
+
 	t.Run("Tracing & logging middleware", func(t *testing.T) {
 		client := http.NewClient().Trace(http.TraceConfig{
 			MaxBodyLength: 4096,
