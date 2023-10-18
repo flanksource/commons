@@ -14,9 +14,30 @@ import (
 	httpntlmv2 "github.com/vadimi/go-http-ntlm/v2"
 )
 
-type Middleware func(http.RoundTripper) http.RoundTripper
-
 type TraceConfig = middlewares.TraceConfig
+
+var TraceAll = TraceConfig{
+	MaxBodyLength:   4096,
+	Body:            true,
+	Response:        true,
+	QueryParam:      true,
+	Headers:         true,
+	ResponseHeaders: true,
+	TLS:             true,
+}
+
+var TraceHeaders = TraceConfig{
+	Body:            false,
+	Response:        false,
+	QueryParam:      true,
+	Headers:         true,
+	ResponseHeaders: true,
+	TLS:             false,
+}
+
+func (a *AuthConfig) IsEmpty() bool {
+	return a.Username == "" && a.Password == ""
+}
 
 type AuthConfig struct {
 	// Username for basic Auth
@@ -40,7 +61,7 @@ type Client struct {
 	authConfig *AuthConfig
 
 	// transportMiddlewares are like http middlewares for transport
-	transportMiddlewares []Middleware
+	transportMiddlewares []middlewares.Middleware
 
 	// retryConfig specifies the configuration for retries.
 	retryConfig RetryConfig
@@ -60,6 +81,8 @@ type Client struct {
 
 	// cacheDNS specifies whether to cache DNS lookups
 	cacheDNS bool
+
+	userAgent string
 }
 
 // NewClient configures a new HTTP client using given configuration
@@ -70,6 +93,7 @@ func NewClient() *Client {
 
 	return &Client{
 		httpClient: client,
+		userAgent:  "flanksource-commons/0",
 		headers:    http.Header{},
 	}
 }
@@ -83,6 +107,11 @@ func (c *Client) R(ctx context.Context) *Request {
 		queryParams: make(url.Values),
 		retryConfig: c.retryConfig,
 	}
+}
+
+func (c *Client) UserAgent(agent string) *Client {
+	c.userAgent = agent
+	return c
 }
 
 // Retry configuration retrying on failure with exponential backoff.
@@ -191,6 +220,11 @@ func (c *Client) Trace(config TraceConfig) *Client {
 	return c
 }
 
+func (c *Client) TraceToStdout(config TraceConfig) *Client {
+	c.Use(middlewares.NewLogger(config))
+	return c
+}
+
 func (c *Client) NTLM(val bool) *Client {
 	if c.authConfig == nil {
 		c.authConfig = &AuthConfig{}
@@ -238,6 +272,14 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 		}
 	}
 
+	if req.Header.Get("User-Agent") == "" {
+		req.Header.Set("User-Agent", c.userAgent)
+	}
+
+	if req.Header.Get("Accept") == "" {
+		req.Header.Set("Accept", "*/*")
+	}
+
 	queryParam := req.URL.Query()
 	for k, v := range r.queryParams {
 		for _, vv := range v {
@@ -247,7 +289,7 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 	req.URL.RawQuery = queryParam.Encode()
 
 	req.Host = host
-	if r.client.authConfig != nil {
+	if r.client.authConfig != nil && !r.client.authConfig.IsEmpty() {
 		req.SetBasicAuth(r.client.authConfig.Username, r.client.authConfig.Password)
 	}
 
@@ -295,13 +337,21 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 	return response, nil
 }
 
+func toMap(h http.Header) map[string]string {
+	m := make(map[string]string)
+	for k, v := range h {
+		m[k] = strings.Join(v, " ")
+	}
+	return m
+}
+
 // Use adds middleware to the client that wraps the client's transport
-func (c *Client) Use(middlewares ...Middleware) *Client {
+func (c *Client) Use(middlewares ...middlewares.Middleware) *Client {
 	c.transportMiddlewares = append(c.transportMiddlewares, middlewares...)
 	return c
 }
 
-func applyMiddleware(h http.RoundTripper, middleware ...Middleware) http.RoundTripper {
+func applyMiddleware(h http.RoundTripper, middleware ...middlewares.Middleware) http.RoundTripper {
 	for i := len(middleware) - 1; i >= 0; i-- {
 		h = middleware[i](h)
 	}

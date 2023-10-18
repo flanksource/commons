@@ -49,6 +49,11 @@ type TraceConfig struct {
 
 	// Headers controls whether the Headers are traced
 	Headers bool
+
+	// TLS connection information
+	TLS bool
+
+	Timing bool
 }
 
 type traceTransport struct {
@@ -63,6 +68,8 @@ func (t *traceTransport) TraceAll(val bool) *traceTransport {
 	t.Config.ResponseHeaders = true
 	t.Config.QueryParam = true
 	t.Config.Headers = true
+	t.Config.TLS = true
+	t.Config.Timing = true
 	return t
 }
 

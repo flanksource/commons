@@ -24,6 +24,10 @@ type Request struct {
 	queryParams url.Values
 }
 
+func (r *Request) GetHeaders() map[string]string {
+	return toMap(r.headers)
+}
+
 func (r *Request) getHeader(key string) string {
 	if r.headers == nil {
 		return ""
@@ -127,12 +131,7 @@ func (r *Request) Do(method, reqURL string) (resp *Response, err error) {
 		}
 	}
 
-	resp, err = r.do()
-	if err != nil {
-		return nil, err
-	}
-
-	return resp, nil
+	return r.do()
 }
 
 func (r *Request) do() (resp *Response, err error) {
