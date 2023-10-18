@@ -59,7 +59,7 @@ type Client struct {
 	authConfig *AuthConfig
 
 	// transportMiddlewares are like http middlewares for transport
-	transportMiddlewares []Middleware
+	transportMiddlewares []middlewares.Middleware
 
 	// retryConfig specifies the configuration for retries.
 	retryConfig RetryConfig
@@ -79,6 +79,7 @@ type Client struct {
 
 	// cacheDNS specifies whether to cache DNS lookups
 	cacheDNS bool
+	userAgent string
 }
 
 // NewClient configures a new HTTP client using given configuration
@@ -89,6 +90,7 @@ func NewClient() *Client {
 
 	return &Client{
 		httpClient: client,
+		userAgent:  "flanksource-commons/0",
 		headers:    http.Header{},
 	}
 }
@@ -259,6 +261,14 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 		for _, vv := range v {
 			req.Header.Set(k, vv)
 		}
+	}
+
+	if req.Header.Get("User-Agent") == "" {
+		req.Header.Set("User-Agent", c.userAgent)
+	}
+
+	if req.Header.Get("Accept") == "" {
+		req.Header.Set("Accept", "*/*")
 	}
 
 	queryParam := req.URL.Query()
