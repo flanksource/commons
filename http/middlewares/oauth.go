@@ -3,6 +3,7 @@ package middlewares
 import (
 	"fmt"
 	netHttp "net/http"
+	"net/url"
 	"time"
 
 	"github.com/flanksource/commons/hash"
@@ -11,34 +12,72 @@ import (
 	"golang.org/x/oauth2/clientcredentials"
 )
 
-func NewOauthTransport(clientID, clientSecret, tokenURL string, scopes ...string) *oauthConfig {
-	return &oauthConfig{
-		clientID:     clientID,
-		clientSecret: clientSecret,
-		tokenURL:     tokenURL,
-		scopes:       scopes,
-		cache:        cache.New(time.Minute*15, time.Hour),
+func NewOauthTransport(config OauthConfig) *oauthRoundTripper {
+	return &oauthRoundTripper{OauthConfig: config, cache: cache.New(time.Minute*15, time.Hour)}
+}
+
+type AuthStyle oauth2.AuthStyle
+
+var AuthStyleInHeader = AuthStyle(oauth2.AuthStyleInHeader)
+var AuthStyleInParams = AuthStyle(oauth2.AuthStyleInParams)
+var AuthStyleAutoDetect = AuthStyle(oauth2.AuthStyleAutoDetect)
+
+type OauthConfig struct {
+	ClientID     string
+	ClientSecret string
+	TokenURL     string
+	Scopes       []string
+	Params       map[string]string
+	AuthStyle    AuthStyle
+	Tracer       func(msg string)
+}
+
+func (c *OauthConfig) AuthStyleInHeader() *OauthConfig {
+	c.AuthStyle = AuthStyleInHeader
+	return c
+}
+
+func (c *OauthConfig) AuthStyleInParams() *OauthConfig {
+	c.AuthStyle = AuthStyleInParams
+	return c
+}
+
+func (c *OauthConfig) getSanitizedSecret() string {
+	if len(c.ClientSecret) <= 4 {
+		return c.ClientSecret
 	}
+	return c.ClientSecret[0:4] + "****"
 }
 
-type oauthConfig struct {
-	clientID     string
-	clientSecret string
-	tokenURL     string
-	scopes       []string
-	cache        *cache.Cache
+func (c OauthConfig) String() string {
+	return fmt.Sprintf("url=%s id=%s, secret=%s scopes=%s params=%s", c.TokenURL, c.ClientID, c.getSanitizedSecret(), c.Scopes, c.Params)
 }
 
-func (t *oauthConfig) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundTripper {
+type oauthRoundTripper struct {
+	OauthConfig
+	cache *cache.Cache
+}
+
+func toUrlValues(m map[string]string) url.Values {
+	values := url.Values{}
+	for k, v := range m {
+		values[k] = []string{v}
+	}
+	return values
+}
+
+func (t *oauthRoundTripper) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundTripper {
 	return RoundTripperFunc(func(ogRequest *netHttp.Request) (*netHttp.Response, error) {
 		config := clientcredentials.Config{
-			ClientID:     t.clientID,
-			ClientSecret: t.clientSecret,
-			TokenURL:     t.tokenURL,
-			Scopes:       t.scopes,
+			ClientID:       t.ClientID,
+			ClientSecret:   t.ClientSecret,
+			TokenURL:       t.TokenURL,
+			Scopes:         t.Scopes,
+			EndpointParams: toUrlValues(t.Params),
+			AuthStyle:      oauth2.AuthStyle(t.AuthStyle),
 		}
 
-		cacheKey := oauthCacheKey(t.clientID, t.clientSecret, t.tokenURL, t.scopes)
+		cacheKey := oauthCacheKey(t.ClientID, t.ClientSecret, t.TokenURL, t.Scopes)
 		var token *oauth2.Token
 		if val, ok := t.cache.Get(cacheKey); ok {
 			token, _ = val.(*oauth2.Token)

@@ -16,6 +16,12 @@ import (
 
 type TraceConfig = middlewares.TraceConfig
 
+type OauthConfig = middlewares.OauthConfig
+
+var AuthStyleInHeader = middlewares.AuthStyleInHeader
+var AuthStyleInParams = middlewares.AuthStyleInParams
+var AuthStyleAutoDetect = middlewares.AuthStyleAutoDetect
+
 var TraceAll = TraceConfig{
 	MaxBodyLength:   4096,
 	Body:            true,
@@ -210,8 +216,8 @@ func (c *Client) Auth(username, password string) *Client {
 	return c
 }
 
-func (c *Client) OAuth(clientID, clientSecret, tokenURL string, scopes ...string) *Client {
-	c.Use(middlewares.NewOauthTransport(clientID, clientSecret, tokenURL, scopes...).RoundTripper)
+func (c *Client) OAuth(config middlewares.OauthConfig) *Client {
+	c.Use(middlewares.NewOauthTransport(config).RoundTripper)
 	return c
 }
 

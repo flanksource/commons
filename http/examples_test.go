@@ -31,7 +31,13 @@ func TestExample(t *testing.T) {
 			scopes       = []string{"https://graph.microsoft.com/.default"}
 		)
 
-		req := http.NewClient().OAuth(clientID, clientSecret, tokenURL, scopes...).R(ctx)
+		req := http.NewClient().OAuth(
+			http.OauthConfig{
+				ClientID:     clientID,
+				ClientSecret: clientSecret,
+				TokenURL:     tokenURL,
+				Scopes:       scopes}).
+			R(ctx)
 		response, err := req.Get("https://graph.microsoft.com/v1.0/users")
 		if err != nil {
 			t.Fatalf("error: %v", err)
