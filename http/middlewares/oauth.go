@@ -17,23 +17,29 @@ func NewOauthTransport(config OauthConfig) *oauthRoundTripper {
 	return &oauthRoundTripper{OauthConfig: config, cache: cache.New(time.Minute*15, time.Hour)}
 }
 
+type AuthStyle oauth2.AuthStyle
+
+var AuthStyleInHeader = AuthStyle(oauth2.AuthStyleInHeader)
+var AuthStyleInParams = AuthStyle(oauth2.AuthStyleInParams)
+var AuthStyleAutoDetect = AuthStyle(oauth2.AuthStyleAutoDetect)
+
 type OauthConfig struct {
 	ClientID     string
 	ClientSecret string
 	TokenURL     string
 	Scopes       []string
 	Params       map[string]string
-	AuthStyle    string
+	AuthStyle    AuthStyle
 	Tracer       func(msg string)
 }
 
 func (c *OauthConfig) AuthStyleInHeader() *OauthConfig {
-	c.AuthStyle = "in-header"
+	c.AuthStyle = AuthStyleInHeader
 	return c
 }
 
 func (c *OauthConfig) AuthStyleInParams() *OauthConfig {
-	c.AuthStyle = "in-params"
+	c.AuthStyle = AuthStyleInParams
 	return c
 }
 
@@ -46,17 +52,6 @@ func (c *OauthConfig) getSanitizedSecret() string {
 
 func (c OauthConfig) String() string {
 	return fmt.Sprintf("url=%s id=%s, secret=%s scopes=%s params=%s", c.TokenURL, c.ClientID, c.getSanitizedSecret(), c.Scopes, c.Params)
-}
-
-func (c OauthConfig) getAuthStyle() oauth2.AuthStyle {
-	if c.AuthStyle == "in-params" {
-		return oauth2.AuthStyleInParams
-	}
-	if c.AuthStyle == "in-header" {
-		return oauth2.AuthStyleInHeader
-	}
-	return oauth2.AuthStyleAutoDetect
-
 }
 
 type oauthRoundTripper struct {
@@ -80,7 +75,7 @@ func (t *oauthRoundTripper) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundT
 			TokenURL:       t.TokenURL,
 			Scopes:         t.Scopes,
 			EndpointParams: toUrlValues(t.Params),
-			AuthStyle:      t.getAuthStyle(),
+			AuthStyle:      oauth2.AuthStyle(t.AuthStyle),
 		}
 
 		cacheKey := oauthCacheKey(t.ClientID, t.ClientSecret, t.TokenURL, t.Scopes)

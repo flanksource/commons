@@ -18,6 +18,10 @@ type TraceConfig = middlewares.TraceConfig
 
 type OauthConfig = middlewares.OauthConfig
 
+var AuthStyleInHeader = middlewares.AuthStyleInHeader
+var AuthStyleInParams = middlewares.AuthStyleInParams
+var AuthStyleAutoDetect = middlewares.AuthStyleAutoDetect
+
 var TraceAll = TraceConfig{
 	MaxBodyLength:   4096,
 	Body:            true,
