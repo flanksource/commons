@@ -1,7 +1,6 @@
 package middlewares
 
 import (
-	"context"
 	"fmt"
 	netHttp "net/http"
 	"net/url"
@@ -86,13 +85,7 @@ func (t *oauthRoundTripper) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundT
 
 		var err error
 		if token == nil {
-			ctx := context.
-				WithValue(ogRequest.Context(),
-					oauth2.HTTPClient,
-					netHttp.Client{
-						Transport: rt,
-					})
-			token, err = config.Token(ctx)
+			token, err = config.Token(ogRequest.Context())
 			if err != nil {
 				return nil, fmt.Errorf("error fetching oauth access token: %w", err)
 			}
