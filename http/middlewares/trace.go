@@ -150,12 +150,10 @@ func (t *traceTransport) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundTrip
 			}
 		}
 
+		span.SetAttributes(attribute.Int64("request.content-length", req.ContentLength))
 		if req.Body != nil && t.Config.Body {
 			if b, err := io.ReadAll(req.Body); err == nil {
-				span.SetAttributes(
-					attribute.String("request.body", string(b)),
-					attribute.Int64("request.content-length", req.ContentLength),
-				)
+				span.SetAttributes(attribute.String("request.body", string(b)))
 				req.Body = io.NopCloser(bytes.NewBuffer(b))
 			}
 		}
@@ -183,15 +181,13 @@ func (t *traceTransport) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundTrip
 
 		if t.Config.Response {
 			if b, err := io.ReadAll(io.LimitReader(resp.Body, t.Config.MaxBodyLength)); err == nil {
-				span.SetAttributes(
-					attribute.String("response.body", string(b)),
-					attribute.Int64("response.content-length", resp.ContentLength),
-				)
+				span.SetAttributes(attribute.String("response.body", string(b)))
 				resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			}
 		}
 
 		span.SetAttributes(attribute.String("response.status", resp.Status))
+		span.SetAttributes(attribute.Int64("response.content-length", resp.ContentLength))
 
 		return resp, nil
 	})
