@@ -133,7 +133,7 @@ func (t *traceTransport) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundTrip
 			spanName = req.URL.Host
 		}
 
-		_, span := t.tracer.Start(req.Context(), spanName)
+		_, span := t.tracer.Start(req.Context(), "http-"+spanName)
 		defer span.End()
 
 		span.SetAttributes(
@@ -150,6 +150,7 @@ func (t *traceTransport) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundTrip
 			}
 		}
 
+		span.SetAttributes(attribute.Int64("request.content-length", req.ContentLength))
 		if req.Body != nil && t.Config.Body {
 			if b, err := io.ReadAll(req.Body); err == nil {
 				span.SetAttributes(attribute.String("request.body", string(b)))
@@ -186,6 +187,7 @@ func (t *traceTransport) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundTrip
 		}
 
 		span.SetAttributes(attribute.String("response.status", resp.Status))
+		span.SetAttributes(attribute.Int64("response.content-length", resp.ContentLength))
 
 		return resp, nil
 	})
