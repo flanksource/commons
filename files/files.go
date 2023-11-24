@@ -21,6 +21,20 @@ import (
 	"github.com/ulikunitz/xz"
 )
 
+func UnfoldGlobs(paths ...string) ([]string, error) {
+	unfoldedPaths := make([]string, 0, len(paths))
+	for _, path := range paths {
+		matched, err := filepath.Glob(path)
+		if err != nil {
+			return nil, fmt.Errorf("invalid glob pattern. path=%s; %w", path, err)
+		}
+
+		unfoldedPaths = append(unfoldedPaths, matched...)
+	}
+
+	return unfoldedPaths, nil
+}
+
 // GzipFile takes the path to a file and returns a Gzip comppressed byte slice
 func GzipFile(path string) ([]byte, error) {
 	var buf bytes.Buffer
@@ -52,7 +66,8 @@ func Unarchive(src, dest string) error {
 	} else if strings.HasSuffix(src, ".tar") || strings.HasSuffix(src, ".tgz") || strings.HasSuffix(src, ".tar.gz") {
 		return Untar(src, dest)
 	}
-	return fmt.Errorf("Unknown format type %s", src)
+
+	return fmt.Errorf("unknown format type %s", src)
 }
 
 // UnarchiveExecutables extracts all executable's to the dest directory, ignoring any path's specified by the archive
@@ -70,7 +85,8 @@ func UnarchiveExecutables(src, dest string) error {
 	} else if strings.HasSuffix(src, ".xz") {
 		return Unxz(src, dest)
 	}
-	return fmt.Errorf("Unknown format type %s", src)
+
+	return fmt.Errorf("unknown format type %s", src)
 }
 
 func Unxz(source, target string) error {
