@@ -29,6 +29,11 @@ func UnfoldGlobs(paths ...string) ([]string, error) {
 			return nil, fmt.Errorf("invalid glob pattern. path=%s; %w", path, err)
 		}
 
+		if len(matched) == 0 {
+			// Absolute path, not a glob
+			matched = append(matched, path)
+		}
+
 		unfoldedPaths = append(unfoldedPaths, matched...)
 	}
 
