@@ -182,7 +182,11 @@ func (t *traceTransport) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundTrip
 		if t.Config.Response {
 			if b, err := io.ReadAll(resp.Body); err == nil {
 				// If the response body is huge, we log a truncated response
-				span.SetAttributes(attribute.String("response.body", string(b[:t.Config.MaxBodyLength])))
+				bSize := int(t.Config.MaxBodyLength)
+				if bSize > len(b) {
+					bSize = len(b)
+				}
+				span.SetAttributes(attribute.String("response.body", string(b[:bSize])))
 				resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			}
 		}
