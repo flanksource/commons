@@ -70,6 +70,8 @@ func NewContext(basectx gocontext.Context, opts ...ContextOptions) Context {
 type Context struct {
 	gocontext.Context
 	logger    logger.Logger
+	debug     *bool
+	trace     *bool
 	isDebugFn func(Context) bool
 	isTraceFn func(Context) bool
 	tracer    trace.Tracer
@@ -96,6 +98,32 @@ func (c Context) GetTracer() trace.Tracer {
 	return c.tracer
 }
 
+func (c Context) WithDebug() Context {
+	t := true
+	c.debug = &t
+	c.logger.SetLogLevel(1)
+	return c
+}
+
+func (c Context) WithTrace() Context {
+	t := true
+	c.trace = &t
+	c.logger.SetLogLevel(2)
+	return c
+}
+
+func (c Context) Clone() Context {
+	return Context{
+		Context:   c.Context,
+		isDebugFn: c.isDebugFn,
+		trace:     c.trace,
+		debug:     c.debug,
+		logger:    c.logger,
+		isTraceFn: c.isTraceFn,
+		tracer:    c.tracer,
+	}
+}
+
 func (c Context) WithTimeout(timeout time.Duration) (Context, gocontext.CancelFunc) {
 	ctx, cancelFunc := gocontext.WithTimeout(c, timeout)
 	return Context{
@@ -108,22 +136,22 @@ func (c Context) WithTimeout(timeout time.Duration) (Context, gocontext.CancelFu
 }
 
 func (c Context) IsDebug() bool {
-	return c.isDebugFn(c)
+	return (c.debug != nil && *c.debug) || c.isDebugFn(c)
 }
 
 func (c Context) IsTrace() bool {
-	return c.isTraceFn(c)
+	return (c.trace != nil && *c.trace) || c.isTraceFn(c)
 }
 
 func (c Context) Debugf(format string, args ...interface{}) {
-	if c.isDebugFn(c) {
+	if c.IsDebug() {
 		c.GetSpan().AddEvent(fmt.Sprintf(format, args...), trace.WithAttributes(attribute.String("level", "debug")))
 		c.logger.Debugf(format, args...)
 	}
 }
 
 func (c Context) Tracef(format string, args ...interface{}) {
-	if c.isTraceFn(c) {
+	if c.IsTrace() {
 		c.GetSpan().AddEvent(fmt.Sprintf(format, args...), trace.WithAttributes(attribute.String("level", "trace")))
 		c.logger.Tracef(format, args...)
 	}
@@ -132,11 +160,13 @@ func (c Context) Tracef(format string, args ...interface{}) {
 func (c Context) Error(err error) {
 	c.GetSpan().RecordError(err)
 	c.GetSpan().SetStatus(codes.Error, err.Error())
+	c.logger.Errorf(err.Error())
 }
 
 func (c Context) Errorf(err error, format string, args ...interface{}) {
 	c.GetSpan().RecordError(err)
 	c.GetSpan().SetStatus(codes.Error, fmt.Sprintf(format, args...))
+	c.logger.Errorf(fmt.Sprintf(format, args...))
 }
 
 func (c Context) GetSpan() trace.Span {
