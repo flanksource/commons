@@ -136,11 +136,11 @@ func (c Context) WithTimeout(timeout time.Duration) (Context, gocontext.CancelFu
 }
 
 func (c Context) IsDebug() bool {
-	return (c.debug != nil && *c.debug) || c.isDebugFn(c)
+	return (c.debug != nil && *c.debug) || (c.isDebugFn != nil && c.isDebugFn(c))
 }
 
 func (c Context) IsTrace() bool {
-	return (c.trace != nil && *c.trace) || c.isTraceFn(c)
+	return (c.trace != nil && *c.trace) || (c.isTraceFn != nil && c.isTraceFn(c))
 }
 
 func (c Context) Debugf(format string, args ...interface{}) {
