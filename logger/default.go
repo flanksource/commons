@@ -79,6 +79,10 @@ func WithValues(keysAndValues ...interface{}) Logger {
 	return currentLogger.WithValues(keysAndValues...)
 }
 
+func SetLogger(logger Logger) {
+	currentLogger = logger
+}
+
 func StandardLogger() Logger {
 	return currentLogger
 }
