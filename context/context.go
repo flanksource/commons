@@ -9,10 +9,11 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
 var (
-	noopTracer = trace.NewNoopTracerProvider().Tracer("noop")
+	noopTracer = noop.NewTracerProvider().Tracer("noop")
 )
 
 type ContextOptions func(*Context)
