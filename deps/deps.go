@@ -1,11 +1,14 @@
 package deps
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path"
 	"runtime"
 	"strings"
+
+	gotemplate "text/template"
 
 	osExec "os/exec"
 
@@ -13,7 +16,6 @@ import (
 	"github.com/flanksource/commons/files"
 	"github.com/flanksource/commons/is"
 	"github.com/flanksource/commons/net"
-	"github.com/flanksource/commons/text"
 	"github.com/flanksource/commons/utils"
 	log "github.com/sirupsen/logrus"
 )
@@ -37,7 +39,7 @@ type BinaryFuncWithEnv func(msg string, env map[string]string, args ...interface
 func (dependency *Dependency) GetPath(name string, binDir string) (string, error) {
 	data := map[string]string{"os": runtime.GOOS, "platform": runtime.GOARCH, "version": dependency.Version}
 	if dependency.BinaryName != "" {
-		templated, err := text.Template(dependency.BinaryName, data)
+		templated, err := template(dependency.BinaryName, data)
 		if err != nil {
 			return "", err
 		}
@@ -106,10 +108,6 @@ var dependencies = map[string]Dependency{
 	"sonobuoy": {
 		Version:  "0.55.1",
 		Template: "https://github.com/vmware-tanzu/sonobuoy/releases/download/v{{.version}}/sonobuoy_{{.version}}_{{.os}}_{{.platform}}.tar.gz",
-	},
-	"govc": {
-		Version:  "v0.27.4",
-		Template: "https://github.com/vmware/govmomi/releases/download/{{.version}}/govc_{{.os | title}}_{{ ternary \"x86_64\" \"armv6\" (eq .platform \"amd64\")}}.tar.gz",
 	},
 	"gojsontoyaml": {
 		Version: "0.15.0",
@@ -268,13 +266,13 @@ func InstallDependency(name, ver string, binDir string) error {
 
 	data := map[string]string{"os": runtime.GOOS, "platform": runtime.GOARCH, "version": ver}
 	if urlPath == "" && dependency.Template != "" {
-		urlPath, err = text.Template(dependency.Template, data)
+		urlPath, err = template(dependency.Template, data)
 		if err != nil {
 			return err
 		}
 	}
 	if urlPath != "" {
-		url, err := text.Template(urlPath, data)
+		url, err := template(urlPath, data)
 		if err != nil {
 			return err
 		}
@@ -288,7 +286,7 @@ func InstallDependency(name, ver string, binDir string) error {
 		}
 	} else if dependency.Go != "" {
 		//FIXME this only works if the PWD is in the GOPATH
-		url, _ := text.Template(dependency.Go, data)
+		url, _ := template(dependency.Go, data)
 		log.Infof("Installing via go get %s (%s) -> %s", name, ver, url)
 		if err := exec.Execf("GOPATH=$PWD/.go go get %s", url); err != nil {
 			return err
@@ -374,4 +372,19 @@ func download(url, bin string) error {
 func Which(cmd string) bool {
 	_, err := osExec.LookPath(cmd)
 	return err == nil
+}
+
+func template(template string, vars map[string]string) (string, error) {
+	tpl := gotemplate.New("")
+
+	tpl, err := tpl.Parse(template)
+
+	if err != nil {
+		return "", fmt.Errorf("invalid template %s: %v", strings.Split(template, "\n")[0], err)
+	}
+	var buf bytes.Buffer
+	if err := tpl.Execute(&buf, vars); err != nil {
+		return "", fmt.Errorf("error executing template %s: %v", strings.Split(template, "\n")[0], err)
+	}
+	return buf.String(), nil
 }
