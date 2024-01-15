@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/flanksource/commons/is"
+	"github.com/flanksource/commons/logger"
 )
 
 var (
@@ -47,9 +48,17 @@ var (
 	BrightWhite   = "\x1b[38;5;244m"
 )
 
+var (
+	isTTY = is.TTY()
+)
+
+func ColorOff() {
+	isTTY = false
+}
+
 // DarkWhitef prints and formats msg as dark white
 func DarkWhitef(msg string, args ...interface{}) string {
-	if is.TTY() {
+	if isTTY && !logger.IsJsonLogs() {
 		return DarkWhite + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
@@ -57,7 +66,7 @@ func DarkWhitef(msg string, args ...interface{}) string {
 
 // DarkWhitef prints and formats msg as dark white
 func LightWhitef(msg string, args ...interface{}) string {
-	if is.TTY() {
+	if isTTY && !logger.IsJsonLogs() {
 		return white + Light + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
@@ -65,7 +74,7 @@ func LightWhitef(msg string, args ...interface{}) string {
 
 // DarkWhitef prints and formats msg as dark white
 func BrightWhitef(msg string, args ...interface{}) string {
-	if is.TTY() {
+	if isTTY && !logger.IsJsonLogs() {
 		return white + Bright + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
@@ -73,7 +82,7 @@ func BrightWhitef(msg string, args ...interface{}) string {
 
 // DarkWhitef prints and formats msg as dark white
 func DarkF(msg string, args ...interface{}) string {
-	if is.TTY() {
+	if isTTY && !logger.IsJsonLogs() {
 		return DarkWhite + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
@@ -81,7 +90,7 @@ func DarkF(msg string, args ...interface{}) string {
 
 // DarkWhitef prints and formats msg as dark white
 func BrightF(msg string, args ...interface{}) string {
-	if is.TTY() {
+	if isTTY && !logger.IsJsonLogs() {
 		return DarkWhite + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
@@ -89,7 +98,7 @@ func BrightF(msg string, args ...interface{}) string {
 
 // Redf prints and formats msg as red text
 func Redf(msg string, args ...interface{}) string {
-	if is.TTY() {
+	if isTTY && !logger.IsJsonLogs() {
 		return Red + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
@@ -97,7 +106,7 @@ func Redf(msg string, args ...interface{}) string {
 
 // LightRedf prints and formats msg as red text
 func LightRedf(msg string, args ...interface{}) string {
-	if is.TTY() {
+	if isTTY && !logger.IsJsonLogs() {
 		return LightRed + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
@@ -105,7 +114,7 @@ func LightRedf(msg string, args ...interface{}) string {
 
 // Yellowf prints and formats msg as red text
 func Yellowf(msg string, args ...interface{}) string {
-	if is.TTY() {
+	if isTTY && !logger.IsJsonLogs() {
 		return Yellow + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
@@ -113,7 +122,7 @@ func Yellowf(msg string, args ...interface{}) string {
 
 // BrightYellowf prints and formats msg as red text
 func BrightYellowf(msg string, args ...interface{}) string {
-	if is.TTY() {
+	if isTTY && !logger.IsJsonLogs() {
 		return BrightYellow + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
@@ -121,7 +130,7 @@ func BrightYellowf(msg string, args ...interface{}) string {
 
 // LightYellowf prints and formats msg as red text
 func LightYellowf(msg string, args ...interface{}) string {
-	if is.TTY() {
+	if isTTY && !logger.IsJsonLogs() {
 		return LightYellow + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
@@ -129,7 +138,7 @@ func LightYellowf(msg string, args ...interface{}) string {
 
 // Grayf prints and formats msg as red text
 func Grayf(msg string, args ...interface{}) string {
-	if is.TTY() {
+	if isTTY && !logger.IsJsonLogs() {
 		return Gray + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
@@ -137,7 +146,7 @@ func Grayf(msg string, args ...interface{}) string {
 
 // BrightGrayf prints and formats msg as red text
 func BrightGrayf(msg string, args ...interface{}) string {
-	if is.TTY() {
+	if isTTY && !logger.IsJsonLogs() {
 		return BrightGray + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
@@ -145,7 +154,7 @@ func BrightGrayf(msg string, args ...interface{}) string {
 
 // LightGrayf prints and formats msg as red text
 func LightGrayf(msg string, args ...interface{}) string {
-	if is.TTY() {
+	if isTTY && !logger.IsJsonLogs() {
 		return LightGray + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
@@ -153,7 +162,7 @@ func LightGrayf(msg string, args ...interface{}) string {
 
 // Bluef prints and formats msg as red text
 func Bluef(msg string, args ...interface{}) string {
-	if is.TTY() {
+	if isTTY && !logger.IsJsonLogs() {
 		return Blue + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
@@ -161,7 +170,7 @@ func Bluef(msg string, args ...interface{}) string {
 
 // LightBluef prints and formats msg as red text
 func LightBluef(msg string, args ...interface{}) string {
-	if is.TTY() {
+	if isTTY && !logger.IsJsonLogs() {
 		return LightBlue + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
@@ -169,7 +178,7 @@ func LightBluef(msg string, args ...interface{}) string {
 
 // BrightBluef prints and formats msg as red text
 func BrightBluef(msg string, args ...interface{}) string {
-	if is.TTY() {
+	if isTTY && !logger.IsJsonLogs() {
 		return blue + Light + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
@@ -177,7 +186,7 @@ func BrightBluef(msg string, args ...interface{}) string {
 
 // Greenf prints and formats msg as green text
 func Greenf(msg string, args ...interface{}) string {
-	if is.TTY() {
+	if isTTY && !logger.IsJsonLogs() {
 		return Green + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
@@ -185,7 +194,7 @@ func Greenf(msg string, args ...interface{}) string {
 
 // BrightGreenf prints and formats msg as light green text
 func BrightGreenf(msg string, args ...interface{}) string {
-	if is.TTY() {
+	if isTTY && !logger.IsJsonLogs() {
 		return green + Bright + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
@@ -193,7 +202,7 @@ func BrightGreenf(msg string, args ...interface{}) string {
 
 // LightGreenf prints and formats msg as light green text
 func LightGreenf(msg string, args ...interface{}) string {
-	if is.TTY() {
+	if isTTY && !logger.IsJsonLogs() {
 		return green + Light + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
@@ -201,7 +210,7 @@ func LightGreenf(msg string, args ...interface{}) string {
 
 // LightCyanf prints and formats msg as light cyan text
 func LightCyanf(msg string, args ...interface{}) string {
-	if is.TTY() {
+	if isTTY && !logger.IsJsonLogs() {
 		return LightCyan + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
@@ -209,7 +218,7 @@ func LightCyanf(msg string, args ...interface{}) string {
 
 // LightCyanf prints and formats msg as light cyan text
 func Cyanf(msg string, args ...interface{}) string {
-	if is.TTY() {
+	if isTTY && !logger.IsJsonLogs() {
 		return Cyan + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
@@ -217,7 +226,7 @@ func Cyanf(msg string, args ...interface{}) string {
 
 // LightCyanf prints and formats msg as light cyan text
 func BrightCyanf(msg string, args ...interface{}) string {
-	if is.TTY() {
+	if isTTY && !logger.IsJsonLogs() {
 		return BrightCyan + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
@@ -225,7 +234,7 @@ func BrightCyanf(msg string, args ...interface{}) string {
 
 // Magentaf prints and formats msg as green text
 func Magentaf(msg string, args ...interface{}) string {
-	if is.TTY() {
+	if isTTY && !logger.IsJsonLogs() {
 		return Magenta + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
@@ -233,7 +242,7 @@ func Magentaf(msg string, args ...interface{}) string {
 
 // Magentaf prints and formats msg as green text
 func LightMagentaf(msg string, args ...interface{}) string {
-	if is.TTY() {
+	if isTTY && !logger.IsJsonLogs() {
 		return LightMagenta + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
@@ -241,7 +250,7 @@ func LightMagentaf(msg string, args ...interface{}) string {
 
 // Magentaf prints and formats msg as green text
 func BrightMagentaf(msg string, args ...interface{}) string {
-	if is.TTY() {
+	if isTTY && !logger.IsJsonLogs() {
 		return BrightMagenta + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
