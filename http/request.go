@@ -28,7 +28,7 @@ func (r *Request) GetHeaders() map[string]string {
 	return toMap(r.headers)
 }
 
-func (r *Request) getHeader(key string) string {
+func (r *Request) GetHeader(key string) string {
 	if r.headers == nil {
 		return ""
 	}
