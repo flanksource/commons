@@ -10,22 +10,37 @@ import (
 )
 
 var currentLogger Logger
+var color, reportCaller, jsonLogs bool
+var level int
 
 func init() {
-	logger := logsrusapi.StandardLogger()
-	logger.SetFormatter(&logsrusapi.TextFormatter{
-		DisableQuote: true,
-	})
-	currentLogger = NewLogrusLogger(logger)
+	currentLogger = newZap(1)
+}
+
+func IsJsonLogs() bool {
+	return jsonLogs
 }
 
 func BindFlags(flags *pflag.FlagSet) {
-	flags.CountP("loglevel", "v", "Increase logging level")
-	flags.Bool("json-logs", false, "Print logs in json format to stderr")
+	flags.CountVarP(&level, "loglevel", "v", "Increase logging level")
+	flags.BoolVar(&jsonLogs, "json-logs", false, "Print logs in json format to stderr")
+	flags.BoolVar(&color, "color", true, "Print logs using color")
+	flags.BoolVar(&reportCaller, "report-caller", false, "Report log caller info")
 }
 
-func ParseFlags(flags *pflag.FlagSet) {
-	level, _ := flags.GetCount("loglevel")
+func UseLogsrus() {
+	logger := logsrusapi.StandardLogger()
+	if jsonLogs {
+		logger.SetFormatter(&logsrusapi.JSONFormatter{})
+	} else {
+		logger.SetFormatter(&logsrusapi.TextFormatter{
+			DisableColors: !color,
+			ForceColors:   color,
+			FullTimestamp: true,
+			DisableQuote:  true,
+		})
+	}
+	currentLogger = NewLogrusLogger(logger, level)
 	currentLogger.SetLogLevel(level)
 }
 
@@ -37,12 +52,12 @@ func Infof(format string, args ...interface{}) {
 	currentLogger.Infof(format, args...)
 }
 
-//Secretf is like Tracef, but attempts to strip any secrets from the text
+// Secretf is like Tracef, but attempts to strip any secrets from the text
 func Secretf(format string, args ...interface{}) {
 	currentLogger.Tracef(stripSecrets(fmt.Sprintf(format, args...)))
 }
 
-//Prettyf is like Tracef, but pretty prints the entire struct
+// Prettyf is like Tracef, but pretty prints the entire struct
 func Prettyf(msg string, obj interface{}) {
 	pretty.Print(obj)
 	// currentLogger.Tracef(msg, pretty.Sprint(obj))
@@ -69,6 +84,10 @@ func V(level int) Verbose {
 
 func IsTraceEnabled() bool {
 	return currentLogger.IsTraceEnabled()
+}
+
+func IsLevelEnabled(level int) bool {
+	return currentLogger.V(level).Enabled()
 }
 
 func IsDebugEnabled() bool {

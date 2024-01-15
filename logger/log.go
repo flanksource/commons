@@ -10,12 +10,15 @@ type Logger interface {
 	WithValues(keysAndValues ...interface{}) Logger
 	IsTraceEnabled() bool
 	IsDebugEnabled() bool
+	IsLevelEnabled(level int) bool
+	GetLevel() int
 	SetLogLevel(level int)
+	SetMinLogLevel(level int)
 	V(level int) Verbose
+	Named(name string) Logger
 }
 
 type Verbose interface {
-	Info(args ...interface{})
 	Infof(format string, args ...interface{})
-	Infoln(args ...interface{})
+	Enabled() bool
 }

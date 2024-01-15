@@ -9,22 +9,34 @@ import (
 
 type logrusLogger struct {
 	*logrusapi.Entry
+	level int
 }
 
 type logrusVerbose struct {
 	Level logrusapi.Level
-	*logrusapi.Entry
+	logrusLogger
 }
 
-func NewLogrusLogger(existing logrusapi.Ext1FieldLogger) Logger {
+func NewLogrusLogger(existing logrusapi.Ext1FieldLogger, level int) Logger {
 	switch v := existing.(type) {
 	case *logrusapi.Entry:
-		return logrusLogger{Entry: v}
+		return logrusLogger{Entry: v, level: level}
 	case *logrusapi.Logger:
-		return logrusLogger{Entry: logrusapi.NewEntry(v)}
+		return logrusLogger{Entry: logrusapi.NewEntry(v), level: level}
 	default:
-		return logrusLogger{Entry: logrusapi.NewEntry(logrusapi.StandardLogger())}
+		return logrusLogger{Entry: logrusapi.NewEntry(logrusapi.StandardLogger()), level: level}
 	}
+}
+
+func (v logrusLogger) SetMinLogLevel(level int) {
+	if v.GetLevel() >= level {
+		return
+	}
+	v.SetLogLevel(level)
+}
+
+func (v logrusLogger) Named(name string) Logger {
+	return v.WithValues("name", name)
 }
 
 func (v logrusVerbose) Info(args ...interface{}) {
@@ -39,6 +51,10 @@ func (v logrusVerbose) Infoln(args ...interface{}) {
 	v.Logln(v.Level, args...)
 }
 
+func (v logrusVerbose) Enabled() bool {
+	return v.level >= int(v.Level)
+}
+
 func (logrus logrusLogger) V(level int) Verbose {
 	var l logrusapi.Level
 	switch level {
@@ -50,8 +66,8 @@ func (logrus logrusLogger) V(level int) Verbose {
 		l = logrusapi.TraceLevel
 	}
 	return logrusVerbose{
-		Entry: logrus.Entry,
-		Level: l,
+		logrusLogger: logrus,
+		Level:        l,
 	}
 }
 
@@ -95,6 +111,14 @@ func (logrus logrusLogger) WithValues(keysAndValues ...interface{}) Logger {
 		fieldMap[fmt.Sprintf("%v", keysAndValues[i])] = keysAndValues[i+1]
 	}
 	return logrusLogger{Entry: logrus.Entry.WithFields(logrusapi.Fields(fieldMap))}
+}
+
+func (logrus logrusLogger) GetLevel() int {
+	return int(logrus.Entry.Level)
+}
+
+func (logrus logrusLogger) IsLevelEnabled(level int) bool {
+	return logrus.V(level).Enabled()
 }
 
 func (logrus logrusLogger) SetLogLevel(level int) {
