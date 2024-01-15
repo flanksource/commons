@@ -62,7 +62,7 @@ func UseZap() {
 	currentLogger = newZap(level)
 }
 
-func newZap(level int) ZapLogger {
+func NewZapEncoder() zapcore.Encoder {
 	var encoder zapcore.Encoder
 
 	capitalColorLevelEncoder := func(level zapcore.Level, enc zapcore.PrimitiveArrayEncoder) {
@@ -93,9 +93,12 @@ func newZap(level int) ZapLogger {
 		encoder = zapcore.NewConsoleEncoder(config)
 
 	}
+	return encoder
+}
 
+func newZap(level int) ZapLogger {
 	atomicLevel := zap.NewAtomicLevelAt(zapcore.InfoLevel - zapcore.Level(level))
-	zapCore := zapcore.NewCore(encoder, zapcore.AddSync(os.Stderr), atomicLevel)
+	zapCore := zapcore.NewCore(NewZapEncoder(), zapcore.AddSync(os.Stderr), atomicLevel)
 	var opts []zapapi.Option
 	if reportCaller {
 		opts = append(opts, zap.AddCaller(), zap.AddCallerSkip(2))

@@ -172,6 +172,30 @@ func (c Context) Errorf(err error, format string, args ...interface{}) {
 	c.logger.Errorf(fmt.Sprintf(format, args...))
 }
 
+func (c Context) Infof(format string, args ...interface{}) {
+	if c.IsDebug() {
+		// info level logs should only be pushed for debug traces
+		c.GetSpan().AddEvent(fmt.Sprintf(format, args...), trace.WithAttributes(attribute.String("level", "info")))
+	}
+	c.logger.Infof(fmt.Sprintf(format, args...))
+}
+
+func (c Context) Warnf(format string, args ...interface{}) {
+	if c.IsDebug() {
+		// info level logs should only be pushed for debug traces
+		c.GetSpan().AddEvent(fmt.Sprintf(format, args...), trace.WithAttributes(attribute.String("level", "warn")))
+	}
+	c.logger.Warnf(fmt.Sprintf(format, args...))
+}
+
+func (c Context) Logf(level int, format string, args ...interface{}) {
+	if c.IsTrace() {
+		// info level logs should only be pushed for debug traces
+		c.GetSpan().AddEvent(fmt.Sprintf(format, args...), trace.WithAttributes(attribute.String("level", fmt.Sprintf("%d", level))))
+	}
+	c.logger.V(level).Infof(format, args...)
+}
+
 func (c Context) GetSpan() trace.Span {
 	return trace.SpanFromContext(c)
 }
