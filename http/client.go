@@ -89,6 +89,8 @@ type Client struct {
 	cacheDNS bool
 
 	userAgent string
+
+	tlsConfig *tls.Config
 }
 
 // NewClient configures a new HTTP client using given configuration
@@ -186,6 +188,7 @@ func (c *Client) InsecureSkipVerify(val bool) *Client {
 	}
 
 	customTransport.TLSClientConfig.InsecureSkipVerify = val
+	c.tlsConfig = customTransport.TLSClientConfig
 	c.httpClient.Transport = customTransport
 	return c
 }
@@ -253,8 +256,6 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 	var host string
 	if r.client.connectTo != "" {
 		host = r.client.connectTo
-	} else if h := r.getHeader("Host"); h != "" {
-		host = h
 	} else {
 		host = r.url.Hostname()
 	}
@@ -262,20 +263,40 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 	if c.cacheDNS {
 		if ips, _ := dns.CacheLookup("A", host); len(ips) > 0 {
 			host = ips[0].String()
+			if c.headers.Get("Host") == "" && r.headers.Get("Host") == "" {
+				// add hostname back as a header
+				r = r.Header("Host", r.url.Hostname())
+			}
 		}
 	}
 
-	req, err := http.NewRequestWithContext(r.ctx, r.method, r.url.String(), r.body)
+	if r.url.Scheme == "https" && c.tlsConfig == nil {
+		// initialize default TLS settings
+		c.InsecureSkipVerify(true)
+	}
+
+	uri := *r.url
+	uri.Host = host
+	req, err := http.NewRequestWithContext(r.ctx, r.method, uri.String(), r.body)
 	if err != nil {
 		return nil, err
 	}
 
-	// use the headers from the client & add/overwrite them with headers from the request
+	// use the headers from the client
 	req.Header = c.headers.Clone()
+	// add/overwrite them with headers from the request
 	for k, v := range r.headers.Clone() {
 		for _, vv := range v {
 			req.Header.Set(k, vv)
 		}
+	}
+
+	if h := req.Header.Get("Host"); h != "" {
+		req.Host = h
+		if c.tlsConfig != nil {
+			c.tlsConfig.ServerName = h
+		}
+		req.Header.Del("Host")
 	}
 
 	if req.Header.Get("User-Agent") == "" {
@@ -293,8 +314,6 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 		}
 	}
 	req.URL.RawQuery = queryParam.Encode()
-
-	req.Host = host
 	if r.client.authConfig != nil && !r.client.authConfig.IsEmpty() {
 		req.SetBasicAuth(r.client.authConfig.Username, r.client.authConfig.Password)
 	}

@@ -3,7 +3,9 @@ package http_test
 import (
 	"context"
 	"fmt"
+	"net"
 	netHTTP "net/http"
+	"net/url"
 	"testing"
 	"time"
 
@@ -17,7 +19,7 @@ import (
 // Responds with 403 & 421
 // https://github.com/flanksource/commons/actions/runs/6458930480/job/17533665387?pr=79
 // nolint:unused
-func TestExample(t *testing.T) {
+func TestHTTP(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("OAuth", func(t *testing.T) {
@@ -67,7 +69,7 @@ func TestExample(t *testing.T) {
 	})
 
 	t.Run("Cache DNS", func(t *testing.T) {
-		req := http.NewClient().CacheDNS(true).R(ctx)
+		req := http.NewClient().CacheDNS(true).TraceToStdout(http.TraceAll).R(ctx)
 		for i := 0; i < 5; i++ {
 			response, err := req.Get("https://github.com/")
 			if err != nil {
@@ -126,6 +128,38 @@ func TestExample(t *testing.T) {
 			if !response.IsOK() {
 				t.Errorf("Got bad response: %d", response.StatusCode)
 			}
+		}
+	})
+
+	t.Run("Host Header", func(t *testing.T) {
+		uri, _ := url.Parse("https://httpbin.demo.aws.flanksource.com/headers")
+
+		ips, err := net.LookupIP(uri.Host)
+
+		if err != nil {
+			t.Error(err.Error())
+		}
+
+		uriIP := *uri
+		uriIP.Host = ips[0].To4().String()
+
+		resp, err := http.NewClient().
+			TraceToStdout(http.TraceAll).
+			InsecureSkipVerify(true).
+			R(context.Background()).
+			Header("Host", uri.Host).
+			Get(uriIP.String())
+		if err != nil {
+			t.Error(err)
+		}
+		var headers map[string]any
+		if body, err := resp.AsJSON(); err != nil {
+			t.Error(err)
+		} else {
+			headers = body["headers"].(map[string]any)
+		}
+		if headers["Host"] != uri.Host {
+			t.Errorf("Expected response headers %s", headers)
 		}
 	})
 
