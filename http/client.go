@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -276,7 +277,7 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 	}
 
 	uri := *r.url
-	uri.Host = host
+	uri.Host = fmt.Sprintf("%s:%s", host, uri.Port())
 	req, err := http.NewRequestWithContext(r.ctx, r.method, uri.String(), r.body)
 	if err != nil {
 		return nil, err
