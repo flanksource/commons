@@ -28,11 +28,19 @@ func NewLogrusLogger(existing logrusapi.Ext1FieldLogger, level int) Logger {
 	}
 }
 
+func (v logrusLogger) WithSkipReportLevel(i int) Logger {
+	return v
+}
+
 func (v logrusLogger) SetMinLogLevel(level int) {
 	if v.GetLevel() >= level {
 		return
 	}
 	v.SetLogLevel(level)
+}
+
+func (v logrusLogger) WithoutName() Logger {
+	return v
 }
 
 func (v logrusLogger) Named(name string) Logger {

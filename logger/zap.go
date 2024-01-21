@@ -3,6 +3,7 @@ package logger
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/kr/pretty"
 	"go.uber.org/zap"
@@ -11,12 +12,13 @@ import (
 )
 
 const (
-	cyan    = "\x1b[36"
-	Cyan    = cyan + Normal
-	magenta = "\x1b[35"
-	Magenta = magenta + Normal
-	Normal  = "m"
-	Reset   = "\x1b[0m"
+	cyan      = "\x1b[36"
+	Cyan      = cyan + Normal
+	magenta   = "\x1b[35"
+	Magenta   = magenta + Normal
+	DarkWhite = "\x1b[38;5;244m"
+	Normal    = "m"
+	Reset     = "\x1b[0m"
 )
 const TraceLevel = zapcore.DebugLevel - 1
 
@@ -24,6 +26,7 @@ type ZapLogger struct {
 	*zapapi.Logger
 	Sugar       *zapapi.SugaredLogger
 	atomicLevel *zapapi.AtomicLevel
+	unamed      any
 }
 
 type zapVerbose struct {
@@ -48,13 +51,32 @@ func (z ZapLogger) GetLevel() int {
 	return int(z.Level()) * -1
 }
 
+func (z ZapLogger) WithoutName() Logger {
+	if z.unamed == nil {
+		return z
+	}
+	return z.unamed.(*ZapLogger)
+
+}
+
 func (z ZapLogger) Named(name string) Logger {
+	currentName := z.Logger.Name()
+	currentName = strings.ReplaceAll(currentName, DarkWhite, "")
+	currentName = strings.ReplaceAll(currentName, Reset, "")
+
+	if currentName == name {
+		return z
+	}
+	if !jsonLogs {
+		name = DarkWhite + name + Reset
+	}
 	logger := z.Logger.Named(name)
 	var level = *z.atomicLevel
 	return ZapLogger{
 		Sugar:       logger.Sugar(),
 		Logger:      logger,
 		atomicLevel: &level,
+		unamed:      &z,
 	}
 }
 
@@ -89,9 +111,7 @@ func NewZapEncoder() zapcore.Encoder {
 		config.EncodeTime = zapcore.TimeEncoderOfLayout("2006-01-02T15:04:05.000")
 		config.EncodeLevel = capitalColorLevelEncoder
 		config.EncodeCaller = zapcore.ShortCallerEncoder
-
 		encoder = zapcore.NewConsoleEncoder(config)
-
 	}
 	return encoder
 }
@@ -177,6 +197,18 @@ func (z ZapLogger) WithEncoder(encoder zapcore.Encoder) ZapLogger {
 		Logger:      logger,
 		Sugar:       logger.Sugar(),
 		atomicLevel: &level,
+		unamed:      z.unamed,
+	}
+}
+
+func (z ZapLogger) WithSkipReportLevel(i int) Logger {
+	logger := z.WithOptions(zap.AddCallerSkip(i))
+	var level = *z.atomicLevel
+	return ZapLogger{
+		Logger:      logger,
+		Sugar:       logger.Sugar(),
+		atomicLevel: &level,
+		unamed:      z.unamed,
 	}
 }
 
@@ -187,6 +219,7 @@ func (zap ZapLogger) WithValues(keysAndValues ...interface{}) Logger {
 		Sugar:       logger,
 		Logger:      logger.Desugar(),
 		atomicLevel: &level,
+		unamed:      zap.unamed,
 	}
 }
 
