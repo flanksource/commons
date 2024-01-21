@@ -16,6 +16,8 @@ type Logger interface {
 	SetMinLogLevel(level int)
 	V(level int) Verbose
 	Named(name string) Logger
+	WithoutName() Logger
+	WithSkipReportLevel(i int) Logger
 }
 
 type Verbose interface {

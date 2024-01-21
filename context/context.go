@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/pkg/errors"
+	"github.com/samber/lo"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -38,7 +40,7 @@ func WithTracer(tracer trace.Tracer) ContextOptions {
 
 func WithLogger(log logger.Logger) ContextOptions {
 	return func(opts *Context) {
-		opts.logger = log
+		opts.Logger = log
 	}
 }
 
@@ -49,17 +51,17 @@ func NewContext(basectx gocontext.Context, opts ...ContextOptions) Context {
 	for _, opt := range opts {
 		opt(&ctx)
 	}
-	if ctx.logger == nil {
-		ctx.logger = logger.StandardLogger()
+	if ctx.Logger == nil {
+		ctx.Logger = logger.StandardLogger()
 	}
 	if ctx.isDebugFn == nil {
 		ctx.isDebugFn = func(Context) bool {
-			return ctx.logger.IsDebugEnabled()
+			return ctx.Logger.IsDebugEnabled()
 		}
 	}
 	if ctx.isTraceFn == nil {
 		ctx.isTraceFn = func(Context) bool {
-			return ctx.logger.IsTraceEnabled()
+			return ctx.Logger.IsTraceEnabled()
 		}
 	}
 	if ctx.tracer == nil {
@@ -70,7 +72,7 @@ func NewContext(basectx gocontext.Context, opts ...ContextOptions) Context {
 
 type Context struct {
 	gocontext.Context
-	logger    logger.Logger
+	Logger    logger.Logger
 	debug     *bool
 	trace     *bool
 	isDebugFn func(Context) bool
@@ -86,7 +88,7 @@ func (c Context) WithValue(key, val interface{}) Context {
 	return Context{
 		Context:   gocontext.WithValue(c, key, val),
 		isDebugFn: c.isDebugFn,
-		logger:    c.logger,
+		Logger:    c.Logger,
 		isTraceFn: c.isTraceFn,
 		tracer:    c.tracer,
 	}
@@ -102,14 +104,14 @@ func (c Context) GetTracer() trace.Tracer {
 func (c Context) WithDebug() Context {
 	t := true
 	c.debug = &t
-	c.logger.SetLogLevel(1)
+	c.Logger.SetLogLevel(1)
 	return c
 }
 
 func (c Context) WithTrace() Context {
 	t := true
 	c.trace = &t
-	c.logger.SetLogLevel(2)
+	c.Logger.SetLogLevel(2)
 	return c
 }
 
@@ -119,7 +121,7 @@ func (c Context) Clone() Context {
 		isDebugFn: c.isDebugFn,
 		trace:     c.trace,
 		debug:     c.debug,
-		logger:    c.logger,
+		Logger:    c.Logger,
 		isTraceFn: c.isTraceFn,
 		tracer:    c.tracer,
 	}
@@ -130,46 +132,64 @@ func (c Context) WithTimeout(timeout time.Duration) (Context, gocontext.CancelFu
 	return Context{
 		Context:   ctx,
 		isDebugFn: c.isDebugFn,
-		logger:    c.logger,
+		Logger:    c.Logger,
+		isTraceFn: c.isTraceFn,
+		tracer:    c.tracer,
+	}, cancelFunc
+}
+
+func (c Context) WithDeadline(deadline time.Time) (Context, gocontext.CancelFunc) {
+	ctx, cancelFunc := gocontext.WithDeadline(c, deadline)
+	return Context{
+		Context:   ctx,
+		isDebugFn: c.isDebugFn,
+		Logger:    c.Logger,
 		isTraceFn: c.isTraceFn,
 		tracer:    c.tracer,
 	}, cancelFunc
 }
 
 func (c Context) IsDebug() bool {
-	return c.logger.IsLevelEnabled(5) ||
+	return c.Logger.IsLevelEnabled(5) ||
 		(c.debug != nil && *c.debug) ||
 		(c.isDebugFn != nil && c.isDebugFn(c))
 }
 
 func (c Context) IsTrace() bool {
-	return c.logger.IsLevelEnabled(6) || (c.trace != nil && *c.trace) || (c.isTraceFn != nil && c.isTraceFn(c))
+	return c.Logger.IsLevelEnabled(6) || (c.trace != nil && *c.trace) || (c.isTraceFn != nil && c.isTraceFn(c))
 }
 
 func (c Context) Debugf(format string, args ...interface{}) {
 	if c.IsDebug() {
 		c.GetSpan().AddEvent(fmt.Sprintf(format, args...), trace.WithAttributes(attribute.String("level", "debug")))
-		c.logger.Debugf(format, args...)
+		c.Logger.Debugf(format, args...)
 	}
 }
 
 func (c Context) Tracef(format string, args ...interface{}) {
 	if c.IsTrace() {
 		c.GetSpan().AddEvent(fmt.Sprintf(format, args...), trace.WithAttributes(attribute.String("level", "trace")))
-		c.logger.Tracef(format, args...)
+		c.Logger.Tracef(format, args...)
 	}
 }
 
-func (c Context) Error(err error) {
+func (c Context) Error(err error, msg ...any) {
+	if len(msg) == 1 {
+		err = errors.Wrap(err, fmt.Sprintf("%v", msg[0]))
+	} else if len(msg) > 1 {
+		err = errors.Wrap(err, fmt.Sprintf(fmt.Sprintf("%v", msg[0]), lo.ToAnySlice(msg[1:])...))
+	}
+
 	c.GetSpan().RecordError(err)
 	c.GetSpan().SetStatus(codes.Error, err.Error())
-	c.logger.Errorf(err.Error())
+	c.Logger.Errorf(err.Error())
 }
 
-func (c Context) Errorf(err error, format string, args ...interface{}) {
-	c.GetSpan().RecordError(err)
-	c.GetSpan().SetStatus(codes.Error, fmt.Sprintf(format, args...))
-	c.logger.Errorf(fmt.Sprintf(format, args...))
+func (c Context) Errorf(format string, args ...interface{}) {
+	err := fmt.Sprintf(format, args...)
+	c.GetSpan().RecordError(errors.New(err))
+	c.GetSpan().SetStatus(codes.Error, err)
+	c.Logger.Errorf(err)
 }
 
 func (c Context) Infof(format string, args ...interface{}) {
@@ -177,7 +197,7 @@ func (c Context) Infof(format string, args ...interface{}) {
 		// info level logs should only be pushed for debug traces
 		c.GetSpan().AddEvent(fmt.Sprintf(format, args...), trace.WithAttributes(attribute.String("level", "info")))
 	}
-	c.logger.Infof(fmt.Sprintf(format, args...))
+	c.Logger.Infof(fmt.Sprintf(format, args...))
 }
 
 func (c Context) Warnf(format string, args ...interface{}) {
@@ -185,7 +205,7 @@ func (c Context) Warnf(format string, args ...interface{}) {
 		// info level logs should only be pushed for debug traces
 		c.GetSpan().AddEvent(fmt.Sprintf(format, args...), trace.WithAttributes(attribute.String("level", "warn")))
 	}
-	c.logger.Warnf(fmt.Sprintf(format, args...))
+	c.Logger.Warnf(fmt.Sprintf(format, args...))
 }
 
 func (c Context) Logf(level int, format string, args ...interface{}) {
@@ -193,7 +213,7 @@ func (c Context) Logf(level int, format string, args ...interface{}) {
 		// info level logs should only be pushed for debug traces
 		c.GetSpan().AddEvent(fmt.Sprintf(format, args...), trace.WithAttributes(attribute.String("level", fmt.Sprintf("%d", level))))
 	}
-	c.logger.V(level).Infof(format, args...)
+	c.Logger.V(level).Infof(format, args...)
 }
 
 func (c Context) GetSpan() trace.Span {
@@ -204,7 +224,7 @@ func (c Context) StartSpan(name string) (Context, trace.Span) {
 	ctx, span := c.tracer.Start(c, name)
 	return Context{
 		Context:   ctx,
-		logger:    c.logger,
+		Logger:    c.Logger,
 		isDebugFn: c.isDebugFn,
 		isTraceFn: c.isTraceFn,
 		tracer:    c.tracer,
