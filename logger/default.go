@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"flag"
 	"fmt"
 	"strings"
 
@@ -26,6 +27,13 @@ func BindFlags(flags *pflag.FlagSet) {
 	flags.BoolVar(&jsonLogs, "json-logs", false, "Print logs in json format to stderr")
 	flags.BoolVar(&color, "color", true, "Print logs using color")
 	flags.BoolVar(&reportCaller, "report-caller", false, "Report log caller info")
+}
+
+func BindGoFlags() {
+	flag.IntVar(&level, "v", 0, "Increase logging level")
+	flag.BoolVar(&jsonLogs, "json-logs", false, "Print logs in json format to stderr")
+	flag.BoolVar(&color, "color", true, "Print logs using color")
+	flag.BoolVar(&reportCaller, "report-caller", false, "Report log caller info")
 }
 
 func UseLogsrus() {
