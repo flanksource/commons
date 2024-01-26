@@ -104,14 +104,14 @@ func (c Context) GetTracer() trace.Tracer {
 func (c Context) WithDebug() Context {
 	t := true
 	c.debug = &t
-	c.Logger.SetLogLevel(1)
+	c.Logger.SetMinLogLevel(1)
 	return c
 }
 
 func (c Context) WithTrace() Context {
 	t := true
 	c.trace = &t
-	c.Logger.SetLogLevel(2)
+	c.Logger.SetMinLogLevel(2)
 	return c
 }
 
@@ -150,7 +150,7 @@ func (c Context) WithDeadline(deadline time.Time) (Context, gocontext.CancelFunc
 }
 
 func (c Context) IsDebug() bool {
-	return c.Logger.IsLevelEnabled(5) ||
+	return c.IsTrace() || c.Logger.IsLevelEnabled(5) ||
 		(c.debug != nil && *c.debug) ||
 		(c.isDebugFn != nil && c.isDebugFn(c))
 }
