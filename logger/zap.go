@@ -160,7 +160,7 @@ func (zap ZapLogger) Tracef(format string, args ...interface{}) {
 }
 
 func (zap ZapLogger) Fatalf(format string, args ...interface{}) {
-	zap.Sugar.Fatalf(format, args...)
+	zap.Sugar.Panicf(format, args...)
 }
 
 func (v zapVerbose) Infof(format string, args ...interface{}) {
