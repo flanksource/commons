@@ -3,6 +3,7 @@ package collections
 import (
 	"encoding/base64"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/flanksource/commons/files"
@@ -90,6 +91,27 @@ func KeyValueSliceToMap(in []string) map[string]string {
 	return sanitized
 }
 
+// SelectorToMap returns a map from a selector string.
+// i.e. "a=b,c=d" -> {"a": "b", "c": "d"}
+func SelectorToMap(selector string) (matchLabels map[string]string) {
+	labels := strings.Split(selector, ",")
+	return KeyValueSliceToMap(labels)
+}
+
+// SortedMap takes a map and returns a sorted key value string
+// i.e. {"a": "b", "c": "d"} -> "a=b,c=d"
+func SortedMap(m map[string]string) string {
+	keys := MapKeys(m)
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+
+	var items []string
+	for _, k := range keys {
+		items = append(items, fmt.Sprintf("%s=%s", k, m[k]))
+	}
+
+	return strings.Join(items, ",")
+}
+
 // MapToIni takes a map and converts it into an INI formatted string
 func MapToIni(Map map[string]string) string {
 	str := ""
@@ -112,7 +134,7 @@ func IniToMap(path string) map[string]string {
 	return result
 }
 
-func MapKeys[K comparable](m map[K]any) []K {
+func MapKeys[K comparable, T any](m map[K]T) []K {
 	keys := make([]K, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)
