@@ -82,12 +82,11 @@ func KeyValueSliceToMap(in []string) map[string]string {
 	for _, item := range in {
 		splits := strings.SplitN(item, "=", 2)
 		if len(splits) == 1 {
-			continue // ignore this item. not in a=b format
+			// For no keys, we add an empty string to match just the key
+			splits = append(splits, "")
 		}
-
 		sanitized[strings.TrimSpace(splits[0])] = strings.TrimSpace(splits[1])
 	}
-
 	return sanitized
 }
 
