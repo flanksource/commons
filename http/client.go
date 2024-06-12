@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -175,19 +176,57 @@ func (c *Client) DisableKeepAlive(val bool) *Client {
 	return c
 }
 
-// InsecureSkipVerify controls whether a client verifies the server's
-// certificate chain and host name
-func (c *Client) InsecureSkipVerify(val bool) *Client {
+func (c *Client) initTLSConfig() {
 	if c.httpClient.Transport == nil {
 		c.httpClient.Transport = http.DefaultTransport
 	}
 
 	customTransport := c.httpClient.Transport.(*http.Transport).Clone()
-
 	if customTransport.TLSClientConfig == nil {
 		customTransport.TLSClientConfig = &tls.Config{}
 	}
+}
 
+func (c *Client) TLSConfig(ca, cert string) (*Client, error) {
+	c.initTLSConfig()
+
+	customTransport := c.httpClient.Transport.(*http.Transport).Clone()
+
+	if ca != "" {
+		certPool, err := x509.SystemCertPool()
+		if err != nil {
+			return nil, err
+		}
+
+		if !certPool.AppendCertsFromPEM([]byte(ca)) {
+			return nil, fmt.Errorf("failed to append ca certificate")
+		}
+		customTransport.TLSClientConfig.RootCAs = certPool
+	}
+
+	if cert != "" {
+		certPool, err := x509.SystemCertPool()
+		if err != nil {
+			return nil, err
+		}
+
+		if !certPool.AppendCertsFromPEM([]byte(cert)) {
+			return nil, fmt.Errorf("failed to append client Certificate certificate")
+		}
+		customTransport.TLSClientConfig.RootCAs = certPool
+	}
+
+	c.tlsConfig = customTransport.TLSClientConfig
+	c.httpClient.Transport = customTransport
+	return c, nil
+}
+
+// InsecureSkipVerify controls whether a client verifies the server's
+// certificate chain and host name
+func (c *Client) InsecureSkipVerify(val bool) *Client {
+	c.initTLSConfig()
+
+	customTransport := c.httpClient.Transport.(*http.Transport).Clone()
 	customTransport.TLSClientConfig.InsecureSkipVerify = val
 	c.tlsConfig = customTransport.TLSClientConfig
 	c.httpClient.Transport = customTransport
@@ -218,6 +257,11 @@ func (c *Client) Auth(username, password string) *Client {
 	c.authConfig.Username = username
 	c.authConfig.Password = password
 	return c
+}
+
+type TLSConfig struct {
+	CA   string
+	Cert string
 }
 
 func (c *Client) OAuth(config middlewares.OauthConfig) *Client {
