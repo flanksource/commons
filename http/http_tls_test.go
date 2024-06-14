@@ -47,7 +47,7 @@ func TestTLSConfig(t *testing.T) {
 		_ = server.Shutdown(context.Background())
 	}()
 
-	client, err := chttp.NewClient().TLSConfig("", string(certPemData))
+	client, err := chttp.NewClient().TLSConfig(chttp.TLSConfig{CA: string(certPemData)})
 	if err != nil {
 		t.Fatal(err)
 	}
