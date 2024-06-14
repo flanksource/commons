@@ -187,37 +187,53 @@ func (c *Client) initTLSConfig() {
 	}
 }
 
-func (c *Client) TLSConfig(ca, cert string) (*Client, error) {
+type TLSConfig struct {
+	// InsecureSkipVerify controls whether a client verifies the server's
+	// certificate chain and host name
+	InsecureSkipVerify bool
+	// HandshakeTimeout defaults to 10 seconds
+	HandshakeTimeout time.Duration
+	// PEM encoded certificate of the CA to verify the server certificate
+	CA string
+	// PEM encoded client certificate
+	Cert string
+	// PEM encoded client private key
+	Key string
+}
+
+func (c *Client) TLSConfig(conf TLSConfig) (*Client, error) {
 	c.initTLSConfig()
 
-	customTransport := c.httpClient.Transport.(*http.Transport).Clone()
+	if conf.HandshakeTimeout == 0 {
+		conf.HandshakeTimeout = time.Second * 10
+	}
 
-	if ca != "" {
+	transport := c.httpClient.Transport.(*http.Transport).Clone()
+	transport.TLSClientConfig.InsecureSkipVerify = conf.InsecureSkipVerify
+	transport.TLSHandshakeTimeout = conf.HandshakeTimeout
+
+	if conf.CA != "" {
 		certPool, err := x509.SystemCertPool()
 		if err != nil {
 			return nil, err
 		}
 
-		if !certPool.AppendCertsFromPEM([]byte(ca)) {
+		if !certPool.AppendCertsFromPEM([]byte(conf.CA)) {
 			return nil, fmt.Errorf("failed to append ca certificate")
 		}
-		customTransport.TLSClientConfig.RootCAs = certPool
+		transport.TLSClientConfig.RootCAs = certPool
 	}
 
-	if cert != "" {
-		certPool, err := x509.SystemCertPool()
+	if conf.Cert != "" && conf.Key != "" {
+		cert, err := tls.X509KeyPair([]byte(conf.Cert), []byte(conf.Key))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to create client certificate: %v", err)
 		}
-
-		if !certPool.AppendCertsFromPEM([]byte(cert)) {
-			return nil, fmt.Errorf("failed to append client Certificate certificate")
-		}
-		customTransport.TLSClientConfig.RootCAs = certPool
+		transport.TLSClientConfig.Certificates = []tls.Certificate{cert}
 	}
 
-	c.tlsConfig = customTransport.TLSClientConfig
-	c.httpClient.Transport = customTransport
+	c.tlsConfig = transport.TLSClientConfig
+	c.httpClient.Transport = transport
 	return c, nil
 }
 
@@ -257,11 +273,6 @@ func (c *Client) Auth(username, password string) *Client {
 	c.authConfig.Username = username
 	c.authConfig.Password = password
 	return c
-}
-
-type TLSConfig struct {
-	CA   string
-	Cert string
 }
 
 func (c *Client) OAuth(config middlewares.OauthConfig) *Client {
