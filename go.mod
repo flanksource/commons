@@ -7,6 +7,7 @@ require (
 	github.com/google/uuid v1.5.0
 	github.com/hashicorp/go-getter v1.7.3
 	github.com/henvic/httpretty v0.1.2
+	github.com/hexops/gotextdiff v1.0.3
 	github.com/kr/pretty v0.3.1
 	github.com/onsi/gomega v1.27.6
 	github.com/patrickmn/go-cache v2.1.0+incompatible
