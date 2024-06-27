@@ -67,9 +67,21 @@ func TestMatchItems(t *testing.T) {
 			expected: false,
 		},
 		{
-			name:     "Multiple Wildcards",
-			item:     "hello-world",
-			items:    []string{"junit-*", "canaries-*", "*-world"},
+			name:     "Handle whitespaces | should be trimmed",
+			item:     "hello",
+			items:    []string{"hello   ", "world"},
+			expected: true,
+		},
+		{
+			name:     "Handle whitespaces | should not be trimmed (no match)",
+			item:     "hello",
+			items:    []string{"hello%20", "world"},
+			expected: false,
+		},
+		{
+			name:     "Handle whitespaces  | should not be trimmed (match)",
+			item:     "hello ",
+			items:    []string{"hello%20", "world"},
 			expected: true,
 		},
 	}
