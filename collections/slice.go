@@ -3,8 +3,6 @@ package collections
 import (
 	"net/url"
 	"strings"
-
-	"github.com/flanksource/commons/logger"
 )
 
 func Dedup[T comparable](arr []T) []T {
@@ -87,11 +85,7 @@ func MatchItems(item string, items ...string) bool {
 	for _, i := range items {
 		i = strings.TrimSpace(i)
 
-		i, err := url.QueryUnescape(i)
-		if err != nil {
-			logger.Warnf("match items received item with invalid url encoding: %v", err)
-			continue
-		}
+		i, _ := url.QueryUnescape(i)
 
 		if strings.HasPrefix(i, "!") {
 			if item == strings.TrimPrefix(i, "!") {
