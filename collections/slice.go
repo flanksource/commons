@@ -1,6 +1,7 @@
 package collections
 
 import (
+	"net/url"
 	"strings"
 )
 
@@ -82,6 +83,10 @@ func MatchItems(item string, items ...string) bool {
 	}
 
 	for _, i := range items {
+		i = strings.TrimSpace(i)
+
+		i, _ := url.QueryUnescape(i)
+
 		if strings.HasPrefix(i, "!") {
 			if item == strings.TrimPrefix(i, "!") {
 				return false
