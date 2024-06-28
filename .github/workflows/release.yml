@@ -11,7 +11,7 @@ jobs:
       release-version: ${{ steps.semantic.outputs.release-version }}
       new-release-published: ${{ steps.semantic.outputs.new-release-published }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: codfish/semantic-release-action@v1
         id: semantic
         env:
