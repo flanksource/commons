@@ -12,7 +12,7 @@ require (
 	github.com/onsi/gomega v1.27.6
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
-	github.com/samber/lo v1.39.0
+	github.com/samber/lo v1.44.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.4
@@ -26,7 +26,7 @@ require (
 	go.uber.org/zap v1.26.0
 	golang.org/x/crypto v0.21.0
 	golang.org/x/oauth2 v0.15.0
-	golang.org/x/sync v0.6.0
+	golang.org/x/sync v0.7.0
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c
 	gopkg.in/flanksource/yaml.v3 v3.2.3
 )
@@ -90,7 +90,7 @@ require (
 	golang.org/x/exp v0.0.0-20230713183714-613f0c0eb8a1 // indirect
 	golang.org/x/net v0.23.0 // indirect
 	golang.org/x/sys v0.18.0 // indirect
-	golang.org/x/text v0.14.0 // indirect
+	golang.org/x/text v0.16.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
 	google.golang.org/api v0.155.0 // indirect
