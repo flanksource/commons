@@ -45,7 +45,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/flanksource/gomplate/v3 v3.20.4 // indirect
-	github.com/flanksource/is-healthy v1.0.19 // indirect
+	github.com/flanksource/is-healthy v1.0.20 // indirect
 	github.com/go-logr/logr v1.4.1 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
