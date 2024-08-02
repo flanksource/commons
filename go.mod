@@ -3,6 +3,7 @@ module github.com/flanksource/commons
 go 1.20
 
 require (
+	github.com/Snawoot/go-http-digest-auth-client v1.1.3
 	github.com/google/go-cmp v0.6.0
 	github.com/google/uuid v1.5.0
 	github.com/hashicorp/go-getter v1.7.3

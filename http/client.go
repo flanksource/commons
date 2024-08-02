@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	dac "github.com/Snawoot/go-http-digest-auth-client"
 	"github.com/flanksource/commons/dns"
 	"github.com/flanksource/commons/http/middlewares"
 	httpntlm "github.com/vadimi/go-http-ntlm"
@@ -53,6 +54,9 @@ type AuthConfig struct {
 
 	// Password for basic Auth
 	Password string
+
+	// Use digest access authentication
+	Digest bool
 
 	// Ntlm controls whether to use NTLM
 	Ntlm bool
@@ -290,6 +294,15 @@ func (c *Client) TraceToStdout(config TraceConfig) *Client {
 	return c
 }
 
+func (c *Client) Digest(val bool) *Client {
+	if c.authConfig == nil {
+		c.authConfig = &AuthConfig{}
+	}
+
+	c.authConfig.Digest = val
+	return c
+}
+
 func (c *Client) NTLM(val bool) *Client {
 	if c.authConfig == nil {
 		c.authConfig = &AuthConfig{}
@@ -403,6 +416,8 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 				User:     parts[0],
 				Password: c.authConfig.Password,
 			}
+		} else if c.authConfig.Digest {
+			r.client.httpClient.Transport = dac.NewDigestTransport(c.authConfig.Username, c.authConfig.Password, r.client.httpClient.Transport)
 		}
 	}
 
