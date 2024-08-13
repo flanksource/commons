@@ -17,11 +17,11 @@ var Global = &Properties{
 
 type Properties struct {
 	m         map[string]string
-	listeners []func(Properties)
+	listeners []func(*Properties)
 	lock      sync.RWMutex
 }
 
-func (p *Properties) RegisterListener(fn func(Properties)) {
+func (p *Properties) RegisterListener(fn func(*Properties)) {
 	p.listeners = append(p.listeners, fn)
 }
 
@@ -34,7 +34,7 @@ func (p *Properties) Set(key string, value any) {
 
 func (p *Properties) notify() {
 	for _, listener := range p.listeners {
-		listener(*p)
+		listener(p)
 	}
 }
 
@@ -102,7 +102,7 @@ func (p *Properties) LoadFile(filename string) error {
 	return nil
 }
 
-func RegisterListener(fn func(Properties)) {
+func RegisterListener(fn func(*Properties)) {
 	Global.RegisterListener(fn)
 }
 

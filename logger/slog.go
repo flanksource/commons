@@ -41,7 +41,7 @@ func GetSlogLogger() SlogLogger {
 	return currentLogger.(SlogLogger)
 }
 
-func onPropertyUpdate(props properties.Properties) {
+func onPropertyUpdate(props *properties.Properties) {
 	for k, v := range props.GetAll() {
 
 		if k == "log.level" || k == "log.json" || k == "log.caller" || k == "log.color" {
@@ -63,8 +63,7 @@ func onPropertyUpdate(props properties.Properties) {
 func New(prefix string) *SlogLogger {
 	// create a new slogger
 	var slogger *slog.Logger
-	var lvl *slog.LevelVar
-	lvl = &slog.LevelVar{}
+	var lvl = &slog.LevelVar{}
 	var l any
 
 	reportCaller := properties.On(false, fmt.Sprintf("log.caller.%s", prefix), "log.caller")
@@ -144,7 +143,7 @@ type SlogLogger struct {
 
 func (s SlogLogger) Warnf(format string, args ...interface{}) {
 	r := slog.NewRecord(time.Now(), slog.LevelWarn, fmt.Sprintf(s.Prefix+format, args...), CallerPC())
-	s.Logger.Handler().Handle(context.Background(), r)
+	_ = s.Logger.Handler().Handle(context.Background(), r)
 }
 
 func (s SlogLogger) GetSlogLogger() *slog.Logger {
@@ -153,7 +152,7 @@ func (s SlogLogger) GetSlogLogger() *slog.Logger {
 
 func (s SlogLogger) Infof(format string, args ...interface{}) {
 	r := slog.NewRecord(time.Now(), slog.LevelInfo, fmt.Sprintf(s.Prefix+format, args...), CallerPC())
-	s.Logger.Handler().Handle(context.Background(), r)
+	_ = s.Logger.Handler().Handle(context.Background(), r)
 }
 
 func (s SlogLogger) Secretf(format string, args ...interface{}) {
@@ -166,22 +165,22 @@ func (s SlogLogger) Prettyf(msg string, obj interface{}) {
 
 func (s SlogLogger) Errorf(format string, args ...interface{}) {
 	r := slog.NewRecord(time.Now(), slog.LevelError, fmt.Sprintf(s.Prefix+format, args...), CallerPC())
-	s.Logger.Handler().Handle(context.Background(), r)
+	_ = s.Logger.Handler().Handle(context.Background(), r)
 }
 
 func (s SlogLogger) Debugf(format string, args ...interface{}) {
 	r := slog.NewRecord(time.Now(), slog.LevelDebug, fmt.Sprintf(s.Prefix+format, args...), CallerPC())
-	s.Logger.Handler().Handle(context.Background(), r)
+	_ = s.Logger.Handler().Handle(context.Background(), r)
 }
 
 func (s SlogLogger) Tracef(format string, args ...interface{}) {
 	r := slog.NewRecord(time.Now(), SlogTraceLevel, fmt.Sprintf(s.Prefix+format, args...), CallerPC())
-	s.Logger.Handler().Handle(context.Background(), r)
+	_ = s.Logger.Handler().Handle(context.Background(), r)
 }
 
 func (s SlogLogger) Fatalf(format string, args ...interface{}) {
 	r := slog.NewRecord(time.Now(), SlogFatal, fmt.Sprintf(s.Prefix+format, args...), CallerPC())
-	s.Logger.Handler().Handle(context.Background(), r)
+	_ = s.Logger.Handler().Handle(context.Background(), r)
 }
 
 type slogVerbose struct {
@@ -191,7 +190,7 @@ type slogVerbose struct {
 
 func (v slogVerbose) Infof(format string, args ...interface{}) {
 	r := slog.NewRecord(time.Now(), v.level, fmt.Sprintf(v.Prefix+format, args...), CallerPC())
-	v.Logger.Handler().Handle(context.Background(), r)
+	_ = v.Logger.Handler().Handle(context.Background(), r)
 }
 
 func (v slogVerbose) Enabled() bool {
