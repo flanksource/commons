@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/kr/pretty"
-	logsrusapi "github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 )
 
@@ -15,7 +14,7 @@ var color, reportCaller, jsonLogs bool
 var level int
 
 func init() {
-	currentLogger = newZap(1)
+	UseSlog()
 }
 
 func IsJsonLogs() bool {
@@ -36,22 +35,6 @@ func BindGoFlags() {
 	flag.BoolVar(&reportCaller, "report-caller", false, "Report log caller info")
 }
 
-func UseLogsrus() {
-	logger := logsrusapi.StandardLogger()
-	if jsonLogs {
-		logger.SetFormatter(&logsrusapi.JSONFormatter{})
-	} else {
-		logger.SetFormatter(&logsrusapi.TextFormatter{
-			DisableColors: !color,
-			ForceColors:   color,
-			FullTimestamp: true,
-			DisableQuote:  true,
-		})
-	}
-	currentLogger = NewLogrusLogger(logger, level)
-	currentLogger.SetLogLevel(level)
-}
-
 func Warnf(format string, args ...interface{}) {
 	currentLogger.Warnf(format, args...)
 }
@@ -67,8 +50,7 @@ func Secretf(format string, args ...interface{}) {
 
 // Prettyf is like Tracef, but pretty prints the entire struct
 func Prettyf(msg string, obj interface{}) {
-	pretty.Print(obj)
-	// currentLogger.Tracef(msg, pretty.Sprint(obj))
+	currentLogger.Tracef(msg, pretty.Sprint(obj))
 }
 
 func Errorf(format string, args ...interface{}) {
@@ -86,7 +68,7 @@ func Tracef(format string, args ...interface{}) {
 func Fatalf(format string, args ...interface{}) {
 	currentLogger.Fatalf(format, args...)
 }
-func V(level int) Verbose {
+func V(level any) Verbose {
 	return currentLogger.V(level)
 }
 

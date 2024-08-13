@@ -3,6 +3,7 @@ package context
 import (
 	gocontext "context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flanksource/commons/logger"
@@ -20,13 +21,13 @@ var (
 
 type ContextOptions func(*Context)
 
-func WithTraceFn(fn func(Context) bool) ContextOptions {
+func WithTraceFn(fn func(Context) *bool) ContextOptions {
 	return func(opts *Context) {
 		opts.isTraceFn = fn
 	}
 }
 
-func WithDebugFn(fn func(Context) bool) ContextOptions {
+func WithDebugFn(fn func(Context) *bool) ContextOptions {
 	return func(opts *Context) {
 		opts.isDebugFn = fn
 	}
@@ -54,16 +55,7 @@ func NewContext(basectx gocontext.Context, opts ...ContextOptions) Context {
 	if ctx.Logger == nil {
 		ctx.Logger = logger.StandardLogger()
 	}
-	if ctx.isDebugFn == nil {
-		ctx.isDebugFn = func(Context) bool {
-			return ctx.Logger.IsDebugEnabled()
-		}
-	}
-	if ctx.isTraceFn == nil {
-		ctx.isTraceFn = func(Context) bool {
-			return ctx.Logger.IsTraceEnabled()
-		}
-	}
+
 	if ctx.tracer == nil {
 		ctx.tracer = noopTracer
 	}
@@ -75,9 +67,33 @@ type Context struct {
 	Logger    logger.Logger
 	debug     *bool
 	trace     *bool
-	isDebugFn func(Context) bool
-	isTraceFn func(Context) bool
+	isDebugFn func(Context) *bool
+	isTraceFn func(Context) *bool
 	tracer    trace.Tracer
+}
+
+func (c Context) String() string {
+	s := []string{}
+	if c.trace != nil {
+		s = append(s, fmt.Sprintf("trace=%v", *c.trace))
+	}
+	if c.debug != nil {
+		s = append(s, fmt.Sprintf("debug=%v", *c.debug))
+	}
+
+	if c.isDebugFn != nil {
+		s = append(s, fmt.Sprintf("isDebugFn=%v", c.isDebugFn(c)))
+	}
+	if c.isTraceFn != nil {
+		s = append(s, fmt.Sprintf("isTraceFn=%v", c.isTraceFn(c)))
+	}
+	if c.tracer != nil && c.tracer != noopTracer {
+		s = append(s, "tracer=true")
+	}
+
+	s = append(s, fmt.Sprintf("level=%d global=%d", c.Logger.GetLevel(), logger.StandardLogger().GetLevel()))
+
+	return strings.Join(s, " ")
 }
 
 func (c *Context) WithTracer(tracer trace.Tracer) {
@@ -104,14 +120,14 @@ func (c Context) GetTracer() trace.Tracer {
 func (c Context) WithDebug() Context {
 	t := true
 	c.debug = &t
-	c.Logger.SetMinLogLevel(1)
+	c.Logger.SetMinLogLevel(logger.Debug)
 	return c
 }
 
 func (c Context) WithTrace() Context {
 	t := true
 	c.trace = &t
-	c.Logger.SetMinLogLevel(2)
+	c.Logger.SetMinLogLevel(logger.Trace)
 	return c
 }
 
@@ -150,26 +166,46 @@ func (c Context) WithDeadline(deadline time.Time) (Context, gocontext.CancelFunc
 }
 
 func (c Context) IsDebug() bool {
-	return c.IsTrace() || c.Logger.IsLevelEnabled(5) ||
-		(c.debug != nil && *c.debug) ||
-		(c.isDebugFn != nil && c.isDebugFn(c))
+	if c.IsTrace() {
+		return true
+	}
+
+	if c.debug != nil {
+		return *c.debug || c.Logger.IsLevelEnabled(5)
+	}
+	if c.isDebugFn != nil {
+		debug := c.isDebugFn(c)
+		if debug != nil {
+			return *debug || c.Logger.IsLevelEnabled(5)
+		}
+	}
+	return c.Logger.IsDebugEnabled()
 }
 
 func (c Context) IsTrace() bool {
-	return c.Logger.IsLevelEnabled(6) || (c.trace != nil && *c.trace) || (c.isTraceFn != nil && c.isTraceFn(c))
+	if c.trace != nil {
+		return *c.trace || c.Logger.IsLevelEnabled(6)
+	}
+	if c.isTraceFn != nil {
+		trace := c.isTraceFn(c)
+		if trace != nil {
+			return *trace || c.Logger.IsLevelEnabled(6)
+		}
+	}
+	return c.Logger.IsTraceEnabled()
 }
 
 func (c Context) Debugf(format string, args ...interface{}) {
 	if c.IsDebug() {
 		c.GetSpan().AddEvent(fmt.Sprintf(format, args...), trace.WithAttributes(attribute.String("level", "debug")))
-		c.Logger.Debugf(format, args...)
+		c.Logger.WithSkipReportLevel(1).Debugf(format, args...)
 	}
 }
 
 func (c Context) Tracef(format string, args ...interface{}) {
 	if c.IsTrace() {
 		c.GetSpan().AddEvent(fmt.Sprintf(format, args...), trace.WithAttributes(attribute.String("level", "trace")))
-		c.Logger.Tracef(format, args...)
+		c.Logger.WithSkipReportLevel(1).Tracef(format, args...)
 	}
 }
 
@@ -182,14 +218,14 @@ func (c Context) Error(err error, msg ...any) {
 
 	c.GetSpan().RecordError(err)
 	c.GetSpan().SetStatus(codes.Error, err.Error())
-	c.Logger.Errorf(err.Error())
+	c.Logger.WithSkipReportLevel(1).Errorf(err.Error())
 }
 
 func (c Context) Errorf(format string, args ...interface{}) {
 	err := fmt.Sprintf(format, args...)
 	c.GetSpan().RecordError(errors.New(err))
 	c.GetSpan().SetStatus(codes.Error, err)
-	c.Logger.Errorf(err)
+	c.Logger.WithSkipReportLevel(1).Errorf(err)
 }
 
 func (c Context) Infof(format string, args ...interface{}) {
@@ -197,7 +233,7 @@ func (c Context) Infof(format string, args ...interface{}) {
 		// info level logs should only be pushed for debug traces
 		c.GetSpan().AddEvent(fmt.Sprintf(format, args...), trace.WithAttributes(attribute.String("level", "info")))
 	}
-	c.Logger.Infof(fmt.Sprintf(format, args...))
+	c.Logger.WithSkipReportLevel(1).Infof(fmt.Sprintf(format, args...))
 }
 
 func (c Context) Warnf(format string, args ...interface{}) {
@@ -205,7 +241,7 @@ func (c Context) Warnf(format string, args ...interface{}) {
 		// info level logs should only be pushed for debug traces
 		c.GetSpan().AddEvent(fmt.Sprintf(format, args...), trace.WithAttributes(attribute.String("level", "warn")))
 	}
-	c.Logger.Warnf(fmt.Sprintf(format, args...))
+	c.Logger.WithSkipReportLevel(1).Warnf(fmt.Sprintf(format, args...))
 }
 
 func (c Context) Logf(level int, format string, args ...interface{}) {
@@ -213,11 +249,20 @@ func (c Context) Logf(level int, format string, args ...interface{}) {
 		// info level logs should only be pushed for debug traces
 		c.GetSpan().AddEvent(fmt.Sprintf(format, args...), trace.WithAttributes(attribute.String("level", fmt.Sprintf("%d", level))))
 	}
-	c.Logger.V(level).Infof(format, args...)
+	c.Logger.WithSkipReportLevel(1).V(level).Infof(format, args...)
 }
 
 func (c Context) GetSpan() trace.Span {
 	return trace.SpanFromContext(c)
+}
+
+func (c Context) WithoutSpan() Context {
+	return Context{
+		Context:   trace.ContextWithSpanContext(c.Context, c.GetSpan().SpanContext()),
+		Logger:    c.Logger,
+		isDebugFn: c.isDebugFn,
+		isTraceFn: c.isTraceFn,
+	}
 }
 
 func (c Context) StartSpan(name string) (Context, trace.Span) {
