@@ -1,6 +1,8 @@
 module github.com/flanksource/commons
 
-go 1.20
+go 1.21
+
+toolchain go1.21.5
 
 require (
 	github.com/Snawoot/go-http-digest-auth-client v1.1.3
@@ -10,6 +12,8 @@ require (
 	github.com/henvic/httpretty v0.1.2
 	github.com/hexops/gotextdiff v1.0.3
 	github.com/kr/pretty v0.3.1
+	github.com/lmittmann/tint v1.0.5
+	github.com/lrita/cmap v0.0.0-20231108122212-cb084a67f554
 	github.com/onsi/gomega v1.27.6
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
@@ -24,7 +28,6 @@ require (
 	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.21.0
 	go.opentelemetry.io/otel/sdk v1.21.0
 	go.opentelemetry.io/otel/trace v1.21.0
-	go.uber.org/zap v1.26.0
 	golang.org/x/crypto v0.23.0
 	golang.org/x/oauth2 v0.15.0
 	golang.org/x/sync v0.7.0
@@ -100,7 +103,6 @@ require (
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.46.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.46.1 // indirect
 	go.opentelemetry.io/otel/metric v1.21.0 // indirect
-	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/exp v0.0.0-20231005195138-3e424a577f31 // indirect
 	golang.org/x/net v0.25.0 // indirect
 	golang.org/x/sys v0.20.0 // indirect

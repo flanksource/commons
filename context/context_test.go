@@ -11,6 +11,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	. "github.com/onsi/gomega"
+	"github.com/samber/lo"
 )
 
 var exporter *stdouttrace.Exporter
@@ -38,11 +39,11 @@ func TestContext(t *testing.T) {
 	ctx := NewContext(
 		gocontext.Background(),
 		WithTracer(tracer),
-		WithDebugFn(func(Context) bool {
-			return true
+		WithDebugFn(func(Context) *bool {
+			return lo.ToPtr(true)
 		}),
-		WithTraceFn(func(Context) bool {
-			return true
+		WithTraceFn(func(Context) *bool {
+			return lo.ToPtr(true)
 		}),
 	)
 
