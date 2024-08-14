@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -67,9 +68,13 @@ func LoadFile(filename string) error {
 }
 
 func (p *Properties) LoadFile(filename string) error {
+	if !path.IsAbs(filename) {
+		cwd, _ := os.Getwd()
+		filename = path.Join(cwd, filename)
+	}
 	file, err := os.Open(filename)
 	if errors.Is(err, os.ErrNotExist) {
-		slog.Debug(fmt.Sprintf("%s does not exist", filename))
+		slog.Warn(fmt.Sprintf("%s does not exist", filename))
 		return nil
 	} else if err != nil {
 		return err
