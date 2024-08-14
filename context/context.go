@@ -65,8 +65,6 @@ func NewContext(basectx gocontext.Context, opts ...ContextOptions) Context {
 type Context struct {
 	gocontext.Context
 	Logger    logger.Logger
-	debug     *bool
-	trace     *bool
 	isDebugFn func(Context) *bool
 	isTraceFn func(Context) *bool
 	tracer    trace.Tracer
@@ -74,22 +72,23 @@ type Context struct {
 
 func (c Context) String() string {
 	s := []string{}
-	if c.trace != nil {
-		s = append(s, fmt.Sprintf("trace=%v", *c.trace))
+	if c.IsTrace() {
+		s = append(s, "[trace]")
+	} else if c.IsDebug() {
+		s = append(s, "[debug]")
 	}
-	if c.debug != nil {
-		s = append(s, fmt.Sprintf("debug=%v", *c.debug))
+	if c.tracer != nil && c.tracer != noopTracer {
+		s = append(s, "[otel]")
 	}
 
 	if c.isDebugFn != nil {
-		s = append(s, fmt.Sprintf("isDebugFn=%v", c.isDebugFn(c)))
+		s = append(s, fmt.Sprintf("isDebugFn=%v", lo.FromPtr(c.isDebugFn(c))))
 	}
 	if c.isTraceFn != nil {
-		s = append(s, fmt.Sprintf("isTraceFn=%v", c.isTraceFn(c)))
+		s = append(s, fmt.Sprintf("isTraceFn=%v", lo.FromPtr(c.isTraceFn(c))))
 	}
-	if c.tracer != nil && c.tracer != noopTracer {
-		s = append(s, "tracer=true")
-	}
+
+	s = append(s, fmt.Sprintf("debug=%v, trace=%v", c.Value("debug"), c.Value("trace")))
 
 	s = append(s, fmt.Sprintf("level=%d global=%d", c.Logger.GetLevel(), logger.StandardLogger().GetLevel()))
 
@@ -118,25 +117,21 @@ func (c Context) GetTracer() trace.Tracer {
 }
 
 func (c Context) WithDebug() Context {
-	t := true
-	c.debug = &t
-	c.Logger.SetMinLogLevel(logger.Debug)
-	return c
+	ctx := c.WithValue("debug", "true")
+	ctx.Logger = ctx.Logger.WithV(logger.Debug)
+	return ctx
 }
 
 func (c Context) WithTrace() Context {
-	t := true
-	c.trace = &t
-	c.Logger.SetMinLogLevel(logger.Trace)
-	return c
+	ctx := c.WithValue("trace", "true")
+	ctx.Logger = ctx.Logger.WithV(logger.Trace)
+	return ctx
 }
 
 func (c Context) Clone() Context {
 	return Context{
 		Context:   c.Context,
 		isDebugFn: c.isDebugFn,
-		trace:     c.trace,
-		debug:     c.debug,
 		Logger:    c.Logger,
 		isTraceFn: c.isTraceFn,
 		tracer:    c.tracer,
@@ -170,9 +165,10 @@ func (c Context) IsDebug() bool {
 		return true
 	}
 
-	if c.debug != nil {
-		return *c.debug || c.Logger.IsLevelEnabled(5)
+	if debug := c.Value("debug"); !lo.IsEmpty(debug) {
+		return debug == "true"
 	}
+
 	if c.isDebugFn != nil {
 		debug := c.isDebugFn(c)
 		if debug != nil {
@@ -183,8 +179,8 @@ func (c Context) IsDebug() bool {
 }
 
 func (c Context) IsTrace() bool {
-	if c.trace != nil {
-		return *c.trace || c.Logger.IsLevelEnabled(6)
+	if trace := c.Value("trace"); !lo.IsEmpty(trace) {
+		return trace == "true"
 	}
 	if c.isTraceFn != nil {
 		trace := c.isTraceFn(c)
