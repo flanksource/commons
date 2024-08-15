@@ -14,7 +14,8 @@ type Response struct {
 	*http.Response
 
 	// Request is the Response's related Request.
-	Request *Request
+	Request    *Request
+	RawRequest *http.Request
 }
 
 func (r *Response) GetHeaders() map[string]string {
