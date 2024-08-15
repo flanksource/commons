@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kr/pretty"
 	"github.com/spf13/pflag"
 )
 
@@ -50,7 +49,7 @@ func Secretf(format string, args ...interface{}) {
 
 // Prettyf is like Tracef, but pretty prints the entire struct
 func Prettyf(msg string, obj interface{}) {
-	currentLogger.Tracef(msg, pretty.Sprint(obj))
+	currentLogger.Tracef(msg, Pretty(obj))
 }
 
 func Errorf(format string, args ...interface{}) {
