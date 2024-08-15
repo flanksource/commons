@@ -22,6 +22,16 @@ var (
 )
 
 var namedLoggers cmap.Map[string, *SlogLogger]
+var todo = context.TODO()
+
+func GetNamedLoggingLevels() (levels map[string]string) {
+	levels = make(map[string]string)
+	namedLoggers.Range(func(key string, value *SlogLogger) bool {
+		levels[key] = value.Level.String()
+		return true
+	})
+	return levels
+}
 
 func BrightF(msg string, args ...interface{}) string {
 	if !color || isTTY && !jsonLogs {
@@ -83,6 +93,7 @@ func New(prefix string) *SlogLogger {
 			TimeFormat: properties.String("15:04:05.999", fmt.Sprintf("log.time.format.%s", prefix), "log.time.format"),
 		}))
 	}
+
 	logger := SlogLogger{
 		Logger: slogger,
 		Level:  lvl,
@@ -130,7 +141,6 @@ func GetLogger(names ...string) *SlogLogger {
 	}
 	child, _ := namedLoggers.LoadOrStore(key, New(key))
 	return child
-
 }
 
 type SlogLogger struct {
@@ -142,6 +152,9 @@ type SlogLogger struct {
 }
 
 func (s SlogLogger) Warnf(format string, args ...interface{}) {
+	if !s.Logger.Enabled(todo, slog.LevelWarn) {
+		return
+	}
 	r := slog.NewRecord(time.Now(), slog.LevelWarn, fmt.Sprintf(s.Prefix+format, args...), CallerPC())
 	_ = s.Logger.Handler().Handle(context.Background(), r)
 }
@@ -151,6 +164,9 @@ func (s SlogLogger) GetSlogLogger() *slog.Logger {
 }
 
 func (s SlogLogger) Infof(format string, args ...interface{}) {
+	if !s.Logger.Enabled(todo, slog.LevelInfo) {
+		return
+	}
 	r := slog.NewRecord(time.Now(), slog.LevelInfo, fmt.Sprintf(s.Prefix+format, args...), CallerPC())
 	_ = s.Logger.Handler().Handle(context.Background(), r)
 }
@@ -164,16 +180,25 @@ func (s SlogLogger) Prettyf(msg string, obj interface{}) {
 }
 
 func (s SlogLogger) Errorf(format string, args ...interface{}) {
+	if !s.Logger.Enabled(todo, slog.LevelError) {
+		return
+	}
 	r := slog.NewRecord(time.Now(), slog.LevelError, fmt.Sprintf(s.Prefix+format, args...), CallerPC())
 	_ = s.Logger.Handler().Handle(context.Background(), r)
 }
 
 func (s SlogLogger) Debugf(format string, args ...interface{}) {
+	if !s.Logger.Enabled(context.Background(), slog.LevelDebug) {
+		return
+	}
 	r := slog.NewRecord(time.Now(), slog.LevelDebug, fmt.Sprintf(s.Prefix+format, args...), CallerPC())
 	_ = s.Logger.Handler().Handle(context.Background(), r)
 }
 
 func (s SlogLogger) Tracef(format string, args ...interface{}) {
+	if !s.Logger.Enabled(todo, SlogTraceLevel) {
+		return
+	}
 	r := slog.NewRecord(time.Now(), SlogTraceLevel, fmt.Sprintf(s.Prefix+format, args...), CallerPC())
 	_ = s.Logger.Handler().Handle(context.Background(), r)
 }
@@ -189,6 +214,10 @@ type slogVerbose struct {
 }
 
 func (v slogVerbose) Infof(format string, args ...interface{}) {
+	if !v.Logger.Enabled(todo, v.level) {
+		return
+	}
+
 	r := slog.NewRecord(time.Now(), v.level, fmt.Sprintf(v.Prefix+format, args...), CallerPC())
 	_ = v.Logger.Handler().Handle(context.Background(), r)
 }
@@ -353,6 +382,6 @@ func (s SlogLogger) IsDebugEnabled() bool {
 }
 
 func Pretty(v any) string {
-	b, _ := json.MarshalIndent(v, "", "  ")
+	b, _ := json.MarshalIndent(v, "  ", "  ")
 	return strings.TrimSpace(string(b))
 }
