@@ -15,6 +15,7 @@ import (
 	"github.com/kr/pretty"
 	"github.com/lmittmann/tint"
 	"github.com/lrita/cmap"
+	"github.com/samber/lo"
 )
 
 var (
@@ -131,15 +132,22 @@ func GetLogger(names ...string) *SlogLogger {
 		return parent
 	}
 
-	key := strings.ToLower(strings.Join(names, ""))
-	if key == "" {
-		return parent
+	path := ""
+	for _, name := range names {
+		if !strings.Contains(name, " ") {
+			name = strings.ToLower(strings.Join(lo.Words(name), " "))
+		} else {
+			name = strings.ToLower(name)
+		}
+		if path != "" {
+			path += "."
+		}
+		path = path + name
+		if v, ok := namedLoggers.Load(path); ok {
+			return v
+		}
 	}
-
-	if v, ok := namedLoggers.Load(key); ok {
-		return v
-	}
-	child, _ := namedLoggers.LoadOrStore(key, New(key))
+	child, _ := namedLoggers.LoadOrStore(path, New(path))
 	return child
 }
 
@@ -172,7 +180,7 @@ func (s SlogLogger) Infof(format string, args ...interface{}) {
 }
 
 func (s SlogLogger) Secretf(format string, args ...interface{}) {
-	s.Debugf(stripSecrets(fmt.Sprintf(format, args...)))
+	s.Debugf(StripSecrets(fmt.Sprintf(format, args...)))
 }
 
 func (s SlogLogger) Prettyf(msg string, obj interface{}) {
