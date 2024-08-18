@@ -10,16 +10,25 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/fsnotify/fsnotify"
 )
 
 var Global = &Properties{
 	m: make(map[string]string),
 }
 
+var LoadFile = func(filename string) error {
+	return Global.LoadFile(filename)
+}
+
 type Properties struct {
 	m         map[string]string
+	filename  string
 	listeners []func(*Properties)
 	lock      sync.RWMutex
+	close     func()
+	Reload    func()
 }
 
 func (p *Properties) RegisterListener(fn func(*Properties)) {
@@ -28,9 +37,9 @@ func (p *Properties) RegisterListener(fn func(*Properties)) {
 
 func (p *Properties) Set(key string, value any) {
 	p.lock.Lock()
+	defer p.notify()
 	defer p.lock.Unlock()
 	p.m[key] = fmt.Sprintf("%v", value)
-	p.notify()
 }
 
 func (p *Properties) notify() {
@@ -63,10 +72,6 @@ func (p *Properties) Update(props map[string]string) {
 	}
 }
 
-func LoadFile(filename string) error {
-	return Global.LoadFile(filename)
-}
-
 func (p *Properties) LoadFile(filename string) error {
 	if !path.IsAbs(filename) {
 		cwd, _ := os.Getwd()
@@ -80,7 +85,13 @@ func (p *Properties) LoadFile(filename string) error {
 		return err
 	}
 	defer file.Close()
-	slog.Info(fmt.Sprintf("loading properties from %s", filename))
+	p.filename = filename
+
+	if p.close == nil {
+		p.close = p.Watch()
+	}
+
+	slog.Info(fmt.Sprintf("Loading properties from %s", filename))
 	var props = make(map[string]string)
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -160,4 +171,30 @@ func (p *Properties) Int(def int, key string) int {
 		}
 	}
 	return def
+}
+
+func (p *Properties) Watch() func() {
+	if p.close != nil {
+		return p.close
+	}
+	slog.Info(fmt.Sprintf("Watching %s for changes", p.filename))
+	// Create new watcher.
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		slog.Warn("Failed to create watcher for properties file: " + err.Error())
+	}
+
+	_ = watcher.Add(path.Dir(p.filename))
+
+	go func() {
+
+		for e := range watcher.Events {
+			if e.Name == p.filename && e.Op != fsnotify.Chmod {
+				p.LoadFile(p.filename)
+			}
+		}
+	}()
+	return func() {
+		_ = watcher.Close()
+	}
 }

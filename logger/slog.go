@@ -230,12 +230,12 @@ func (s SlogLogger) Debugf(format string, args ...interface{}) {
 }
 
 func (s SlogLogger) handle(r slog.Record, format string, args ...interface{}) {
-	caller := GetCaller(r.PC)
-	if fileLogger, ok := namedLoggers.Load(caller); ok {
-		if !fileLogger.IsLevelEnabled(FromSlogLevel(r.Level)) {
-			return
-		}
-	}
+	// caller := GetCaller(r.PC)
+	// if fileLogger, ok := namedLoggers.Load(caller); ok {
+	// 	if !fileLogger.IsLevelEnabled(FromSlogLevel(r.Level)) {
+	// 		return
+	// 	}
+	// }
 	if jsonLogs {
 		if s.Prefix != "" {
 			r.Add("logger", s.Prefix)
