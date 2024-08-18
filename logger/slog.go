@@ -9,13 +9,13 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/flanksource/commons/is"
 	"github.com/flanksource/commons/properties"
 	"github.com/kr/pretty"
 	"github.com/lmittmann/tint"
 	"github.com/lrita/cmap"
-	"github.com/samber/lo"
 )
 
 var (
@@ -28,14 +28,14 @@ var todo = context.TODO()
 func GetNamedLoggingLevels() (levels map[string]string) {
 	levels = make(map[string]string)
 	namedLoggers.Range(func(key string, value *SlogLogger) bool {
-		levels[key] = value.Level.String()
+		levels[key] = FromSlogLevel(value.Level.Level()).String()
 		return true
 	})
 	return levels
 }
 
 func BrightF(msg string, args ...interface{}) string {
-	if !color || isTTY && !jsonLogs {
+	if isTTY && color && !jsonLogs {
 		return DarkWhite + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
@@ -54,7 +54,6 @@ func GetSlogLogger() SlogLogger {
 
 func onPropertyUpdate(props *properties.Properties) {
 	for k, v := range props.GetAll() {
-
 		if k == "log.level" || k == "log.json" || k == "log.caller" || k == "log.color" {
 			root := New("root")
 			existing := GetLogger()
@@ -69,35 +68,50 @@ func onPropertyUpdate(props *properties.Properties) {
 			reportCaller, _ = strconv.ParseBool(v)
 		}
 	}
+
+	if props.On(false, "log.json") && props.On(false, "log.color") {
+		// disable color logs when json logs are enabled
+		properties.Set("log.color", "false")
+	}
 }
 
 func New(prefix string) *SlogLogger {
 	// create a new slogger
-	var slogger *slog.Logger
+	var logger *SlogLogger
 	var lvl = &slog.LevelVar{}
 	var l any
 
-	reportCaller := properties.On(false, fmt.Sprintf("log.caller.%s", prefix), "log.caller")
-	logJson := properties.On(false, fmt.Sprintf("log.json.%s", prefix), "log.json")
-	logColor := properties.On(false, fmt.Sprintf("log.color.%s", prefix), "log.color")
+	reportCaller := properties.On(reportCaller, fmt.Sprintf("log.caller.%s", prefix), "log.caller")
+	logJson := properties.On(jsonLogs, "log.json")
+	logColor := properties.On(color, fmt.Sprintf("log.color.%s", prefix), "log.color")
 	logLevel := properties.String("", fmt.Sprintf("log.level.%s", prefix), "log.level")
-	if logJson {
-		slogger = slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
-			AddSource: reportCaller,
-			Level:     lvl,
-		}))
-	} else {
-		slogger = slog.New(tint.NewHandler(os.Stderr, &tint.Options{
-			Level:      lvl,
-			NoColor:    !logColor,
-			AddSource:  reportCaller,
-			TimeFormat: properties.String("15:04:05.999", fmt.Sprintf("log.time.format.%s", prefix), "log.time.format"),
-		}))
+	logStderr := properties.On(logToStderr, "log.stderr")
+	destination := os.Stdout
+	if logStderr {
+		destination = os.Stderr
 	}
 
-	logger := SlogLogger{
-		Logger: slogger,
-		Level:  lvl,
+	if logJson {
+		color = false
+		jsonLogs = true
+		logger = &SlogLogger{
+			Level: lvl,
+			Logger: slog.New(slog.NewJSONHandler(destination, &slog.HandlerOptions{
+				AddSource: reportCaller,
+				Level:     lvl,
+			})),
+		}
+
+	} else {
+		logger = &SlogLogger{
+			Logger: slog.New(tint.NewHandler(destination, &tint.Options{
+				Level:      lvl,
+				NoColor:    !logColor,
+				AddSource:  reportCaller,
+				TimeFormat: properties.String("15:04:05.999", fmt.Sprintf("log.time.format.%s", prefix), "log.time.format"),
+			})),
+			Level: lvl,
+		}
 	}
 
 	if logLevel != "" {
@@ -106,11 +120,12 @@ func New(prefix string) *SlogLogger {
 		l = level
 	}
 
-	if prefix != "" {
-		logger.Prefix = fmt.Sprintf("[%s] ", BrightF(prefix))
+	if prefix != "" && prefix != "root" {
+		logger.Prefix = prefix
 	}
+
 	logger.SetLogLevel(l)
-	return &logger
+	return logger
 }
 func UseSlog() {
 	if currentLogger != nil {
@@ -126,6 +141,20 @@ func UseSlog() {
 	properties.RegisterListener(onPropertyUpdate)
 }
 
+func camelCaseWords(s string) []string {
+	var result strings.Builder
+	for _, r := range s {
+		if unicode.IsUpper(r) {
+			result.WriteRune(' ')
+			result.WriteRune(r)
+
+		} else {
+			result.WriteRune(r)
+		}
+	}
+	return strings.Fields(result.String())
+}
+
 func GetLogger(names ...string) *SlogLogger {
 	parent, _ := namedLoggers.Load("root")
 	if len(names) == 0 {
@@ -133,18 +162,17 @@ func GetLogger(names ...string) *SlogLogger {
 	}
 
 	path := ""
-	for _, name := range names {
-		if !strings.Contains(name, " ") {
-			name = strings.ToLower(strings.Join(lo.Words(name), " "))
-		} else {
-			name = strings.ToLower(name)
-		}
+	for i, name := range names {
+		name = strings.ToLower(strings.Join(camelCaseWords(name), " "))
 		if path != "" {
 			path += "."
 		}
-		path = path + name
+		path = path + strings.TrimSpace(name)
 		if v, ok := namedLoggers.Load(path); ok {
 			return v
+		}
+		if i == 0 {
+			break
 		}
 	}
 	child, _ := namedLoggers.LoadOrStore(path, New(path))
@@ -163,8 +191,8 @@ func (s SlogLogger) Warnf(format string, args ...interface{}) {
 	if !s.Logger.Enabled(todo, slog.LevelWarn) {
 		return
 	}
-	r := slog.NewRecord(time.Now(), slog.LevelWarn, fmt.Sprintf(s.Prefix+format, args...), CallerPC())
-	_ = s.Logger.Handler().Handle(context.Background(), r)
+	s.handle(slog.NewRecord(time.Now(), slog.LevelWarn, "", CallerPC()), format, args...)
+
 }
 
 func (s SlogLogger) GetSlogLogger() *slog.Logger {
@@ -175,8 +203,7 @@ func (s SlogLogger) Infof(format string, args ...interface{}) {
 	if !s.Logger.Enabled(todo, slog.LevelInfo) {
 		return
 	}
-	r := slog.NewRecord(time.Now(), slog.LevelInfo, fmt.Sprintf(s.Prefix+format, args...), CallerPC())
-	_ = s.Logger.Handler().Handle(context.Background(), r)
+	s.handle(slog.NewRecord(time.Now(), slog.LevelInfo, "", CallerPC()), format, args...)
 }
 
 func (s SlogLogger) Secretf(format string, args ...interface{}) {
@@ -191,15 +218,34 @@ func (s SlogLogger) Errorf(format string, args ...interface{}) {
 	if !s.Logger.Enabled(todo, slog.LevelError) {
 		return
 	}
-	r := slog.NewRecord(time.Now(), slog.LevelError, fmt.Sprintf(s.Prefix+format, args...), CallerPC())
-	_ = s.Logger.Handler().Handle(context.Background(), r)
+	s.handle(slog.NewRecord(time.Now(), slog.LevelError, "", CallerPC()), format, args...)
 }
 
 func (s SlogLogger) Debugf(format string, args ...interface{}) {
 	if !s.Logger.Enabled(context.Background(), slog.LevelDebug) {
 		return
 	}
-	r := slog.NewRecord(time.Now(), slog.LevelDebug, fmt.Sprintf(s.Prefix+format, args...), CallerPC())
+	s.handle(slog.NewRecord(time.Now(), slog.LevelDebug, "", CallerPC()), format, args...)
+
+}
+
+func (s SlogLogger) handle(r slog.Record, format string, args ...interface{}) {
+	caller := GetCaller(r.PC)
+	if fileLogger, ok := namedLoggers.Load(caller); ok {
+		if !fileLogger.IsLevelEnabled(FromSlogLevel(r.Level)) {
+			return
+		}
+	}
+	if jsonLogs {
+		if s.Prefix != "" {
+			r.Add("logger", s.Prefix)
+		}
+		r.Message = fmt.Sprintf(format, args...)
+	} else if s.Prefix != "" {
+		r.Message = fmt.Sprintf(fmt.Sprintf("(%s) ", BrightF(s.Prefix))+format, args...)
+	} else {
+		r.Message = fmt.Sprintf(format, args...)
+	}
 	_ = s.Logger.Handler().Handle(context.Background(), r)
 }
 
@@ -207,13 +253,12 @@ func (s SlogLogger) Tracef(format string, args ...interface{}) {
 	if !s.Logger.Enabled(todo, SlogTraceLevel) {
 		return
 	}
-	r := slog.NewRecord(time.Now(), SlogTraceLevel, fmt.Sprintf(s.Prefix+format, args...), CallerPC())
-	_ = s.Logger.Handler().Handle(context.Background(), r)
+	s.handle(slog.NewRecord(time.Now(), SlogTraceLevel, "", CallerPC()), format, args...)
+
 }
 
 func (s SlogLogger) Fatalf(format string, args ...interface{}) {
-	r := slog.NewRecord(time.Now(), SlogFatal, fmt.Sprintf(s.Prefix+format, args...), CallerPC())
-	_ = s.Logger.Handler().Handle(context.Background(), r)
+	s.handle(slog.NewRecord(time.Now(), SlogFatal, "", CallerPC()), format, args...)
 }
 
 type slogVerbose struct {
@@ -226,8 +271,8 @@ func (v slogVerbose) Infof(format string, args ...interface{}) {
 		return
 	}
 
-	r := slog.NewRecord(time.Now(), v.level, fmt.Sprintf(v.Prefix+format, args...), CallerPC())
-	_ = v.Logger.Handler().Handle(context.Background(), r)
+	v.handle(slog.NewRecord(time.Now(), v.level, "", CallerPC()), format, args...)
+
 }
 
 func (v slogVerbose) Enabled() bool {

@@ -11,7 +11,7 @@ import (
 )
 
 var currentLogger Logger
-var color, reportCaller, jsonLogs bool
+var color, reportCaller, jsonLogs, logToStderr bool
 var level int
 
 func init() {
@@ -27,6 +27,7 @@ func BindFlags(flags *pflag.FlagSet) {
 	flags.BoolVar(&jsonLogs, "json-logs", false, "Print logs in json format to stderr")
 	flags.BoolVar(&color, "color", true, "Print logs using color")
 	flags.BoolVar(&reportCaller, "report-caller", false, "Report log caller info")
+	flags.BoolVar(&logToStderr, "log-to-stderr", false, "Log to stderr instead of stdout")
 }
 
 func BindGoFlags() {
