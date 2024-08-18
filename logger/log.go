@@ -45,6 +45,34 @@ const (
 	Silent LogLevel = 10
 )
 
+func (l LogLevel) String() string {
+	switch l {
+	case Debug:
+		return "debug"
+	case Trace:
+		return "trace"
+	case Trace1:
+		return "trace1"
+	case Trace2:
+		return "trace2"
+	case Trace3:
+		return "trace3"
+	case Trace4:
+		return "trace4"
+	case Info:
+		return "info"
+	case Warn:
+		return "warn"
+	case Error:
+		return "error"
+	case Fatal:
+		return "fatal"
+	case Silent:
+		return "silent"
+	}
+	return ""
+}
+
 const (
 	cyan      = "\x1b[36"
 	Cyan      = cyan + Normal

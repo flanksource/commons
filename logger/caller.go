@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"path"
 	"runtime"
 	"strconv"
 	"strings"
@@ -65,6 +66,20 @@ func skipFrame(frame runtime.Frame) bool {
 		}
 	}
 	return false
+}
+
+func GetCaller(pc ...uintptr) string {
+	frames := runtime.CallersFrames(pc)
+	for {
+		frame, more := frames.Next()
+		if !skipFrame(frame) {
+
+			return path.Base(path.Dir(frame.File)) + "/" + path.Base(frame.File)
+		}
+		if !more {
+			return ""
+		}
+	}
 }
 
 func CallerPC(skip ...int) uintptr {
