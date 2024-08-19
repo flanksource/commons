@@ -6,6 +6,7 @@ toolchain go1.21.5
 
 require (
 	github.com/Snawoot/go-http-digest-auth-client v1.1.3
+	github.com/fsnotify/fsnotify v1.7.0
 	github.com/google/go-cmp v0.6.0
 	github.com/google/uuid v1.5.0
 	github.com/hashicorp/go-getter v1.7.5
@@ -50,9 +51,8 @@ require (
 	github.com/distribution/reference v0.5.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/flanksource/gomplate/v3 v3.24.22 // indirect
-	github.com/flanksource/is-healthy v1.0.26 // indirect
+	github.com/flanksource/is-healthy v1.0.27 // indirect
 	github.com/flanksource/kubectl-neat v1.0.4 // indirect
-	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-logr/logr v1.4.1 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
