@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 )
@@ -137,6 +138,9 @@ func Update(props map[string]string) {
 func On(def bool, keys ...string) bool {
 	return Global.On(def, keys...)
 }
+func Duration(def time.Duration, keys ...string) time.Duration {
+	return Global.Duration(def, keys...)
+}
 
 func String(def string, keys ...string) string {
 	return Global.String(def, keys...)
@@ -159,6 +163,18 @@ func (p *Properties) String(def string, keys ...string) string {
 	for _, key := range keys {
 		if v := p.Get(key); v != "" {
 			return v
+		}
+	}
+	return def
+}
+
+func (p *Properties) Duration(def time.Duration, keys ...string) time.Duration {
+	for _, key := range keys {
+		if v := p.Get(key); v != "" {
+			if d, err := time.ParseDuration(v); err == nil {
+				return d
+			}
+			//FIXME: return the failed parsing up the stack
 		}
 	}
 	return def
