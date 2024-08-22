@@ -16,11 +16,17 @@ import (
 	"github.com/kr/pretty"
 	"github.com/lmittmann/tint"
 	"github.com/lrita/cmap"
+	"github.com/samber/lo"
+	"github.com/spf13/pflag"
 )
 
 var (
 	isTTY = is.TTY()
 )
+
+const rootName = "root"
+
+var logFlagset = pflag.NewFlagSet("logger", pflag.ContinueOnError)
 
 var namedLoggers cmap.Map[string, *SlogLogger]
 var todo = context.TODO()
@@ -42,10 +48,6 @@ func BrightF(msg string, args ...interface{}) string {
 }
 
 var SlogTraceLevel slog.Level = slog.LevelDebug - 1
-var SlogTraceLevel1 slog.Level = SlogTraceLevel - 1
-var SlogTraceLevel2 slog.Level = SlogTraceLevel - 2
-var SlogTraceLevel3 slog.Level = SlogTraceLevel - 3
-var SlogTraceLevel4 slog.Level = SlogTraceLevel - 4
 var SlogFatal = slog.LevelError + 1
 
 func GetSlogLogger() SlogLogger {
@@ -55,7 +57,7 @@ func GetSlogLogger() SlogLogger {
 func onPropertyUpdate(props *properties.Properties) {
 	for k, v := range props.GetAll() {
 		if k == "log.level" || k == "log.json" || k == "log.caller" || k == "log.color" {
-			root := New("root")
+			root := New(rootName)
 			existing := GetLogger()
 			(*existing).Logger = root.Logger
 		} else if k == "db.log.level" {
@@ -79,12 +81,20 @@ func New(prefix string) *SlogLogger {
 	// create a new slogger
 	var logger *SlogLogger
 	var lvl = &slog.LevelVar{}
-	var l any
 
 	reportCaller := properties.On(reportCaller, fmt.Sprintf("log.caller.%s", prefix), "log.caller")
 	logJson := properties.On(jsonLogs, "log.json")
 	logColor := properties.On(color, fmt.Sprintf("log.color.%s", prefix), "log.color")
-	logLevel := properties.String("", fmt.Sprintf("log.level.%s", prefix), "log.level")
+
+	var rootLevel string
+	cmdLineLevel := logFlagset.Lookup("loglevel")
+	if cmdLineLevel.Changed {
+		rootLevel = LogLevel(level).String()
+	} else {
+		rootLevel = properties.String("info", "log.level")
+	}
+	namedLevel := properties.String(rootLevel, "log.level."+prefix)
+
 	logStderr := properties.On(logToStderr, "log.stderr")
 	destination := os.Stdout
 	if logStderr {
@@ -114,17 +124,11 @@ func New(prefix string) *SlogLogger {
 		}
 	}
 
-	if logLevel != "" {
-		l = logLevel
-	} else {
-		l = level
-	}
-
-	if prefix != "" && prefix != "root" {
+	if prefix != "" && prefix != rootName {
 		logger.Prefix = prefix
 	}
 
-	logger.SetLogLevel(l)
+	logger.SetLogLevel(namedLevel)
 	return logger
 }
 func UseSlog() {
@@ -132,10 +136,20 @@ func UseSlog() {
 		return
 	}
 
-	root := New("root")
+	logFlagset = pflag.NewFlagSet("logger", pflag.ContinueOnError)
+	// standalone parsing of flags to ensure we always have the correct values
+	bindFlags(logFlagset)
+	logFlagset.ParseErrorsWhitelist.UnknownFlags = true
+	if err := logFlagset.Parse(os.Args[1:]); err != nil {
+		fmt.Println(err.Error())
+	}
+
+	fmt.Printf("level=%d json=%v color=%v caller=%v args=%s ", level, jsonLogs, color, reportCaller, strings.Join(os.Args[1:], " "))
+
+	root := New(rootName)
 
 	slog.SetDefault(root.Logger)
-	namedLoggers.Store("root", root)
+	namedLoggers.Store(rootName, root)
 	currentLogger = root
 
 	properties.RegisterListener(onPropertyUpdate)
@@ -156,7 +170,7 @@ func camelCaseWords(s string) []string {
 }
 
 func GetLogger(names ...string) *SlogLogger {
-	parent, _ := namedLoggers.Load("root")
+	parent, _ := namedLoggers.Load(rootName)
 	if len(names) == 0 {
 		return parent
 	}
@@ -230,12 +244,6 @@ func (s SlogLogger) Debugf(format string, args ...interface{}) {
 }
 
 func (s SlogLogger) handle(r slog.Record, format string, args ...interface{}) {
-	// caller := GetCaller(r.PC)
-	// if fileLogger, ok := namedLoggers.Load(caller); ok {
-	// 	if !fileLogger.IsLevelEnabled(FromSlogLevel(r.Level)) {
-	// 		return
-	// 	}
-	// }
 	if jsonLogs {
 		if s.Prefix != "" {
 			r.Add("logger", s.Prefix)
@@ -259,6 +267,10 @@ func (s SlogLogger) Tracef(format string, args ...interface{}) {
 
 func (s SlogLogger) Fatalf(format string, args ...interface{}) {
 	s.handle(slog.NewRecord(time.Now(), SlogFatal, "", CallerPC()), format, args...)
+}
+
+func (s SlogLogger) DebugLevels() {
+	s.Debugf("name=%s level=%d json=%v color=%v ", s.Prefix, s.GetLevel(), jsonLogs, color)
 }
 
 type slogVerbose struct {
@@ -287,6 +299,9 @@ func (s SlogLogger) V(level any) Verbose {
 }
 
 func ParseLevel(logger Logger, level any) LogLevel {
+	if lo.IsEmpty(level) {
+		return Info
+	}
 	switch v := level.(type) {
 	case slog.Level:
 		return FromSlogLevel(v)
@@ -295,12 +310,20 @@ func ParseLevel(logger Logger, level any) LogLevel {
 	case int:
 		return LogLevel(int(v))
 	case string:
+
+		// its a string e.g. "1"
 		if i, err := strconv.Atoi(v); err == nil {
 			return LogLevel(i)
 		}
-		switch strings.ToLower(v) {
-		case "trace":
-			return Trace
+
+		v = strings.ToLower(v)
+		// custom trace level e.g. trace7
+		if strings.HasPrefix(v, "trace") {
+			if i, err := strconv.Atoi(strings.TrimPrefix(v, "trace")); err == nil {
+				return LogLevel(int(Trace) + i)
+			}
+		}
+		switch v {
 		case "debug":
 			return Debug
 		case "info":
@@ -311,16 +334,14 @@ func ParseLevel(logger Logger, level any) LogLevel {
 			return Error
 		case "fatal":
 			return Fatal
-		case "trace1":
-			return Trace1
-		case "trace2":
-			return Trace2
-		case "trace3":
-			return Trace3
-		case "trace4":
-			return Trace4
+		case "trace":
+			return Trace
 		default:
-			logger.Warnf("invalid log level: %v", level)
+			if logger == nil {
+				fmt.Printf("invalid log level: %v\n", level)
+			} else {
+				logger.Warnf("invalid log level: %v", level)
+			}
 		}
 	default:
 		return ParseLevel(logger, fmt.Sprintf("%v", level))
@@ -339,55 +360,39 @@ func (s SlogLogger) IsLevelEnabled(level LogLevel) bool {
 
 func FromSlogLevel(level slog.Level) LogLevel {
 	switch level {
-	case SlogTraceLevel1:
-		return Trace1
-	case SlogTraceLevel2:
-		return Trace2
-	case SlogTraceLevel3:
-		return Trace3
-	case SlogTraceLevel4:
-		return Trace4
 	case SlogTraceLevel:
 		return Trace
 	case slog.LevelDebug:
 		return Debug
 	case slog.LevelWarn:
 		return Warn
+	case slog.LevelInfo:
+		return Info
 	case slog.LevelError:
 		return Error
 	}
-
-	return Info
+	return LogLevel(int(Trace) + (int(level)*-1 - int(SlogTraceLevel*-1)))
 }
+
 func (s SlogLogger) GetLevel() LogLevel {
 	return FromSlogLevel(s.Level.Level())
 }
 
 func (level LogLevel) Slog() slog.Level {
 	switch level {
-	case Trace1:
-		return SlogTraceLevel1
-	case Trace2:
-		return SlogTraceLevel2
-	case Trace3:
-		return SlogTraceLevel3
-	case Trace4:
-		return SlogTraceLevel4
-	case Trace:
-		return SlogTraceLevel
-	case Debug:
-		return slog.LevelDebug
 	case Info:
 		return slog.LevelInfo
 	case Warn:
 		return slog.LevelWarn
 	case Error:
 		return slog.LevelError
+	case Trace:
+		return SlogTraceLevel
 	case Fatal:
 		return SlogFatal
 	}
 
-	return slog.LevelInfo
+	return slog.Level(int(SlogTraceLevel) - int(level-Trace))
 }
 
 func (s SlogLogger) WithV(level any) Logger {
