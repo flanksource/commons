@@ -1,6 +1,9 @@
 package logger
 
-import "log/slog"
+import (
+	"fmt"
+	"log/slog"
+)
 
 type Logger interface {
 	Warnf(format string, args ...interface{})
@@ -51,14 +54,6 @@ func (l LogLevel) String() string {
 		return "debug"
 	case Trace:
 		return "trace"
-	case Trace1:
-		return "trace1"
-	case Trace2:
-		return "trace2"
-	case Trace3:
-		return "trace3"
-	case Trace4:
-		return "trace4"
 	case Info:
 		return "info"
 	case Warn:
@@ -70,7 +65,7 @@ func (l LogLevel) String() string {
 	case Silent:
 		return "silent"
 	}
-	return ""
+	return fmt.Sprintf("trace%d", l-Trace)
 }
 
 const (

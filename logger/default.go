@@ -22,7 +22,7 @@ func IsJsonLogs() bool {
 	return jsonLogs
 }
 
-func BindFlags(flags *pflag.FlagSet) {
+func bindFlags(flags *pflag.FlagSet) {
 	flags.CountVarP(&level, "loglevel", "v", "Increase logging level")
 	flags.BoolVar(&jsonLogs, "json-logs", false, "Print logs in json format to stderr")
 	flags.BoolVar(&color, "color", true, "Print logs using color")
@@ -30,6 +30,15 @@ func BindFlags(flags *pflag.FlagSet) {
 	flags.BoolVar(&logToStderr, "log-to-stderr", false, "Log to stderr instead of stdout")
 }
 
+// BindFlags add flags to an existing flag set,
+// note that this is not an actual binding which occurs later during initialization
+func BindFlags(flags *pflag.FlagSet) {
+	flags.CountP("loglevel", "v", "Increase logging level")
+	flags.Bool("json-logs", false, "Print logs in json format to stderr")
+	flags.Bool("color", true, "Print logs using color")
+	flags.Bool("report-caller", false, "Report log caller info")
+	flags.Bool("log-to-stderr", false, "Log to stderr instead of stdout")
+}
 func BindGoFlags() {
 	flag.IntVar(&level, "v", 0, "Increase logging level")
 	flag.BoolVar(&jsonLogs, "json-logs", false, "Print logs in json format to stderr")
@@ -98,6 +107,10 @@ func StandardLogger() Logger {
 	return currentLogger
 }
 
+// PrintableSecret returns an approximation of a secret, so that it is possible to compare the secrets rudimentally
+// e.g. for "john-doe-jane" it will return ***e
+// Secrets smaller than 10 characters will always return ***
+// These secrets
 func PrintableSecret(secret string) string {
 	if len(secret) == 0 {
 		return "<nil>"
