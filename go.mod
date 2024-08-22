@@ -51,7 +51,7 @@ require (
 	github.com/distribution/reference v0.5.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/flanksource/gomplate/v3 v3.24.23 // indirect
-	github.com/flanksource/is-healthy v1.0.27 // indirect
+	github.com/flanksource/is-healthy v1.0.28 // indirect
 	github.com/flanksource/kubectl-neat v1.0.4 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-logr/logr v1.4.1 // indirect
