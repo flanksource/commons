@@ -259,6 +259,7 @@ func (s SlogLogger) Tracef(format string, args ...interface{}) {
 
 func (s SlogLogger) Fatalf(format string, args ...interface{}) {
 	s.handle(slog.NewRecord(time.Now(), SlogFatal, "", CallerPC()), format, args...)
+	os.Exit(1)
 }
 
 type slogVerbose struct {
