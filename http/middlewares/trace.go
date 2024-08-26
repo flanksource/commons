@@ -5,6 +5,7 @@ import (
 	"io"
 	netHttp "net/http"
 
+	"github.com/flanksource/commons/logger"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -143,7 +144,7 @@ func (t *traceTransport) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundTrip
 		)
 
 		if t.Config.Headers {
-			for key, values := range SanitizeHeaders(req.Header, t.Config.RedactedHeaders...) {
+			for key, values := range logger.SanitizeHeaders(req.Header, t.Config.RedactedHeaders...) {
 				for _, value := range values {
 					span.SetAttributes(attribute.String("request.header."+key, value))
 				}
@@ -172,7 +173,7 @@ func (t *traceTransport) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundTrip
 		}
 
 		if t.Config.ResponseHeaders {
-			for key, values := range SanitizeHeaders(resp.Header, t.Config.RedactedHeaders...) {
+			for key, values := range logger.SanitizeHeaders(resp.Header, t.Config.RedactedHeaders...) {
 				for _, value := range values {
 					span.SetAttributes(attribute.String("response.header."+key, value))
 				}

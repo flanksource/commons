@@ -3,47 +3,73 @@ package logger
 import (
 	"crypto/md5"
 	"encoding/hex"
-	"flag"
 	"fmt"
+	"os"
+	"regexp"
 	"strings"
 
 	"github.com/spf13/pflag"
 )
 
 var currentLogger Logger
-var color, reportCaller, jsonLogs, logToStderr bool
-var level int
+var flags = &flagSet{}
+
+type flagSet struct {
+	color, reportCaller, jsonLogs, logToStderr bool
+	level                                      string
+}
+
+func (f flagSet) String() string {
+	return fmt.Sprintf("level=%v json=%v color=%v caller=%v stderr=%v", f.level, f.jsonLogs, f.color, f.reportCaller, f.logToStderr)
+}
+
+func (f *flagSet) bindFlags(flags *pflag.FlagSet) {
+	_ = flags.CountP("log-level", "v", "Increase logging level")
+	flags.BoolVar(&f.jsonLogs, "json-logs", false, "Print logs in json format to stderr")
+	flags.BoolVar(&f.color, "color", true, "Print logs using color")
+	flags.BoolVar(&f.reportCaller, "report-caller", false, "Report log caller info")
+	flags.BoolVar(&f.logToStderr, "log-to-stderr", false, "Log to stderr instead of stdout")
+}
+
+func (f *flagSet) Parse() error {
+	logFlagset := pflag.NewFlagSet("logger", pflag.ContinueOnError)
+	// standalone parsing of flags to ensure we always have the correct values
+	f.bindFlags(logFlagset)
+	logFlagset.ParseErrorsWhitelist.UnknownFlags = true
+	if err := logFlagset.Parse(os.Args[1:]); err != nil {
+		return err
+	}
+	for _, arg := range os.Args[1:] {
+		if strings.HasPrefix(arg, "-v") {
+			if strings.Contains(arg, "=") {
+				f.level = arg[3:]
+			} else if ok, _ := regexp.MatchString("-v{1,}", arg); ok {
+				f.level = fmt.Sprintf("%d", len(arg)-1)
+			} else {
+				f.level = arg[2:]
+			}
+		}
+	}
+	return nil
+}
 
 func init() {
 	UseSlog()
 }
 
 func IsJsonLogs() bool {
-	return jsonLogs
-}
-
-func bindFlags(flags *pflag.FlagSet) {
-	flags.CountVarP(&level, "loglevel", "v", "Increase logging level")
-	flags.BoolVar(&jsonLogs, "json-logs", false, "Print logs in json format to stderr")
-	flags.BoolVar(&color, "color", true, "Print logs using color")
-	flags.BoolVar(&reportCaller, "report-caller", false, "Report log caller info")
-	flags.BoolVar(&logToStderr, "log-to-stderr", false, "Log to stderr instead of stdout")
+	return flags.jsonLogs
 }
 
 // BindFlags add flags to an existing flag set,
 // note that this is not an actual binding which occurs later during initialization
 func BindFlags(flags *pflag.FlagSet) {
 	flags.CountP("loglevel", "v", "Increase logging level")
+	flags.String("log-level", "info", "Set the default log level")
 	flags.Bool("json-logs", false, "Print logs in json format to stderr")
 	flags.Bool("color", true, "Print logs using color")
 	flags.Bool("report-caller", false, "Report log caller info")
 	flags.Bool("log-to-stderr", false, "Log to stderr instead of stdout")
-}
-func BindGoFlags() {
-	flag.IntVar(&level, "v", 0, "Increase logging level")
-	flag.BoolVar(&jsonLogs, "json-logs", false, "Print logs in json format to stderr")
-	flag.BoolVar(&color, "color", true, "Print logs using color")
-	flag.BoolVar(&reportCaller, "report-caller", false, "Report log caller info")
 }
 
 func Warnf(format string, args ...interface{}) {
@@ -113,12 +139,14 @@ func StandardLogger() Logger {
 // These secrets
 func PrintableSecret(secret string) string {
 	if len(secret) == 0 {
-		return "<nil>"
-	} else if len(secret) > 30 {
+		return ""
+	} else if len(secret) > 64 {
 		sum := md5.Sum([]byte(secret))
 		hash := hex.EncodeToString(sum[:])
 		return fmt.Sprintf("md5(%s),length=%d", hash[0:8], len(secret))
-	} else if len(secret) > 16 {
+	} else if len(secret) > 32 {
+		return fmt.Sprintf("%s****%s", secret[0:3], secret[len(secret)-1:])
+	} else if len(secret) >= 16 {
 		return fmt.Sprintf("%s****%s", secret[0:1], secret[len(secret)-2:])
 	} else if len(secret) > 10 {
 		return fmt.Sprintf("****%s", secret[len(secret)-1:])

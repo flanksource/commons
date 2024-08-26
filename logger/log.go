@@ -2,6 +2,7 @@ package logger
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 )
 
@@ -28,7 +29,9 @@ type Logger interface {
 }
 
 type Verbose interface {
+	io.Writer
 	Infof(format string, args ...interface{})
+	WithFilter(filters ...string) Verbose
 	Enabled() bool
 }
 

@@ -1,4 +1,4 @@
-package middlewares
+package logger
 
 import (
 	"net/http"
