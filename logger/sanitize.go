@@ -1,4 +1,4 @@
-package middlewares
+package logger
 
 import (
 	"net/http"
@@ -6,7 +6,7 @@ import (
 	"github.com/flanksource/commons/collections"
 )
 
-var commonRedactedHeaders = []string{
+var CommonRedactedHeaders = []string{
 	"Authorization*", "Bearer*", "Session*", "*Cookie", "*Token", "*-Secret", "*-Key",
 	"Password", "Passwd", "Pwd",
 }
@@ -16,7 +16,7 @@ const redactedString = "██████████████████�
 func SanitizeHeaders(headers http.Header, redactedHeaders ...string) http.Header {
 	var redacted = http.Header{}
 
-	redactedHeaders = append(redactedHeaders, commonRedactedHeaders...)
+	redactedHeaders = append(redactedHeaders, CommonRedactedHeaders...)
 
 	for key, values := range headers {
 		key = http.CanonicalHeaderKey(key)

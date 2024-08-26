@@ -26,8 +26,6 @@ var (
 
 const rootName = "root"
 
-var logFlagset = pflag.NewFlagSet("logger", pflag.ContinueOnError)
-
 var namedLoggers cmap.Map[string, *SlogLogger]
 var todo = context.TODO()
 
@@ -41,7 +39,7 @@ func GetNamedLoggingLevels() (levels map[string]string) {
 }
 
 func BrightF(msg string, args ...interface{}) string {
-	if isTTY && color && !jsonLogs {
+	if isTTY && flags.color && !IsJsonLogs() {
 		return DarkWhite + fmt.Sprintf(msg, args...) + Reset
 	}
 	return fmt.Sprintf(msg, args...)
@@ -56,18 +54,19 @@ func GetSlogLogger() SlogLogger {
 
 func onPropertyUpdate(props *properties.Properties) {
 	for k, v := range props.GetAll() {
-		if k == "log.level" || k == "log.json" || k == "log.caller" || k == "log.color" {
-			root := New(rootName)
-			existing := GetLogger()
-			(*existing).Logger = root.Logger
-		} else if k == "db.log.level" {
+		if k == "db.log.level" {
 			GetLogger("db").SetLogLevel(v)
 		} else if strings.HasPrefix(k, "log.level") {
 			name := strings.TrimPrefix(k, "log.level.")
 			named := GetLogger(strings.Split(name, ".")...)
+			if name == "http" {
+				named.Infof("Logging http client requests")
+				http.DefaultTransport = NewHttpLogger(named, http.DefaultTransport)
+				http.DefaultClient = &http.Client{Transport: http.DefaultTransport}
+			}
 			named.SetLogLevel(v)
-		} else if k == "log.report.caller" {
-			reportCaller, _ = strconv.ParseBool(v)
+		} else if k == "log.report.caller" || k == "log.caller" {
+			flags.reportCaller, _ = strconv.ParseBool(v)
 		}
 	}
 
@@ -82,28 +81,26 @@ func New(prefix string) *SlogLogger {
 	var logger *SlogLogger
 	var lvl = &slog.LevelVar{}
 
-	reportCaller := properties.On(reportCaller, fmt.Sprintf("log.caller.%s", prefix), "log.caller")
-	logJson := properties.On(jsonLogs, "log.json")
-	logColor := properties.On(color, fmt.Sprintf("log.color.%s", prefix), "log.color")
+	reportCaller := properties.On(flags.reportCaller, fmt.Sprintf("log.caller.%s", prefix), "log.caller")
+	logJson := properties.On(flags.jsonLogs, "log.json")
+	logColor := properties.On(flags.color, fmt.Sprintf("log.color.%s", prefix), "log.color")
 
 	var rootLevel string
-	cmdLineLevel := logFlagset.Lookup("loglevel")
-	if cmdLineLevel.Changed {
-		rootLevel = LogLevel(level).String()
+	if flags.level != "" {
+		rootLevel = flags.level
 	} else {
 		rootLevel = properties.String("info", "log.level")
 	}
 	namedLevel := properties.String(rootLevel, "log.level."+prefix)
 
-	logStderr := properties.On(logToStderr, "log.stderr")
+	logStderr := properties.On(flags.logToStderr, "log.stderr")
 	destination := os.Stdout
 	if logStderr {
 		destination = os.Stderr
 	}
-
 	if logJson {
-		color = false
-		jsonLogs = true
+		flags.color = false
+		flags.jsonLogs = true
 		logger = &SlogLogger{
 			Level: lvl,
 			Logger: slog.New(slog.NewJSONHandler(destination, &slog.HandlerOptions{
@@ -129,6 +126,8 @@ func New(prefix string) *SlogLogger {
 	}
 
 	logger.SetLogLevel(namedLevel)
+
+	// logger.V(4).Infof("new logger created name=%v flags=%s level=%s", prefix, flags.level, FromSlogLevel(lvl.Level()).String())
 	return logger
 }
 func UseSlog() {
@@ -136,15 +135,9 @@ func UseSlog() {
 		return
 	}
 
-	logFlagset = pflag.NewFlagSet("logger", pflag.ContinueOnError)
-	// standalone parsing of flags to ensure we always have the correct values
-	bindFlags(logFlagset)
-	logFlagset.ParseErrorsWhitelist.UnknownFlags = true
-	if err := logFlagset.Parse(os.Args[1:]); err != nil {
-		fmt.Println(err.Error())
+	if err := flags.Parse(); err != nil {
+		fmt.Printf("error parsing flags: %v\n", err)
 	}
-
-	fmt.Printf("level=%d json=%v color=%v caller=%v args=%s ", level, jsonLogs, color, reportCaller, strings.Join(os.Args[1:], " "))
 
 	root := New(rootName)
 
@@ -157,16 +150,17 @@ func UseSlog() {
 
 func camelCaseWords(s string) []string {
 	var result strings.Builder
+	var last rune
 	for _, r := range s {
-		if unicode.IsUpper(r) {
+		if unicode.IsUpper(r) && !unicode.IsUpper(last) {
 			result.WriteRune(' ')
 			result.WriteRune(r)
-
 		} else {
 			result.WriteRune(r)
 		}
+		last = r
 	}
-	return strings.Fields(result.String())
+	return lo.Map(strings.Fields(result.String()), func(s string, _ int) string { return strings.TrimSpace(s) })
 }
 
 func GetLogger(names ...string) *SlogLogger {
@@ -336,6 +330,8 @@ func ParseLevel(logger Logger, level any) LogLevel {
 			return Fatal
 		case "trace":
 			return Trace
+		case "silent":
+			return Silent
 		default:
 			if logger == nil {
 				fmt.Printf("invalid log level: %v\n", level)

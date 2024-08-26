@@ -10,6 +10,11 @@ import (
 
 var log = StandardLogger()
 var _ = ginkgo.Describe("LogLevel Parsing", func() {
+
+	ginkgo.It("Default log level", func() {
+		gomega.Expect(GetLogger().GetLevel()).To(gomega.Equal(Info))
+	})
+
 	ginkgo.DescribeTable("parsing log levels from text",
 		func(input string, expected LogLevel) {
 			level := ParseLevel(log, input)

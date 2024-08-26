@@ -3,10 +3,9 @@ package collections
 import (
 	"encoding/base64"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
-
-	"github.com/flanksource/commons/files"
 )
 
 // ToGenericMap converts a map[string]string to a map[string]interface{}
@@ -123,8 +122,13 @@ func MapToIni(Map map[string]string) string {
 // IniToMap takes the path to an INI formatted file and transforms it into a map
 func IniToMap(path string) map[string]string {
 	result := make(map[string]string)
-	ini := files.SafeRead(path)
-	for _, line := range strings.Split(ini, "\n") {
+
+	ini, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+
+	for _, line := range strings.Split(string(ini), "\n") {
 		values := strings.Split(line, "=")
 		if len(values) == 2 {
 			result[values[0]] = values[1]
