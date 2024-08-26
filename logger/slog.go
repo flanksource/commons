@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -17,7 +18,6 @@ import (
 	"github.com/lmittmann/tint"
 	"github.com/lrita/cmap"
 	"github.com/samber/lo"
-	"github.com/spf13/pflag"
 )
 
 var (
@@ -238,15 +238,19 @@ func (s SlogLogger) Debugf(format string, args ...interface{}) {
 }
 
 func (s SlogLogger) handle(r slog.Record, format string, args ...interface{}) {
-	if jsonLogs {
+	s.handleRaw(r, fmt.Sprintf(format, args...))
+}
+
+func (s SlogLogger) handleRaw(r slog.Record, msg string) {
+	if IsJsonLogs() {
 		if s.Prefix != "" {
 			r.Add("logger", s.Prefix)
 		}
-		r.Message = fmt.Sprintf(format, args...)
+		r.Message = msg
 	} else if s.Prefix != "" {
-		r.Message = fmt.Sprintf(fmt.Sprintf("(%s) ", BrightF(s.Prefix))+format, args...)
+		r.Message = fmt.Sprintf(fmt.Sprintf("(%s) ", BrightF(s.Prefix)) + msg)
 	} else {
-		r.Message = fmt.Sprintf(format, args...)
+		r.Message = msg
 	}
 	_ = s.Logger.Handler().Handle(context.Background(), r)
 }
@@ -264,12 +268,46 @@ func (s SlogLogger) Fatalf(format string, args ...interface{}) {
 }
 
 func (s SlogLogger) DebugLevels() {
-	s.Debugf("name=%s level=%d json=%v color=%v ", s.Prefix, s.GetLevel(), jsonLogs, color)
+	s.Debugf("name=%s level=%d json=%v color=%v ", s.Prefix, s.GetLevel(), IsJsonLogs(), flags.color)
 }
 
 type slogVerbose struct {
 	SlogLogger
-	level slog.Level
+	level   slog.Level
+	filters []string
+}
+
+func (v slogVerbose) WithFilter(filters ...string) Verbose {
+	v.filters = filters
+	return v
+}
+
+func (v slogVerbose) isFiltered(line string) bool {
+	if len(strings.TrimSpace(line)) == 0 {
+		return true
+	}
+	for _, filter := range v.filters {
+		if strings.Contains(line, filter) {
+			return true
+		}
+	}
+	return false
+}
+
+func (v slogVerbose) Write(p []byte) (n int, err error) {
+	if !v.Logger.Enabled(todo, v.level) {
+		return
+	}
+
+	for _, line := range strings.Split(string(p), "\n") {
+		if v.isFiltered(line) {
+			continue
+		}
+
+		v.handleRaw(slog.NewRecord(time.Now(), v.level, "", CallerPC()), line)
+	}
+
+	return len(p), nil
 }
 
 func (v slogVerbose) Infof(format string, args ...interface{}) {
@@ -278,7 +316,6 @@ func (v slogVerbose) Infof(format string, args ...interface{}) {
 	}
 
 	v.handle(slog.NewRecord(time.Now(), v.level, "", CallerPC()), format, args...)
-
 }
 
 func (v slogVerbose) Enabled() bool {
@@ -436,6 +473,15 @@ func (s SlogLogger) IsDebugEnabled() bool {
 }
 
 func Pretty(v any) string {
+	switch v := v.(type) {
+	case map[string]any:
+		for _, k := range lo.Keys(v) {
+			if lo.IsEmpty(v[k]) {
+				delete(v, k)
+			}
+		}
+	}
+
 	b, _ := json.MarshalIndent(v, "  ", "  ")
 	return strings.TrimSpace(string(b))
 }

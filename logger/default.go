@@ -40,6 +40,8 @@ func (f *flagSet) Parse() error {
 		return err
 	}
 	for _, arg := range os.Args[1:] {
+		// FIXME there seems to be a race condition where pflag
+		// will return a count that does not match the actual number of -v flags
 		if strings.HasPrefix(arg, "-v") {
 			if strings.Contains(arg, "=") {
 				f.level = arg[3:]
