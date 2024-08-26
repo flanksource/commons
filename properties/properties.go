@@ -13,7 +13,10 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/spf13/pflag"
 )
+
+var commandlineProperties map[string]string
 
 var Global = &Properties{
 	m: make(map[string]string),
@@ -21,6 +24,10 @@ var Global = &Properties{
 
 var LoadFile = func(filename string) error {
 	return Global.LoadFile(filename)
+}
+
+func BindFlags(flags *pflag.FlagSet) {
+	flags.StringToStringVarP(&commandlineProperties, "properties", "P", nil, "System properties")
 }
 
 type Properties struct {
@@ -53,10 +60,17 @@ func (p *Properties) GetAll() map[string]string {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 	m := p.m
+	for k, v := range commandlineProperties {
+		m[k] = v
+	}
 	return m
 }
 
 func (p *Properties) Get(key string) string {
+	if v, ok := commandlineProperties[key]; ok {
+		return v
+	}
+
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 	return p.m[key]
@@ -81,6 +95,7 @@ func (p *Properties) LoadFile(filename string) error {
 	file, err := os.Open(filename)
 	if errors.Is(err, os.ErrNotExist) {
 		slog.Warn(fmt.Sprintf("%s does not exist", filename))
+		p.Update(commandlineProperties)
 		return nil
 	} else if err != nil {
 		return err
@@ -113,6 +128,10 @@ func (p *Properties) LoadFile(filename string) error {
 
 	if scanner.Err() != nil {
 		return scanner.Err()
+	}
+
+	for k, v := range commandlineProperties {
+		props[k] = v
 	}
 	p.Update(props)
 
