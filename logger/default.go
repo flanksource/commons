@@ -39,13 +39,15 @@ func (f *flagSet) Parse() error {
 	if err := logFlagset.Parse(os.Args[1:]); err != nil {
 		return err
 	}
+
+	re, _ := regexp.Compile("-v{1,}")
 	for _, arg := range os.Args[1:] {
 		// FIXME there seems to be a race condition where pflag
 		// will return a count that does not match the actual number of -v flags
 		if strings.HasPrefix(arg, "-v") {
 			if strings.Contains(arg, "=") {
 				f.level = arg[3:]
-			} else if ok, _ := regexp.MatchString("-v{1,}", arg); ok {
+			} else if ok := re.MatchString(arg); ok {
 				f.level = fmt.Sprintf("%d", len(arg)-1)
 			} else {
 				f.level = arg[2:]

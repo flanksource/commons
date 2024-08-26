@@ -225,7 +225,10 @@ func (p *Properties) Watch() func() {
 
 		for e := range watcher.Events {
 			if e.Name == p.filename && e.Op != fsnotify.Chmod {
-				p.LoadFile(p.filename)
+				if err := p.LoadFile(p.filename); err != nil {
+					fmt.Printf("Error reloading %s: %s\n", p.filename, err)
+				}
+
 			}
 		}
 	}()
