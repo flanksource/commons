@@ -41,6 +41,7 @@ const (
 )
 
 // ByteSize returns a human-readable byte string of the form 10M, 12.5K, and so forth.  The following units are available:
+//
 //	E: Exabyte
 //	P: Petabyte
 //	T: Terabyte
@@ -48,6 +49,7 @@ const (
 //	M: Megabyte
 //	K: Kilobyte
 //	B: Byte
+//
 // The unit that results in the smallest number greater than or equal to 1 is always chosen.
 // Input is the size in bytes.
 func HumanizeBytes(size interface{}) string {
@@ -96,6 +98,54 @@ func HumanizeBytes(size interface{}) string {
 		unit = "B"
 	case bytes == 0:
 		return "0B"
+	}
+
+	result := strconv.FormatFloat(value, 'f', 1, 64)
+	result = strings.TrimSuffix(result, ".0")
+	return result + unit
+}
+
+const (
+	KILO = 1000
+	MEGA = 1000 * KILO
+	GIGA = 1000 * MEGA
+)
+
+func HumanizeInt(size interface{}) string {
+	unit := ""
+	var val uint64
+	var err error
+	switch t := size.(type) {
+	case uint:
+		val = uint64(t)
+	case uint64:
+		val = t
+	case int:
+		val = uint64(t)
+	case int64:
+		val = uint64(t)
+	case string:
+		val, err = strconv.ParseUint(t, 10, 64)
+		if err != nil {
+			logger.Debugf("error converting string to bytes: %v", err)
+			return ""
+		}
+	}
+
+	value := float64(val)
+
+	switch {
+	case val >= GIGA:
+		unit = "b"
+		value = value / GIGA
+	case val >= MEGA:
+		unit = "b"
+		value = value / MEGA
+	case val >= KILO:
+		unit = "k"
+		value = value / KILO
+	case val == 0:
+		return "0"
 	}
 
 	result := strconv.FormatFloat(value, 'f', 1, 64)

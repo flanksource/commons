@@ -28,6 +28,18 @@ type Duration time.Duration
 // week lose granularity and are truncated to resp. days-hours-minutes and
 // weeks-days-hours. The zero duration formats as 0s.
 func (d Duration) String() string {
+
+	if d.Hours() > 24*7 {
+		d = d - d%Duration(time.Hour)
+	} else if d.Hours() > 24 {
+		d = d - d%Duration(time.Minute)
+	} else if d.Minutes() > 2 {
+		d = d - d%Duration(time.Second)
+	} else if d.Seconds() > 2 {
+		d = d - d%Duration(time.Millisecond)
+	} else if d.Nanoseconds() > 2*1000*1000 {
+		d = d - d%Duration(time.Microsecond)
+	}
 	// Largest time is 2540400h10m10.000000000s
 	var buf [32]byte
 	w := len(buf)

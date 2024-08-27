@@ -12,9 +12,12 @@ func TestHumanizeDuration(t *testing.T) {
 	}{
 		{5 * time.Nanosecond, "5ns"},
 		{5 * time.Millisecond, "5ms"},
+		{1250 * time.Millisecond, "1.25s"},
+		{121*time.Second + 250*time.Millisecond, "2m1s"},
+
 		{5 * time.Second, "5s"},
-		{75 * time.Second, "1m15s"},
-		{121 * time.Second, "2m1s"},
+		{75*time.Second + 250*time.Millisecond, "1m15.25s"},
+		{121*time.Second + 250*time.Millisecond, "2m1s"},
 		{431 * time.Second, "7m11s"},
 		{65 * time.Minute, "1h5m"},
 		{125 * time.Minute, "2h5m"},
