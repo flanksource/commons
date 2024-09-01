@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -158,10 +159,15 @@ func PrintableSecret(secret string) string {
 	return "****"
 }
 
-// StripSecrets takes a YAML or INI formatted text and removes any potentially secret data
+// StripSecrets takes a URL, YAML or INI formatted text and removes any potentially secret data
 // as denoted by keys containing "pass" or "secret" or exact matches for "key"
 // the last character of the secret is kept to aid in troubleshooting
 func StripSecrets(text string) string {
+
+	if uri, err := url.Parse(text); err == nil {
+		return uri.Redacted()
+	}
+
 	out := ""
 	for _, line := range strings.Split(text, "\n") {
 
