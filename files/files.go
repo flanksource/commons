@@ -5,19 +5,16 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
-	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/flanksource/commons/logger"
-	"github.com/hashicorp/go-getter"
 	"github.com/ulikunitz/xz"
 )
 
@@ -334,45 +331,6 @@ func GetBaseName(filename string) string {
 		return filename
 	}
 	return strings.Join(parts[0:len(parts)-1], ".")
-}
-
-// Getter gets a directory or file using the Hashicorp go-getter library
-// See https://github.com/hashicorp/go-getter
-func Getter(url, dst string) error {
-	pwd, _ := os.Getwd()
-
-	stashed := false
-	if Exists(dst + "/.git") {
-		cmd := exec.Command("git", "stash")
-		cmd.Dir = pwd
-
-		cmd.Dir = dst
-		cmd.Stderr = os.Stderr
-		cmd.Stdout = os.Stdout
-
-		if err := cmd.Run(); err == nil {
-			stashed = true
-		}
-
-	}
-	client := &getter.Client{
-		Ctx:     context.TODO(),
-		Src:     url,
-		Dst:     dst,
-		Pwd:     pwd,
-		Mode:    getter.ClientModeDir,
-		Options: []getter.ClientOption{},
-	}
-	logger.Infof("Downloading %s -> %s", url, dst)
-	err := client.Get()
-	if stashed {
-		cmd := exec.Command("git", "stash", "pop")
-		cmd.Dir = dst
-		cmd.Stderr = os.Stderr
-		cmd.Stdout = os.Stdout
-		return cmd.Run()
-	}
-	return err
 }
 
 // TempFileName generates a temporary filename for
