@@ -43,7 +43,7 @@ require (
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/distribution/reference v0.5.0 // indirect
-	github.com/flanksource/gomplate/v3 v3.24.29 // indirect
+	github.com/flanksource/gomplate/v3 v3.24.30 // indirect
 	github.com/flanksource/is-healthy v1.0.31 // indirect
 	github.com/flanksource/kubectl-neat v1.0.4 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
@@ -72,11 +72,13 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/ohler55/ojg v1.20.2 // indirect
+	github.com/oklog/ulid/v2 v2.1.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
 	github.com/robertkrimen/otto v0.2.1 // indirect
 	github.com/rogpeppe/go-internal v1.12.0 // indirect
+	github.com/samber/oops v1.13.1 // indirect
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
 	github.com/spf13/cobra v1.7.0 // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
