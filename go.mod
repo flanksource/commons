@@ -1,8 +1,7 @@
 module github.com/flanksource/commons
 
 go 1.21
-
-toolchain go1.21.5
+toolchain go1.22.5
 
 require (
 	github.com/Snawoot/go-http-digest-auth-client v1.1.3
@@ -26,10 +25,10 @@ require (
 	github.com/ulikunitz/xz v0.5.12
 	github.com/vadimi/go-http-ntlm v1.0.3
 	github.com/vadimi/go-http-ntlm/v2 v2.4.1
-	go.opentelemetry.io/otel v1.21.0
+	go.opentelemetry.io/otel v1.30.0
 	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.21.0
 	go.opentelemetry.io/otel/sdk v1.21.0
-	go.opentelemetry.io/otel/trace v1.21.0
+	go.opentelemetry.io/otel/trace v1.30.0
 	golang.org/x/crypto v0.27.0
 	golang.org/x/oauth2 v0.15.0
 	golang.org/x/sync v0.8.0
@@ -92,7 +91,7 @@ require (
 	github.com/vadimi/go-ntlm v1.2.1 // indirect
 	github.com/yuin/gopher-lua v1.1.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
-	go.opentelemetry.io/otel/metric v1.21.0 // indirect
+	go.opentelemetry.io/otel/metric v1.30.0 // indirect
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
 	golang.org/x/net v0.29.0 // indirect
 	golang.org/x/sys v0.25.0 // indirect
