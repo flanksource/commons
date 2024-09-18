@@ -2,6 +2,7 @@ package net
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -39,7 +40,7 @@ func GET(url string, args ...interface{}) ([]byte, error) {
 		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return body, fmt.Errorf(resp.Status)
+		return body, errors.New(resp.Status)
 	}
 	return body, nil
 }
@@ -53,7 +54,7 @@ func Download(url, path string) error {
 	logger.Tracef("Download %s [%d]-> %s\n", url, resp.StatusCode, path)
 
 	if resp.StatusCode != 200 {
-		return fmt.Errorf(resp.Status)
+		return errors.New(resp.Status)
 	}
 	defer resp.Body.Close()
 	out, err := os.Create(path)

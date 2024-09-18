@@ -475,13 +475,52 @@ func (s SlogLogger) IsDebugEnabled() bool {
 func Pretty(v any) string {
 	switch v := v.(type) {
 	case map[string]any:
-		for _, k := range lo.Keys(v) {
-			if lo.IsEmpty(v[k]) {
-				delete(v, k)
-			}
-		}
+		walkMap(v, maskSensitive)
 	}
 
 	b, _ := json.MarshalIndent(v, "  ", "  ")
 	return strings.TrimSpace(string(b))
+}
+
+func maskSensitive(key string, v any) any {
+	switch v.(type) {
+	case string:
+		if IsSensitiveKey(key) {
+			return "****"
+		}
+	}
+
+	return v
+}
+
+var SensitiveKeys = []string{"user", "pass", "key", "token", "username", "password"}
+
+func IsSensitiveKey(v string) bool {
+	v = strings.Trim(strings.TrimSpace(strings.ToLower(v)), "_")
+	for _, k := range SensitiveKeys {
+		if v == k || strings.Contains(v, k) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func walkMap(m map[string]any, replacer func(key string, val any) any) map[string]any {
+	for k, v := range m {
+		if lo.IsEmpty(v) {
+			delete(m, k)
+			continue
+		}
+
+		switch v := v.(type) {
+		case string:
+			m[k] = replacer(k, v)
+
+		case map[string]any:
+			walkMap(v, replacer)
+		}
+	}
+
+	return m
 }
