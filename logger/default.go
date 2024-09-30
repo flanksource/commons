@@ -1,10 +1,7 @@
 package logger
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"fmt"
-	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -136,70 +133,4 @@ func SetLogger(logger Logger) {
 
 func StandardLogger() Logger {
 	return currentLogger
-}
-
-// PrintableSecret returns an approximation of a secret, so that it is possible to compare the secrets rudimentally
-// e.g. for "john-doe-jane" it will return ***e
-// Secrets smaller than 10 characters will always return ***
-// These secrets
-func PrintableSecret(secret string) string {
-	if len(secret) == 0 {
-		return ""
-	} else if len(secret) > 64 {
-		sum := md5.Sum([]byte(secret))
-		hash := hex.EncodeToString(sum[:])
-		return fmt.Sprintf("md5(%s),length=%d", hash[0:8], len(secret))
-	} else if len(secret) > 32 {
-		return fmt.Sprintf("%s****%s", secret[0:3], secret[len(secret)-1:])
-	} else if len(secret) >= 16 {
-		return fmt.Sprintf("%s****%s", secret[0:1], secret[len(secret)-2:])
-	} else if len(secret) > 10 {
-		return fmt.Sprintf("****%s", secret[len(secret)-1:])
-	}
-	return "****"
-}
-
-// StripSecrets takes a URL, YAML or INI formatted text and removes any potentially secret data
-// as denoted by keys containing "pass" or "secret" or exact matches for "key"
-// the last character of the secret is kept to aid in troubleshooting
-func StripSecrets(text string) string {
-
-	if uri, err := url.Parse(text); err == nil {
-		return uri.Redacted()
-	}
-
-	out := ""
-	for _, line := range strings.Split(text, "\n") {
-
-		var k, v, sep string
-		if strings.Contains(line, ":") {
-			parts := strings.Split(line, ":")
-			k = parts[0]
-			if len(parts) > 1 {
-				v = parts[1]
-			}
-			sep = ":"
-		} else if strings.Contains(line, "=") {
-			parts := strings.Split(line, "=")
-			k = parts[0]
-			if len(parts) > 1 {
-				v = parts[1]
-			}
-			sep = "="
-		} else {
-			v = line
-		}
-
-		if strings.Contains(k, "pass") || strings.Contains(k, "secret") || strings.Contains(k, "_key") || strings.TrimSpace(k) == "key" || strings.TrimSpace(k) == "token" {
-			if len(v) == 0 {
-				out += k + sep + "\n"
-			} else {
-				out += k + sep + "****" + v[len(v)-1:] + "\n"
-			}
-		} else {
-			out += k + sep + v + "\n"
-		}
-	}
-	return out
-
 }

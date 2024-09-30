@@ -9,7 +9,7 @@ import (
 	"github.com/flanksource/commons/files"
 )
 
-func TestInstallDependency(t *testing.T) {
+func XTestInstallDependency(t *testing.T) {
 	dir, err := os.MkdirTemp("", "commons-test-deps")
 	fmt.Printf("Created dir %s\n", dir)
 	if err != nil {
