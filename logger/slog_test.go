@@ -78,7 +78,8 @@ func Test_walkMap(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := walkMap(tt.args, maskSensitive); !reflect.DeepEqual(got, tt.want) {
+
+			if got := StripSecretsFromMap(tt.args); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("walkMap() = %v, want %v", got, tt.want)
 			}
 		})
