@@ -2,7 +2,6 @@ package logger
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -152,7 +151,7 @@ func camelCaseWords(s string) []string {
 	var result strings.Builder
 	var last rune
 	for _, r := range s {
-		if unicode.IsUpper(r) && !unicode.IsUpper(last) {
+		if unicode.IsUpper(r) && !unicode.IsUpper(last) && result.Len() > 0 {
 			result.WriteRune(' ')
 			result.WriteRune(r)
 		} else {
@@ -238,7 +237,11 @@ func (s SlogLogger) Debugf(format string, args ...interface{}) {
 }
 
 func (s SlogLogger) handle(r slog.Record, format string, args ...interface{}) {
-	s.handleRaw(r, fmt.Sprintf(format, args...))
+	if len(args) == 0 {
+		s.handleRaw(r, format)
+	} else {
+		s.handleRaw(r, fmt.Sprintf(format, args...))
+	}
 }
 
 func (s SlogLogger) handleRaw(r slog.Record, msg string) {
@@ -248,7 +251,7 @@ func (s SlogLogger) handleRaw(r slog.Record, msg string) {
 		}
 		r.Message = msg
 	} else if s.Prefix != "" {
-		r.Message = fmt.Sprintf(fmt.Sprintf("(%s) ", BrightF(s.Prefix)) + msg)
+		r.Message = fmt.Sprintf("(%s) %s", BrightF(s.Prefix), msg)
 	} else {
 		r.Message = msg
 	}
@@ -318,6 +321,13 @@ func (v slogVerbose) Infof(format string, args ...interface{}) {
 	v.handle(slog.NewRecord(time.Now(), v.level, "", CallerPC()), format, args...)
 }
 
+func (v slogVerbose) Info(msg string) {
+	if !v.Logger.Enabled(todo, v.level) {
+		return
+	}
+
+	v.handleRaw(slog.NewRecord(time.Now(), v.level, "", CallerPC()), msg)
+}
 func (v slogVerbose) Enabled() bool {
 	return v.Logger.Enabled(context.Background(), v.level)
 }
