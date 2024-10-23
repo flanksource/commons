@@ -22,6 +22,7 @@ require (
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/samber/lo v1.44.0
+	github.com/samber/oops v1.13.1
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/pflag v1.0.5
@@ -48,7 +49,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/distribution/reference v0.5.0 // indirect
 	github.com/flanksource/gomplate/v3 v3.24.37 // indirect
-	github.com/flanksource/is-healthy v1.0.33 // indirect
+	github.com/flanksource/is-healthy v1.0.34 // indirect
 	github.com/flanksource/kubectl-neat v1.0.4 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
@@ -83,7 +84,6 @@ require (
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
 	github.com/robertkrimen/otto v0.2.1 // indirect
 	github.com/rogpeppe/go-internal v1.12.0 // indirect
-	github.com/samber/oops v1.13.1 // indirect
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
 	github.com/spf13/cobra v1.7.0 // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
