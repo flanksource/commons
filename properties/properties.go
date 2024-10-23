@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/flanksource/is-healthy/pkg/health"
 	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/pflag"
 )
@@ -84,6 +85,10 @@ func (p *Properties) Update(props map[string]string) {
 
 	for k, v := range props {
 		p.m[k] = v
+
+		if k == "global.cert-manager.expiry" {
+			health.SetDefaultCertificateExpiryWarningPeriod(p.Duration(time.Hour*48, k))
+		}
 	}
 }
 
@@ -92,6 +97,7 @@ func (p *Properties) LoadFile(filename string) error {
 		cwd, _ := os.Getwd()
 		filename = path.Join(cwd, filename)
 	}
+
 	file, err := os.Open(filename)
 	if errors.Is(err, os.ErrNotExist) {
 		slog.Warn(fmt.Sprintf("%s does not exist", filename))
