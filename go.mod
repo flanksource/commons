@@ -7,6 +7,7 @@ toolchain go1.21.5
 require (
 	github.com/Snawoot/go-http-digest-auth-client v1.1.3
 	github.com/fatih/color v1.10.0
+	github.com/flanksource/is-healthy v1.0.34
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/goccy/go-yaml v1.12.0
 	github.com/google/go-cmp v0.6.0
@@ -49,7 +50,6 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/distribution/reference v0.5.0 // indirect
 	github.com/flanksource/gomplate/v3 v3.24.38 // indirect
-	github.com/flanksource/is-healthy v1.0.34 // indirect
 	github.com/flanksource/kubectl-neat v1.0.4 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
@@ -122,4 +122,4 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 )
 
-replace github.com/flanksource/is-healthy => ../is-healthy
+// replace github.com/flanksource/is-healthy => ../is-healthy

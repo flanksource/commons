@@ -19,8 +19,19 @@ import (
 
 var commandlineProperties map[string]string
 
+func healthDefaultSetter(p *Properties) {
+	certExpiryKey := "health.cert-manager.expiryGracePeriod"
+	if _, ok := p.m[certExpiryKey]; ok {
+		certExpiry := p.Duration(time.Hour*48, certExpiryKey)
+		health.SetDefaultCertificateExpiryWarningPeriod(certExpiry)
+	}
+}
+
+var defaultListeners = []func(*Properties){healthDefaultSetter}
+
 var Global = &Properties{
-	m: make(map[string]string),
+	m:         make(map[string]string),
+	listeners: defaultListeners,
 }
 
 var LoadFile = func(filename string) error {
