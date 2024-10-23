@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
+	"github.com/samber/oops"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -214,7 +215,12 @@ func (c Context) Error(err error, msg ...any) {
 
 	c.GetSpan().RecordError(err)
 	c.GetSpan().SetStatus(codes.Error, err.Error())
-	c.Logger.WithSkipReportLevel(1).Errorf(err.Error())
+
+	if o, ok := oops.AsOops(err); ok {
+		c.Logger.WithSkipReportLevel(1).Errorf("%#v", o.ToMap())
+	} else {
+		c.Logger.WithSkipReportLevel(1).Errorf(err.Error())
+	}
 }
 
 func (c Context) Errorf(format string, args ...interface{}) {
