@@ -49,7 +49,7 @@ require (
 	github.com/cert-manager/cert-manager v1.16.1 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/distribution/reference v0.5.0 // indirect
-	github.com/flanksource/gomplate/v3 v3.24.40 // indirect
+	github.com/flanksource/gomplate/v3 v3.24.41 // indirect
 	github.com/flanksource/is-healthy v1.0.37 // indirect
 	github.com/flanksource/kubectl-neat v1.0.4 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
