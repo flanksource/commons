@@ -621,6 +621,8 @@ github.com/apache/arrow/go/v11 v11.0.0/go.mod h1:Eg5OsL5H+e299f7u5ssuXsuHQVEGC4x
 github.com/apache/thrift v0.16.0/go.mod h1:PHK3hniurgQaNMZYaCLEqXKsYK8upmhPbmdP2FXSqgU=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5/go.mod h1:wHh0iHkYZB8zMSxRWpUBQtwG5a7fFgvEO+odwuTv2gs=
 github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a/go.mod h1:lB+ZfQJz7igIIfQNfa7Ml4HSf2uFQQRzpGGRXenZAgY=
+github.com/bmatcuk/doublestar/v4 v4.7.1 h1:fdDeAqgT47acgwd9bd9HxJRDmc9UAmPpc+2m0CXv75Q=
+github.com/bmatcuk/doublestar/v4 v4.7.1/go.mod h1:xBQ8jztBU6kakFMg+8WGxn0c6z1fTSPVIjEY1Wr7jzc=
 github.com/boombuler/barcode v1.0.0/go.mod h1:paBWMcWSl3LHKBqUq+rly7CNSldXjb2rDl3JlRe0mD8=
 github.com/boombuler/barcode v1.0.1/go.mod h1:paBWMcWSl3LHKBqUq+rly7CNSldXjb2rDl3JlRe0mD8=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
@@ -682,8 +684,8 @@ github.com/flanksource/gomplate/v3 v3.20.4/go.mod h1:27BNWhzzSjDed1z8YShO6W+z6G9
 github.com/flanksource/gomplate/v3 v3.24.42 h1:+/CdUcrVS6iy0eK3d43uOmGdIDFAAfDwFbANqe5ZlTk=
 github.com/flanksource/gomplate/v3 v3.24.42/go.mod h1:6LGE4p7DFizSm1kZmU9Mz5zXpBlCoecBCvDLNdN4cyg=
 github.com/flanksource/is-healthy v0.0.0-20230705092916-3b4cf510c5fc/go.mod h1:4pQhmF+TnVqJroQKY8wSnSp+T18oLson6YQ2M0qPHfQ=
-github.com/flanksource/is-healthy v1.0.40 h1:WFrMptErKwzWwhwqVl6sfslSTT17cZAY/8Vpuor8A5I=
-github.com/flanksource/is-healthy v1.0.40/go.mod h1:GBZXgvn5Jfn7lewRUky7uRHn16Q3LC9D583NyhwcMCc=
+github.com/flanksource/is-healthy v1.0.41 h1:SXxd5ZrhKA1Eozd9OppmFsIGx3cASXo4ObOUHeaJsus=
+github.com/flanksource/is-healthy v1.0.41/go.mod h1:HQk8AMFv2IbzGEh5pRrV9mYMrABoq1vDrllvb60pk3s=
 github.com/flanksource/kubectl-neat v1.0.4 h1:t5/9CqgE84oEtB0KitgJ2+WIeLfD+RhXSxYrqb4X8yI=
 github.com/flanksource/kubectl-neat v1.0.4/go.mod h1:Un/Voyh3cmiZNKQrW/TkAl28nAA7vwnwDGVjRErKjOw=
 github.com/fogleman/gg v1.2.1-0.20190220221249-0403632d5b90/go.mod h1:R/bRT+9gY/C5z7JzPU0zXsXHKM4/ayA+zqcVNZzPa1k=
