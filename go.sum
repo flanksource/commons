@@ -681,8 +681,8 @@ github.com/evanphx/json-patch v4.12.0+incompatible/go.mod h1:50XU6AFN0ol/bzJsmQL
 github.com/fatih/color v1.16.0 h1:zmkK9Ngbjj+K0yRhTVONQh1p/HknKYSlNT+vZCzyokM=
 github.com/fatih/color v1.16.0/go.mod h1:fL2Sau1YI5c0pdGEVCbKQbLXB6edEj1ZgiY4NijnWvE=
 github.com/flanksource/gomplate/v3 v3.20.4/go.mod h1:27BNWhzzSjDed1z8YShO6W+z6G9oZXuxfNFGd/iGSdc=
-github.com/flanksource/gomplate/v3 v3.24.46 h1:PebvWxiErSFwvmoAOkCsZycJ5Wy5mxvxiIYvKv0dgFc=
-github.com/flanksource/gomplate/v3 v3.24.46/go.mod h1:GFfoGB/qkvS/XQuWsJByAo2eF5Qp74EAGwUReVscoc4=
+github.com/flanksource/gomplate/v3 v3.24.47 h1:m4mtxAPnKBzb0eeMWno2+GT+jVVblgGJRG36DWC19V4=
+github.com/flanksource/gomplate/v3 v3.24.47/go.mod h1:sH4uNjbvZ9J4LUNEVrhSjQqKtzrkngu9tkF6oTK/ONc=
 github.com/flanksource/is-healthy v0.0.0-20230705092916-3b4cf510c5fc/go.mod h1:4pQhmF+TnVqJroQKY8wSnSp+T18oLson6YQ2M0qPHfQ=
 github.com/flanksource/is-healthy v1.0.47 h1:vwGyDfJ+sQF5CABTYac9E+EtJB6+r/3rkiV9vLJnK4k=
 github.com/flanksource/is-healthy v1.0.47/go.mod h1:kdWcNCxiOjgpAd2+fIQnBxvT45IaR+zc92wfOsaI8Kk=
