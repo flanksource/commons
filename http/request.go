@@ -48,6 +48,12 @@ func (r *Request) QueryParam(key, value string) *Request {
 	return r
 }
 
+// QueryParamAdd adds value to query param key
+func (r *Request) QueryParamAdd(key, value string) *Request {
+	r.queryParams.Add(key, value)
+	return r
+}
+
 func (r *Request) Get(url string) (*Response, error) {
 	return r.Do(http.MethodGet, url)
 }
