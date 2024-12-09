@@ -88,7 +88,10 @@ func DumpMetrics(prefix string) string {
 	for _, v := range lo.Filter(_metrics, func(i *io_prometheus_client.MetricFamily, _ int) bool {
 		return strings.HasPrefix(lo.FromPtr(i.Name), prefix)
 	}) {
-		expfmt.MetricFamilyToText(out, v)
+		if _, err := expfmt.MetricFamilyToText(out, v); err != nil {
+			return err.Error()
+		}
+
 	}
 	return out.String()
 }

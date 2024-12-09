@@ -96,8 +96,11 @@ func TestPriorityQueueConcurrency(t *testing.T) {
 	g := NewWithT(t)
 	pq, err := New(QueueOpts[string]{
 		Comparator: strings.Compare,
+		Metrics: MetricsOpts[string]{
+			MetricName: "concurrent_queue",
+		},
 	})
-	Expect(err).To(BeNil())
+	g.Expect(err).To(BeNil())
 
 	const numGoroutines = 50
 	const itemsPerGoroutine = 100
@@ -140,13 +143,10 @@ func TestPriorityQueueConcurrency(t *testing.T) {
 	// Wait for all operations to complete
 	wg.Wait()
 	g.Expect(time.Since(start).Milliseconds()).To(BeNumerically("<", 100))
-
-	// g.Expect(matchers.DumpMetrics("priority")).To(ContainSubstring("zz"))
 	g.Expect(int(dequeued.Load())).To(Equal(expectedCount))
-	// g.Expect("priority_queue_duration_sum").To(matchers.MatchCounter(1))
-	g.Expect("priority_queue_duration_count").To(matchers.MatchCounter(int64(expectedCount)))
+	g.Expect("concurrent_queue_duration_count").To(matchers.MatchCounter(int64(expectedCount)))
 
-	g.Expect("priority_queue_size").To(matchers.MatchCounter(0))
+	g.Expect("concurrent_queue_size").To(matchers.MatchCounter(0))
 	g.Expect(pq.Size()).To(BeNumerically("==", 0))
 
 	t.Log("\n" + matchers.DumpMetrics("priority"))
@@ -155,7 +155,4 @@ func TestPriorityQueueConcurrency(t *testing.T) {
 
 func first[T1 any, T2 any](a T1, b T2) T1 {
 	return a
-}
-func second[T1 any, T2 any](a T1, b T2) T2 {
-	return b
 }
