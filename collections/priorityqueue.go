@@ -16,7 +16,7 @@
 package collections
 
 import (
-	"cmp"
+	"errors"
 	"fmt"
 	"iter"
 	"strings"
@@ -36,7 +36,7 @@ type MetricsOpts[T comparable] struct {
 	Labels          map[string]any
 	Labeller        map[string]func(i T) string
 	DurationBuckets []float64
-	MetricName      string
+	Name            string
 	Disable         bool
 }
 
@@ -109,31 +109,31 @@ func newMetrics[T comparable](opts MetricsOpts[T]) *metrics[T] {
 		}
 	}
 
-	if opts.MetricName == "" {
-		opts.MetricName = "priority_queue"
+	if opts.Name == "" {
+		opts.Name = "priority_queue"
 	}
 
 	return &metrics[T]{
 		opts: opts,
 		enqueuedTotal: promauto.NewCounterVec(prometheus.CounterOpts{
-			Name: opts.MetricName + "_enqueued_total",
+			Name: opts.Name + "_enqueued_total",
 			Help: "The total number of enqueued items",
 		}, keys),
 		dedupedTotal: promauto.NewCounterVec(prometheus.CounterOpts{
-			Name: opts.MetricName + "_deduped_total",
+			Name: opts.Name + "_deduped_total",
 			Help: "The total number of enqueued items",
 		}, keys),
 		dequeuedTotal: promauto.NewCounterVec(prometheus.CounterOpts{
-			Name: opts.MetricName + "_dequeued_total",
+			Name: opts.Name + "_dequeued_total",
 			Help: "The total number of dequeued items",
 		}, keys),
 		queueSize: promauto.NewGauge(prometheus.GaugeOpts{
-			Name:        opts.MetricName + "_size",
+			Name:        opts.Name + "_size",
 			Help:        "The current size of the queue",
 			ConstLabels: labels,
 		}),
 		queueDuration: promauto.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    opts.MetricName + "_duration",
+			Name:    opts.Name + "_duration",
 			Help:    "Time an object spent in the queue in milliseconds",
 			Buckets: opts.DurationBuckets,
 		}, keys),
@@ -165,17 +165,15 @@ type QueueOpts[T comparable] struct {
 	Metrics    MetricsOpts[T]
 }
 
-func New[T cmp.Ordered](opts QueueOpts[T]) (*Queue[T], error) {
-
+func NewQueue[T comparable](opts QueueOpts[T]) (*Queue[T], error) {
 	if opts.Dedupe && opts.Equals == nil {
-		return nil, fmt.Errorf("Dedupe requires Equals function")
+		return nil, errors.New("dedupe requires Equals function")
 	}
 
 	if opts.Comparator == nil {
-		opts.Comparator = func(a, b T) int {
-			return cmp.Compare(a, b)
-		}
+		return nil, errors.New("a comparator function is required")
 	}
+
 	return &Queue[T]{
 		heap: binaryheap.NewWith(func(a, b queueItem[T]) int {
 			return opts.Comparator(a.item, b.item)

@@ -12,10 +12,10 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestPriorityQueue(t *testing.T) {
+func TestPriorityQueueString(t *testing.T) {
 	g := NewWithT(t)
 
-	pq, err := New(QueueOpts[string]{
+	pq, err := NewQueue(QueueOpts[string]{
 		Comparator: strings.Compare,
 		Metrics: MetricsOpts[string]{
 			Labels: map[string]any{
@@ -52,18 +52,67 @@ func TestPriorityQueue(t *testing.T) {
 	g.Expect("priority_queue_duration_count").To(matchers.MatchCounter(1, "prefix", "i"))
 
 	g.Expect("priority_queue_size").To(matchers.MatchCounter(0))
+}
 
+type QueueItem struct {
+	Timestamp time.Time // Queued time
+	Obj       map[string]any
+}
+
+func (t *QueueItem) Name() string {
+	return t.Obj["name"].(string)
+}
+
+func NewQueueItem(obj map[string]any) *QueueItem {
+	return &QueueItem{
+		Timestamp: time.Now(),
+		Obj:       obj,
+	}
+}
+
+func TestPriorityQueue(t *testing.T) {
+	g := NewWithT(t)
+
+	pq, err := NewQueue(QueueOpts[*QueueItem]{
+		Metrics: MetricsOpts[*QueueItem]{
+			Name: "test",
+		},
+		Comparator: func(a, b *QueueItem) int {
+			return strings.Compare(a.Obj["name"].(string), b.Obj["name"].(string))
+		},
+		Dedupe: true,
+		Equals: func(a, b *QueueItem) bool {
+			return strings.EqualFold(a.Obj["name"].(string), b.Obj["name"].(string))
+		},
+	})
+	g.Expect(err).To(BeNil())
+	g.Expect(pq.Size()).To(BeZero())
+
+	names := []string{"bob", "foo", "bar", "eve", "baz", "alice", "bob"}
+	for _, name := range names {
+		pq.Enqueue(NewQueueItem(map[string]any{"name": name}))
+	}
+
+	g.Expect(pq.Size()).To(BeNumerically("==", len(names)))
+
+	expected := []string{"alice", "bar", "baz", "bob", "eve", "foo"}
+	for _, e := range expected {
+		g.Expect(first(pq.Peek()).Name()).To(Equal(e))
+		g.Expect(first(pq.Dequeue()).Name()).Should(Equal(e))
+	}
+
+	g.Expect(pq.Size()).To(BeZero())
 }
 
 func TestPriorityQueueDedupe(t *testing.T) {
 	g := NewWithT(t)
 
-	pq, err := New(QueueOpts[string]{
+	pq, err := NewQueue(QueueOpts[string]{
 		Equals:     func(a, b string) bool { return a == b },
 		Dedupe:     true,
 		Comparator: strings.Compare,
 		Metrics: MetricsOpts[string]{
-			MetricName: "dedupe_queue",
+			Name: "dedupe_queue",
 		}})
 
 	g.Expect(err).To(BeNil())
@@ -94,10 +143,10 @@ func TestPriorityQueueDedupe(t *testing.T) {
 
 func TestPriorityQueueConcurrency(t *testing.T) {
 	g := NewWithT(t)
-	pq, err := New(QueueOpts[string]{
+	pq, err := NewQueue(QueueOpts[string]{
 		Comparator: strings.Compare,
 		Metrics: MetricsOpts[string]{
-			MetricName: "concurrent_queue",
+			Name: "concurrent_queue",
 		},
 	})
 	g.Expect(err).To(BeNil())
@@ -150,9 +199,8 @@ func TestPriorityQueueConcurrency(t *testing.T) {
 	g.Expect(pq.Size()).To(BeNumerically("==", 0))
 
 	t.Log("\n" + matchers.DumpMetrics("priority"))
-
 }
 
-func first[T1 any, T2 any](a T1, b T2) T1 {
+func first[T1 any, T2 any](a T1, _ T2) T1 {
 	return a
 }
