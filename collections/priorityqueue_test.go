@@ -29,7 +29,8 @@ func TestPriorityQueueString(t *testing.T) {
 					return i[0:1]
 				},
 			},
-		}})
+		},
+	})
 
 	g.Expect(err).To(BeNil())
 	g.Expect(pq.Size()).To(BeNumerically("==", 0))
@@ -75,7 +76,14 @@ func TestPriorityQueue(t *testing.T) {
 
 	pq, err := NewQueue(QueueOpts[*QueueItem]{
 		Metrics: MetricsOpts[*QueueItem]{
-			Name: "test",
+			Labels: map[string]any{
+				"const_label": "value1",
+			},
+			Labeller: map[string]func(i *QueueItem) string{
+				"prefix": func(i *QueueItem) string {
+					return "dummy"
+				},
+			},
 		},
 		Comparator: func(a, b *QueueItem) int {
 			return strings.Compare(a.Obj["name"].(string), b.Obj["name"].(string))
@@ -113,7 +121,8 @@ func TestPriorityQueueDedupe(t *testing.T) {
 		Comparator: strings.Compare,
 		Metrics: MetricsOpts[string]{
 			Name: "dedupe_queue",
-		}})
+		},
+	})
 
 	g.Expect(err).To(BeNil())
 	g.Expect(pq.Size()).To(BeNumerically("==", 0))
@@ -138,7 +147,6 @@ func TestPriorityQueueDedupe(t *testing.T) {
 	g.Expect("dedupe_queue_dequeued_total").To(matchers.MatchCounter(3))
 	g.Expect("dedupe_queue_deduped_total").To(matchers.MatchCounter(1))
 	g.Expect("dedupe_queue_size").To(matchers.MatchCounter(0))
-
 }
 
 func TestPriorityQueueConcurrency(t *testing.T) {
