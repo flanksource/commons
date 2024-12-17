@@ -272,7 +272,7 @@ func (queue *Queue[T]) Dequeue() (T, bool) {
 	// Peek for notBefore
 	v, _ := queue.heap.Peek()
 	if !v.notBefore.IsZero() {
-		if v.notBefore.Sub(time.Now()) < 0 {
+		if time.Until(v.notBefore) < 0 {
 			return zero, false
 		}
 	}
