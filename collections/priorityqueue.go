@@ -173,8 +173,9 @@ func getOrCreateHistogramVec(prefix, suffix, help string, keys []string, buckets
 }
 
 type queueItem[T comparable] struct {
-	item     T
-	inserted time.Time
+	item      T
+	inserted  time.Time
+	notBefore time.Time
 }
 
 // Assert Queue implementation
@@ -208,6 +209,10 @@ func NewQueue[T comparable](opts QueueOpts[T]) (*Queue[T], error) {
 
 	return &Queue[T]{
 		heap: binaryheap.NewWith(func(a, b queueItem[T]) int {
+			nbc := notBeforeComparator(a, b)
+			if nbc != 0 {
+				return nbc
+			}
 			return opts.Comparator(a.item, b.item)
 		}),
 		Comparator: opts.Comparator,
@@ -217,12 +222,36 @@ func NewQueue[T comparable](opts QueueOpts[T]) (*Queue[T], error) {
 	}, nil
 }
 
+func notBeforeComparator[T comparable](a, b queueItem[T]) int {
+	if a.notBefore.IsZero() && b.notBefore.IsZero() {
+		return 0
+	}
+
+	if a.notBefore.Sub(b.notBefore) > 0 {
+		return 1
+	} else {
+		return -1
+	}
+}
+
 // Enqueue adds a value to the end of the queue
 func (queue *Queue[T]) Enqueue(value T) {
 	queue.mutex.Lock()
 	queue.heap.Push(queueItem[T]{
 		item:     value,
 		inserted: time.Now(),
+	})
+	queue.metrics.enqueue(value, queue.heap.Size())
+	queue.mutex.Unlock()
+}
+
+// Enqueue adds a value to the end of the queue
+func (queue *Queue[T]) EnqueueWithDelay(value T, delay time.Duration) {
+	queue.mutex.Lock()
+	queue.heap.Push(queueItem[T]{
+		item:      value,
+		inserted:  time.Now(),
+		notBefore: time.Now().Add(delay),
 	})
 	queue.metrics.enqueue(value, queue.heap.Size())
 	queue.mutex.Unlock()
@@ -238,9 +267,18 @@ func (queue *Queue[T]) Dequeue() (T, bool) {
 	queue.mutex.Lock()
 	defer queue.mutex.Unlock()
 
+	var zero T
+
+	// Peek for notBefore
+	v, _ := queue.heap.Peek()
+	if !v.notBefore.IsZero() {
+		if v.notBefore.Sub(time.Now()) < 0 {
+			return zero, false
+		}
+	}
+
 	wrapper, ok := queue.heap.Pop()
 	if !ok {
-		var zero T
 		return zero, false
 	}
 
