@@ -271,10 +271,8 @@ func (queue *Queue[T]) Dequeue() (T, bool) {
 
 	// Peek for notBefore
 	v, _ := queue.heap.Peek()
-	if !v.notBefore.IsZero() {
-		if time.Until(v.notBefore) < 0 {
-			return zero, false
-		}
+	if !v.notBefore.IsZero() && time.Until(v.notBefore) > 0 {
+		return zero, false
 	}
 
 	wrapper, ok := queue.heap.Pop()
