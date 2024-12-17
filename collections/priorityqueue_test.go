@@ -223,9 +223,11 @@ func TestPriorityQueueWithDelay(t *testing.T) {
 	g.Expect(err).To(BeNil())
 	g.Expect(pq.Size()).To(BeNumerically("==", 0))
 
-	pq.EnqueueWithDelay("item1-delay-10s", 10*time.Second)
-	pq.EnqueueWithDelay("item1-delay-05s", 5*time.Second)
+	pq.EnqueueWithDelay("item1-delay-06s", 6*time.Second)
+	pq.EnqueueWithDelay("item1-delay-03s", 3*time.Second)
 	pq.Enqueue("item1")
+
+	start := time.Now()
 
 	var items []string
 	for {
@@ -233,11 +235,23 @@ func TestPriorityQueueWithDelay(t *testing.T) {
 			break
 		}
 
-		item, _ := pq.Dequeue()
-		items = append(items, item)
+		item, valid := pq.Dequeue()
+		if valid {
+			items = append(items, item)
+		}
+
+		if time.Since(start) > (1*time.Second) && time.Since(start) < (2*time.Second) {
+			g.Expect(items).To(Equal([]string{"item1"}))
+		}
+		if time.Since(start) > (3*time.Second) && time.Since(start) < (5*time.Second) {
+			g.Expect(items).To(Equal([]string{"item1", "item1-delay-03s"}))
+		}
+		if time.Since(start) > (6 * time.Second) {
+			g.Expect(items).To(Equal([]string{"item1", "item1-delay-03s", "item1-delay-06s"}))
+		}
 	}
 
-	g.Expect(items).To(Equal([]string{"item1", "item1-delay-05s", "item1-delay-10s"}))
+	g.Expect(items).To(Equal([]string{"item1", "item1-delay-03s", "item1-delay-06s"}))
 }
 
 func first[T1 any, T2 any](a T1, _ T2) T1 {
