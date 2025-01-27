@@ -102,6 +102,54 @@ func TestMatchItems(t *testing.T) {
 			patterns: []string{"!default"},
 			expected: true,
 		},
+		{
+			name:     "Exclude All",
+			item:     "anyitem",
+			patterns: []string{"!*"},
+			expected: false,
+		},
+		{
+			name:     "Exclude All with Inclusion",
+			item:     "apple",
+			patterns: []string{"!*", "apple"},
+			expected: false,
+		},
+		{
+			name:     "Multiple Exclusions",
+			item:     "apple",
+			patterns: []string{"!banana", "!orange", "!apple"},
+			expected: false,
+		},
+		{
+			name:     "Empty Item with Patterns",
+			item:     "",
+			patterns: []string{"*"},
+			expected: true,
+		},
+		{
+			name:     "Empty Pattern String",
+			item:     "apple",
+			patterns: []string{""},
+			expected: false,
+		},
+		{
+			name:     "URL Encoded Pattern Matches",
+			item:     "hello ",
+			patterns: []string{"hello%20"},
+			expected: true,
+		},
+		{
+			name:     "URL Encoded Pattern Does Not Match",
+			item:     "hello",
+			patterns: []string{"hello%20"},
+			expected: false,
+		},
+		{
+			name:     "Malformed URL Encoding",
+			item:     "apple",
+			patterns: []string{"%zzapple"},
+			expected: false,
+		},
 	}
 
 	for _, test := range tests {

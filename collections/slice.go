@@ -87,33 +87,25 @@ func MatchItems(item string, patterns ...string) bool {
 	slices.SortFunc(patterns, sortPatterns)
 
 	for _, p := range patterns {
-		pattern, _ := url.QueryUnescape(strings.TrimSpace(p))
+		pattern, err := url.QueryUnescape(strings.TrimSpace(p))
+		if err != nil {
+			continue
+		}
 
 		if strings.HasPrefix(pattern, "!") {
-			if item == strings.TrimPrefix(pattern, "!") {
+			if matchPattern(item, strings.TrimPrefix(pattern, "!")) {
 				return false
 			}
 
 			continue
 		}
 
-		if pattern == "*" || item == pattern {
+		if matchPattern(item, pattern) {
 			return true
-		}
-
-		if strings.HasPrefix(pattern, "*") {
-			if strings.HasSuffix(item, strings.TrimPrefix(pattern, "*")) {
-				return true
-			}
-		}
-
-		if strings.HasSuffix(pattern, "*") {
-			if strings.HasPrefix(item, strings.TrimSuffix(pattern, "*")) {
-				return true
-			}
 		}
 	}
 
+	//nolint:gosimple
 	//lint:ignore S1008 ...
 	if allExclusions(patterns) {
 		// If all the filters were exlusions, and none of the exclusions excluded the item, then it's a match
@@ -123,9 +115,35 @@ func MatchItems(item string, patterns ...string) bool {
 	return false
 }
 
+func matchPattern(item, pattern string) bool {
+	if pattern == "*" || item == pattern {
+		return true
+	}
+
+	if strings.HasPrefix(pattern, "*") {
+		if strings.HasSuffix(item, strings.TrimPrefix(pattern, "*")) {
+			return true
+		}
+	}
+
+	if strings.HasSuffix(pattern, "*") {
+		if strings.HasPrefix(item, strings.TrimSuffix(pattern, "*")) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // sortPatterns defines the priority for sorting:
 // exclusions ("!") have higher priority than other patterns.
 func sortPatterns(a, b string) int {
+	if a == "!*" {
+		return -1
+	} else if b == "!*" {
+		return 1
+	}
+
 	if strings.HasPrefix(a, "!") {
 		return -1
 	} else if strings.HasPrefix(b, "!") {
@@ -143,7 +161,7 @@ func allExclusions(patterns []string) bool {
 	for _, pattern := range patterns {
 		pattern = strings.TrimSpace(pattern)
 		if pattern == "" {
-			continue
+			return false
 		}
 
 		if !strings.HasPrefix(pattern, "!") {
