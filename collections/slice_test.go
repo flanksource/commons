@@ -9,86 +9,104 @@ func TestMatchItems(t *testing.T) {
 	tests := []struct {
 		name     string
 		item     string
-		items    []string
+		patterns []string
 		expected bool
 	}{
 		{
 			name:     "Exact Match",
 			item:     "apple",
-			items:    []string{"apple"},
+			patterns: []string{"apple"},
 			expected: true,
 		},
 		{
 			name:     "Negative Match",
 			item:     "apple",
-			items:    []string{"!apple"},
+			patterns: []string{"!apple"},
 			expected: false,
 		},
 		{
 			name:     "Empty Items List",
 			item:     "apple",
-			items:    []string{},
+			patterns: []string{},
 			expected: true,
 		},
 		{
 			name:     "Wildcard Match",
 			item:     "apple",
-			items:    []string{"*"},
+			patterns: []string{"*"},
 			expected: true,
 		},
 		{
 			name:     "Wildcard Prefix Match",
 			item:     "apple",
-			items:    []string{"appl*"},
+			patterns: []string{"appl*"},
 			expected: true,
 		},
 		{
 			name:     "Wildcard Suffix Match",
 			item:     "apple",
-			items:    []string{"*ple"},
+			patterns: []string{"*ple"},
 			expected: true,
 		},
 		{
 			name:     "Mixed Matches",
 			item:     "apple",
-			items:    []string{"!banana", "appl*", "cherry"},
+			patterns: []string{"!banana", "appl*", "cherry"},
 			expected: true,
 		},
 		{
 			name:     "No Items Match",
 			item:     "apple",
-			items:    []string{"!apple", "banana"},
+			patterns: []string{"!apple", "banana"},
 			expected: false,
 		},
 		{
 			name:     "Multiple Wildcards",
 			item:     "apple",
-			items:    []string{"ap*e", "*p*"},
+			patterns: []string{"ap*e", "*p*"},
 			expected: false,
 		},
 		{
 			name:     "Handle whitespaces | should be trimmed",
 			item:     "hello",
-			items:    []string{"hello   ", "world"},
+			patterns: []string{"hello   ", "world"},
 			expected: true,
 		},
 		{
 			name:     "Handle whitespaces | should not be trimmed (no match)",
 			item:     "hello",
-			items:    []string{"hello%20", "world"},
+			patterns: []string{"hello%20", "world"},
 			expected: false,
 		},
 		{
 			name:     "Handle whitespaces  | should not be trimmed (match)",
 			item:     "hello ",
-			items:    []string{"hello%20", "world"},
+			patterns: []string{"hello%20", "world"},
+			expected: true,
+		},
+		{
+			name:     "exclusion and inclusion",
+			item:     "mission-control",
+			patterns: []string{"!mission-control", "mission-control"},
+			expected: false,
+		},
+		{
+			name:     "inclusion and exclusion",
+			item:     "mission-control",
+			patterns: []string{"mission-control", "!mission-control"},
+			expected: false,
+		},
+		{
+			name:     "exclusion",
+			item:     "mission-control",
+			patterns: []string{"!default"},
 			expected: true,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := MatchItems(test.item, test.items...)
+			result := MatchItems(test.item, test.patterns...)
 			if result != test.expected {
 				t.Errorf("Expected %v but got %v", test.expected, result)
 			}
