@@ -107,7 +107,7 @@ func MatchItems(item string, patterns ...string) bool {
 
 	//nolint:gosimple
 	//lint:ignore S1008 ...
-	if allExclusions(patterns) {
+	if IsExclusionOnlyPatterns(patterns) {
 		// If all the filters were exlusions, and none of the exclusions excluded the item, then it's a match
 		return true
 	}
@@ -153,7 +153,7 @@ func sortPatterns(a, b string) int {
 	return 0
 }
 
-func allExclusions(patterns []string) bool {
+func IsExclusionOnlyPatterns(patterns []string) bool {
 	if len(patterns) == 0 {
 		return false
 	}
