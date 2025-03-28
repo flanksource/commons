@@ -9,10 +9,14 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"unicode"
+
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/bmatcuk/doublestar/v4"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/ulikunitz/xz"
@@ -61,8 +65,37 @@ func ValidatePath(path string) error {
 
 	return nil
 }
+
+func DoubleStarGlob(root string, paths []string) ([]string, error) {
+	unfoldedPaths := []string{}
+
+	for _, path := range paths {
+		if !strings.HasPrefix(path, root) {
+			path = filepath.Join(root, path)
+		}
+		if err := ValidatePath(path); err != nil {
+			return nil, err
+		}
+		matched, err := doublestar.FilepathGlob(path)
+		if err != nil {
+			return nil, fmt.Errorf("invalid glob pattern. path=%s; %w", path, err)
+		}
+
+		if len(matched) == 0 {
+			// Absolute path, not a glob
+			matched = append(matched, path)
+		}
+
+		unfoldedPaths = append(unfoldedPaths, matched...)
+	}
+
+	return unfoldedPaths, nil
+}
+
+// Deprecated: use DoubleStarGlob instead
 func UnfoldGlobs(paths ...string) ([]string, error) {
 	unfoldedPaths := make([]string, 0, len(paths))
+
 	for _, path := range paths {
 		matched, err := filepath.Glob(path)
 		if err != nil {
