@@ -18,6 +18,49 @@ import (
 	"github.com/ulikunitz/xz"
 )
 
+var blacklistedPathSymbols = "${}[]?*:<>|"
+var blockedPrefixes = []string{"/run/", "/proc/", "/etc/", "/var/", "/tmp/", "/dev/"}
+
+func isASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+
+		if s[i] > unicode.MaxASCII || unicode.IsControl(rune(s[i])) {
+			return false
+		}
+	}
+	return true
+
+}
+
+// ValidatePath validates a single path for security issues
+func ValidatePath(path string) error {
+
+	// Check for non-ASCII characters
+	if !isASCII(path) {
+		return fmt.Errorf("path %s contains non-ASCII characters", path)
+	}
+
+	// Check for illegal characters
+	if strings.ContainsAny(path, blacklistedPathSymbols) {
+		return fmt.Errorf("path %s contains illegal characters", path)
+	}
+
+	// Check for path traversal attempts
+
+	if strings.Contains(path, "../") || strings.Contains(path, "..\\") {
+		return fmt.Errorf("path %s attempts to access parent directories which is not allowed", path)
+	}
+
+	cleanPath := filepath.Clean(path)
+	// Check for blocked prefixes
+	for _, prefix := range blockedPrefixes {
+		if strings.HasPrefix(cleanPath, prefix) {
+			return fmt.Errorf("path %s contains a blocked prefix: %s", path, prefix)
+		}
+	}
+
+	return nil
+}
 func UnfoldGlobs(paths ...string) ([]string, error) {
 	unfoldedPaths := make([]string, 0, len(paths))
 	for _, path := range paths {
@@ -157,6 +200,10 @@ func Unzip(src, dest string) error {
 		}
 		defer rc.Close()
 
+		if err := ValidatePath(f.Name); err != nil {
+			return err
+		}
+
 		fpath := filepath.Join(dest, f.Name)
 		if f.FileInfo().IsDir() {
 			if err := os.MkdirAll(fpath, f.Mode()); err != nil {
@@ -228,6 +275,9 @@ func UntarWithFilter(tarball, target string, filter FileFilter) error {
 		}
 
 		info := header.FileInfo()
+		if err := ValidatePath(header.Name); err != nil {
+			return err
+		}
 		path := filepath.Join(target, header.Name)
 		if filter != nil {
 			path = filter(info)
