@@ -5,7 +5,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/onsi/gomega"
 	. "github.com/onsi/gomega"
 )
 
@@ -31,7 +30,7 @@ type ConfigB struct {
 type Fixture struct {
 	Key    string
 	Value  string
-	Expect func(*gomega.WithT, *Config, error)
+	Expect func(*WithT, *Config, error)
 }
 
 func DeepFields(iface interface{}) []reflect.Value {
@@ -58,7 +57,7 @@ func TestSet(t *testing.T) {
 		{
 			Key:   "a.foo",
 			Value: "bar",
-			Expect: func(g *gomega.WithT, cfg *Config, err error) {
+			Expect: func(g *WithT, cfg *Config, err error) {
 				g.Expect(err).ToNot(HaveOccurred())
 				g.Expect(cfg.A.Foo).To(Equal("bar"))
 			},
@@ -66,7 +65,7 @@ func TestSet(t *testing.T) {
 		{
 			Key:   "b.bar",
 			Value: "3",
-			Expect: func(g *gomega.WithT, cfg *Config, err error) {
+			Expect: func(g *WithT, cfg *Config, err error) {
 				g.Expect(err).ToNot(HaveOccurred())
 				g.Expect(cfg.B.Bar).To(Equal(3))
 			},
@@ -74,7 +73,7 @@ func TestSet(t *testing.T) {
 		{
 			Key:   "a.version",
 			Value: "v1.2.3",
-			Expect: func(g *gomega.WithT, cfg *Config, err error) {
+			Expect: func(g *WithT, cfg *Config, err error) {
 				g.Expect(err).ToNot(HaveOccurred())
 				g.Expect(cfg.A.Version).To(Equal("v1.2.3"))
 			},
@@ -84,7 +83,7 @@ func TestSet(t *testing.T) {
 	for i, fixture := range fixtures {
 		name := fmt.Sprintf("Test %d - %s", i, fixture.Key)
 		t.Run(name, func(t *testing.T) {
-			g := gomega.NewWithT(t)
+			g := NewWithT(t)
 
 			cfg := &Config{}
 			err := Set(cfg, fixture.Key, fixture.Value)

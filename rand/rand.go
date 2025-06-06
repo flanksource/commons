@@ -11,7 +11,7 @@ import (
 // GenerateRandHex generates a random hex string of given length in hex format
 func GenerateRandHex(length int) (string, error) {
 	if length%2 != 0 {
-		return "", fmt.Errorf("please provide an even number. Hex strings cannot be unevenly long.")
+		return "", fmt.Errorf("please provide an even number; hex strings cannot be unevenly long")
 	}
 
 	b := make([]byte, length/2)

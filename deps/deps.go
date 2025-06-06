@@ -256,11 +256,12 @@ func InstallDependency(name, ver string, binDir string) error {
 	}
 
 	var urlPath string
-	if runtime.GOOS == "linux" {
+	switch runtime.GOOS {
+	case "linux":
 		urlPath = dependency.Linux
-	} else if runtime.GOOS == "darwin" {
+	case "darwin":
 		urlPath = dependency.Macosx
-	} else if runtime.GOOS == "windows" {
+	case "windows":
 		urlPath = dependency.Windows
 	}
 

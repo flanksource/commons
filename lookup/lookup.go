@@ -45,9 +45,9 @@ const (
 )
 
 var (
-	ErrMalformedIndex    = errors.New("Malformed index key")
-	ErrInvalidIndexUsage = errors.New("Invalid index key usage")
-	ErrKeyNotFound       = errors.New("Unable to find the key")
+	ErrMalformedIndex    = errors.New("malformed index key")
+	ErrInvalidIndexUsage = errors.New("invalid index key usage")
+	ErrKeyNotFound       = errors.New("unable to find the key")
 )
 
 // LookupString performs a lookup into a value, using a string. Same as `Loookup`

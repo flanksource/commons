@@ -230,10 +230,7 @@ func TestPriorityQueueWithDelay(t *testing.T) {
 	start := time.Now()
 
 	var items []string
-	for {
-		if pq.Size() == 0 {
-			break
-		}
+	for pq.Size() != 0 {
 
 		item, valid := pq.Dequeue()
 		if valid {
