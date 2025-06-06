@@ -5,3 +5,8 @@ test:
 .PHONY: lint
 lint:
 	golangci-lint run
+
+.PHONY: tidy
+tidy:
+	go mod tidy	
+
