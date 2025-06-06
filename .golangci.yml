@@ -1,9 +1,15 @@
-version: "2"
+version: '2'
 linters:
   settings:
     govet:
       disable:
         - printf
+    staticcheck:
+      checks:
+        - all
+        - -QF1008
+        - -ST1003 #  ST1003: func NewHttpLogger should be NewHTTPLogger 
+        - -ST1016 # methods on the same type should have the same receiver name (seen 1x "l", 1x "level")
   exclusions:
     generated: lax
     presets:

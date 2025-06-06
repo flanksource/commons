@@ -30,7 +30,7 @@ func MatchCounter(val int64, labels ...string) gcustom.CustomGomegaMatcher {
 			if v := int64(*value.Gauge.Value); v == val {
 				return true, nil
 			} else {
-				return false, fmt.Errorf("Expected %d, got %d", val, v)
+				return false, fmt.Errorf("expected %d, got %d", val, v)
 			}
 
 		} else if value.Counter != nil {
@@ -41,7 +41,7 @@ func MatchCounter(val int64, labels ...string) gcustom.CustomGomegaMatcher {
 			if v := int64(*value.Counter.Value); v == val {
 				return true, nil
 			} else {
-				return false, fmt.Errorf("Expected %d, got %d", val, v)
+				return false, fmt.Errorf("expected %d, got %d", val, v)
 			}
 
 		} else if value.Histogram != nil {
@@ -54,7 +54,7 @@ func MatchCounter(val int64, labels ...string) gcustom.CustomGomegaMatcher {
 				if v := int64(*value.Histogram.SampleCount); v == val {
 					return true, nil
 				} else {
-					return false, fmt.Errorf("Expected %d, got %d", val, v)
+					return false, fmt.Errorf("expected %d, got %d", val, v)
 				}
 
 			} else if strings.HasSuffix(metric, "_sum") {
@@ -64,10 +64,10 @@ func MatchCounter(val int64, labels ...string) gcustom.CustomGomegaMatcher {
 				if v := int64(*value.Histogram.SampleSum); v == val {
 					return true, nil
 				} else {
-					return false, fmt.Errorf("Expected %d, got %d", val, v)
+					return false, fmt.Errorf("expected %d, got %d", val, v)
 				}
 			} else {
-				return false, fmt.Errorf("Uknown histrogram metric: %v", metric)
+				return false, fmt.Errorf("unknown histogram metric: %v", metric)
 			}
 
 		} else {

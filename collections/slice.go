@@ -21,7 +21,7 @@ func Dedup[T comparable](arr []T) []T {
 // ReplaceAllInSlice runs strings.Replace on all elements in a slice and returns the result
 func ReplaceAllInSlice(a []string, find string, replacement string) (replaced []string) {
 	for _, s := range a {
-		replaced = append(replaced, strings.Replace(s, find, replacement, -1))
+		replaced = append(replaced, strings.ReplaceAll(s, find, replacement))
 	}
 	return
 }
