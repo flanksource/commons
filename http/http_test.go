@@ -132,10 +132,8 @@ func TestHTTP(t *testing.T) {
 	})
 
 	t.Run("Host Header", func(t *testing.T) {
-		uri, _ := url.Parse("https://httpbin.demo.aws.flanksource.com/headers")
-
+		uri, _ := url.Parse("https://httpbin.org/headers")
 		ips, err := net.LookupIP(uri.Host)
-
 		if err != nil {
 			t.Error(err.Error())
 		}
@@ -152,19 +150,21 @@ func TestHTTP(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
+
 		var headers map[string]any
 		if body, err := resp.AsJSON(); err != nil {
 			t.Error(err)
 		} else {
 			headers = body["headers"].(map[string]any)
 		}
+
 		if headers["Host"] != uri.Host {
 			t.Errorf("Expected response headers %s", headers)
 		}
 	})
 
 	t.Run("No Auth", func(t *testing.T) {
-		resp, err := http.NewClient().R(context.Background()).Header("Hello", "World").Get("https://httpbin.demo.aws.flanksource.com/headers")
+		resp, err := http.NewClient().R(context.Background()).Header("Hello", "World").Get("https://httpbin.org/headers")
 		if err != nil {
 			t.Error(err)
 		}
