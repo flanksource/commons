@@ -121,7 +121,7 @@ func matchPattern(item, pattern string) bool {
 	}
 
 	if strings.HasPrefix(pattern, "*") && strings.HasSuffix(pattern, "*") {
-		if strings.Contains(item, strings.Trim(pattern, "*")) {
+		if strings.Contains(item, strings.TrimPrefix(strings.TrimSuffix(pattern, "*"), "*")) {
 			return true
 		}
 	}
