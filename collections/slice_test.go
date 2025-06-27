@@ -63,8 +63,14 @@ func TestMatchItems(t *testing.T) {
 		{
 			name:     "Multiple Wildcards",
 			item:     "apple",
-			patterns: []string{"ap*e", "*p*"},
+			patterns: []string{"ap*e", "*pl*e"},
 			expected: false,
+		},
+		{
+			name:     "Glob",
+			item:     "apple",
+			patterns: []string{"*ppl*"},
+			expected: true,
 		},
 		{
 			name:     "Handle whitespaces | should be trimmed",

@@ -120,6 +120,12 @@ func matchPattern(item, pattern string) bool {
 		return true
 	}
 
+	if strings.HasPrefix(pattern, "*") && strings.HasSuffix(pattern, "*") {
+		if strings.Contains(item, strings.TrimPrefix(strings.TrimSuffix(pattern, "*"), "*")) {
+			return true
+		}
+	}
+
 	if strings.HasPrefix(pattern, "*") {
 		if strings.HasSuffix(item, strings.TrimPrefix(pattern, "*")) {
 			return true
