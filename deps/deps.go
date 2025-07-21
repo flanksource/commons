@@ -27,6 +27,7 @@ type Dependency struct {
 	Linux        string
 	LinuxARM     string
 	Macosx       string
+	MacosxARM    string
 	Windows      string
 	Go           string
 	Docker       string
@@ -212,6 +213,7 @@ var dependencies = map[string]Dependency{
 		LinuxARM:   "https://github.com/PostgREST/postgrest/releases/download/{{.version}}/postgrest-{{.version}}-ubuntu-aarch64.tar.xz ",
 		Windows:    "https://github.com/PostgREST/postgrest/releases/download/{{.version}}/postgrest-{{.version}}-windows-x64.zip",
 		Macosx:     "https://github.com/PostgREST/postgrest/releases/download/{{.version}}/postgrest-{{.version}}-macos-x64.tar.xz",
+		MacosxARM:  "https://github.com/PostgREST/postgrest/releases/download/{{.version}}/postgrest-{{.version}}-macos-aarch64.tar.xz",
 		BinaryName: "postgrest",
 	},
 	"yq": {
@@ -270,6 +272,9 @@ func InstallDependency(name, ver string, binDir string) error {
 		}
 	case "darwin":
 		urlPath = dependency.Macosx
+		if strings.HasPrefix(runtime.GOARCH, "arm") && dependency.MacosxARM != "" {
+			urlPath = dependency.MacosxARM
+		}
 	case "windows":
 		urlPath = dependency.Windows
 	}
