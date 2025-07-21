@@ -23,18 +23,24 @@ import (
 // Dependency is a struct referring to a version and the templated path
 // to download the dependency on the different OS platforms
 type Dependency struct {
-	Version                            string
-	Linux, Macosx, Windows, Go, Docker string
-	Template                           string
-	BinaryName                         string
-	PreInstalled                       []string
+	Version      string
+	Linux        string
+	LinuxARM     string
+	Macosx       string
+	MacosxARM    string
+	Windows      string
+	Go           string
+	Docker       string
+	Template     string
+	BinaryName   string
+	PreInstalled []string
 }
 
 // BinaryFunc is an interface to executing a binary, downloading it necessary
-type BinaryFunc func(msg string, args ...interface{}) error
+type BinaryFunc func(msg string, args ...any) error
 
 // BinaryFuncWithEnv is an interface to executing a binary, downloading it necessary
-type BinaryFuncWithEnv func(msg string, env map[string]string, args ...interface{}) error
+type BinaryFuncWithEnv func(msg string, env map[string]string, args ...any) error
 
 func (dependency *Dependency) GetPath(name string, binDir string) (string, error) {
 	data := map[string]string{"os": runtime.GOOS, "platform": runtime.GOARCH, "version": dependency.Version}
@@ -62,7 +68,7 @@ func absolutePath(dir string) string {
 func BinaryWithEnv(name, ver string, binDir string, env map[string]string) BinaryFunc {
 	name = strings.ToLower(name)
 	binDir = absolutePath(binDir)
-	return func(msg string, args ...interface{}) error {
+	return func(msg string, args ...any) error {
 		bin := fmt.Sprintf("%s/%s", binDir, name)
 		if !files.Exists(binDir) {
 			if err := os.MkdirAll(binDir, 0755); err != nil {
@@ -202,10 +208,12 @@ var dependencies = map[string]Dependency{
 		Template: "https://storage.googleapis.com/kubebuilder-tools/kubebuilder-tools-{{.version}}-{{.os}}-{{.platform}}.tar.gz",
 	},
 	"postgrest": {
-		Version:    "v12.2.0",
+		Version:    "v12.2.12",
 		Linux:      "https://github.com/PostgREST/postgrest/releases/download/{{.version}}/postgrest-{{.version}}-linux-static-x64.tar.xz",
+		LinuxARM:   "https://github.com/PostgREST/postgrest/releases/download/{{.version}}/postgrest-{{.version}}-ubuntu-aarch64.tar.xz ",
 		Windows:    "https://github.com/PostgREST/postgrest/releases/download/{{.version}}/postgrest-{{.version}}-windows-x64.zip",
 		Macosx:     "https://github.com/PostgREST/postgrest/releases/download/{{.version}}/postgrest-{{.version}}-macos-x64.tar.xz",
+		MacosxARM:  "https://github.com/PostgREST/postgrest/releases/download/{{.version}}/postgrest-{{.version}}-macos-aarch64.tar.xz",
 		BinaryName: "postgrest",
 	},
 	"yq": {
@@ -259,8 +267,14 @@ func InstallDependency(name, ver string, binDir string) error {
 	switch runtime.GOOS {
 	case "linux":
 		urlPath = dependency.Linux
+		if strings.HasPrefix(runtime.GOARCH, "arm") && dependency.LinuxARM != "" {
+			urlPath = dependency.LinuxARM
+		}
 	case "darwin":
 		urlPath = dependency.Macosx
+		if strings.HasPrefix(runtime.GOARCH, "arm") && dependency.MacosxARM != "" {
+			urlPath = dependency.MacosxARM
+		}
 	case "windows":
 		urlPath = dependency.Windows
 	}
@@ -305,7 +319,7 @@ func Binary(name, ver string, binDir string) BinaryFunc {
 
 	dependency, ok := dependencies[name]
 	if !ok {
-		return func(msg string, args ...interface{}) error {
+		return func(msg string, args ...any) error {
 			if Which(name) {
 				return exec.Execf(name+" "+msg, args...)
 			}
@@ -314,7 +328,7 @@ func Binary(name, ver string, binDir string) BinaryFunc {
 	}
 
 	if dependency.Docker != "" {
-		return func(msg string, args ...interface{}) error {
+		return func(msg string, args ...any) error {
 			cwd, _ := os.Getwd()
 			docker := fmt.Sprintf("docker run --rm -v %s:%s -w %s %s:%s ", cwd, cwd, cwd, dependency.Docker, ver)
 			return exec.Execf(docker+msg, args...)
@@ -322,7 +336,7 @@ func Binary(name, ver string, binDir string) BinaryFunc {
 	}
 
 	if len(dependency.PreInstalled) > 0 {
-		return func(msg string, args ...interface{}) error {
+		return func(msg string, args ...any) error {
 			for _, bin := range dependency.PreInstalled {
 				if Which(bin) {
 					return exec.Execf(bin+" "+msg, args...)
@@ -332,7 +346,7 @@ func Binary(name, ver string, binDir string) BinaryFunc {
 		}
 	}
 
-	return func(msg string, args ...interface{}) error {
+	return func(msg string, args ...any) error {
 		if err := InstallDependency(name, ver, binDir); err != nil {
 			return err
 		}
