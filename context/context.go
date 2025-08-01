@@ -1,3 +1,36 @@
+// Package context provides an enhanced context implementation that combines
+// standard Go context functionality with integrated logging and distributed tracing.
+//
+// The Context type embeds context.Context and adds:
+//   - Integrated structured logging with level control
+//   - OpenTelemetry tracing support
+//   - Debug and trace mode flags
+//   - Automatic correlation between logs and traces
+//
+// Basic Usage:
+//
+//	ctx := context.NewContext(context.Background())
+//	ctx.Infof("Processing request %s", requestID)
+//	
+//	// Enable debug logging
+//	debugCtx := ctx.WithDebug()
+//	debugCtx.Debugf("Detailed information: %v", details)
+//	
+//	// Start a traced operation
+//	ctx, span := ctx.StartSpan("database-query")
+//	defer span.End()
+//	ctx.Infof("Executing query: %s", query)
+//
+// With Custom Logger and Tracer:
+//
+//	ctx := context.NewContext(
+//		context.Background(),
+//		context.WithLogger(customLogger),
+//		context.WithTracer(otel.Tracer("my-service")),
+//	)
+//
+// The context automatically propagates logging configuration and trace spans
+// through the call chain, ensuring consistent observability across your application.
 package context
 
 import (
@@ -20,32 +53,71 @@ var (
 	noopTracer = noop.NewTracerProvider().Tracer("noop")
 )
 
+// ContextOptions is a function that configures a Context during creation.
 type ContextOptions func(*Context)
 
+// WithTraceFn sets a custom function to determine if trace logging is enabled.
+// This allows dynamic control of trace logging based on context values or external conditions.
+//
+// Example:
+//
+//	ctx := NewContext(context.Background(), WithTraceFn(func(ctx Context) *bool {
+//		// Enable trace for specific user IDs
+//		userID := ctx.Value("userID")
+//		enabled := userID == "debug-user"
+//		return &enabled
+//	}))
 func WithTraceFn(fn func(Context) *bool) ContextOptions {
 	return func(opts *Context) {
 		opts.isTraceFn = fn
 	}
 }
 
+// WithDebugFn sets a custom function to determine if debug logging is enabled.
+// This allows dynamic control of debug logging based on context values or external conditions.
 func WithDebugFn(fn func(Context) *bool) ContextOptions {
 	return func(opts *Context) {
 		opts.isDebugFn = fn
 	}
 }
 
+// WithTracer configures the OpenTelemetry tracer for the context.
+// If not specified, a no-op tracer is used.
+//
+// Example:
+//
+//	tracer := otel.Tracer("my-service")
+//	ctx := NewContext(context.Background(), WithTracer(tracer))
 func WithTracer(tracer trace.Tracer) ContextOptions {
 	return func(opts *Context) {
 		opts.tracer = tracer
 	}
 }
 
+// WithLogger sets a custom logger for the context.
+// If not specified, the standard logger is used.
 func WithLogger(log logger.Logger) ContextOptions {
 	return func(opts *Context) {
 		opts.Logger = log
 	}
 }
 
+// NewContext creates a new enhanced context from a standard Go context.
+// The context is configured with the provided options and defaults to
+// the standard logger and a no-op tracer if not specified.
+//
+// Example:
+//
+//	// Basic context with defaults
+//	ctx := NewContext(context.Background())
+//	
+//	// Context with custom configuration
+//	ctx := NewContext(
+//		context.Background(),
+//		WithLogger(myLogger),
+//		WithTracer(myTracer),
+//		WithDebugFn(customDebugCheck),
+//	)
 func NewContext(basectx gocontext.Context, opts ...ContextOptions) Context {
 	ctx := Context{
 		Context: basectx,
@@ -63,6 +135,17 @@ func NewContext(basectx gocontext.Context, opts ...ContextOptions) Context {
 	return ctx
 }
 
+// Context is an enhanced context that embeds the standard context.Context
+// and adds integrated logging and tracing capabilities.
+//
+// It provides:
+//   - Structured logging with automatic trace correlation
+//   - Debug and trace mode management
+//   - OpenTelemetry span creation and management
+//   - Context value propagation with type safety
+//
+// The Context maintains its configuration (logger, tracer, debug/trace settings)
+// when creating derived contexts through WithValue, WithTimeout, etc.
 type Context struct {
 	gocontext.Context
 	Logger    logger.Logger

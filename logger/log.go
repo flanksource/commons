@@ -1,3 +1,32 @@
+// Package logger provides a flexible logging interface with support for
+// multiple backends (logrus, slog) and various output formats.
+//
+// The package offers a global logger instance that can be configured with
+// different log levels, output formats, and additional context values.
+//
+// Basic Usage:
+//
+//	logger.Infof("Server started on port %d", 8080)
+//	logger.Debugf("Processing request: %s", requestID)
+//	logger.Errorf("Failed to connect to database: %v", err)
+//
+// With Context Values:
+//
+//	log := logger.GetLogger().WithValues("user", userID, "request", requestID)
+//	log.Infof("Processing user request")
+//
+// Named Loggers:
+//
+//	dbLogger := logger.GetLogger().Named("database")
+//	apiLogger := logger.GetLogger().Named("api")
+//
+// Log Levels:
+//
+//	logger.SetLogLevel(logger.Debug)  // Enable debug logging
+//	logger.SetLogLevel(logger.Trace)  // Enable trace logging
+//
+// The package supports standard log levels (Info, Debug, Error, etc.) plus
+// extended trace levels (Trace, Trace1-4) for fine-grained debugging.
 package logger
 
 import (
@@ -6,6 +35,9 @@ import (
 	"log/slog"
 )
 
+// Logger is the main interface for logging operations.
+// It provides methods for different log levels and supports
+// structured logging with key-value pairs.
 type Logger interface {
 	Warnf(format string, args ...interface{})
 	Infof(format string, args ...interface{})
@@ -13,6 +45,12 @@ type Logger interface {
 	Debugf(format string, args ...interface{})
 	Tracef(format string, args ...interface{})
 	Fatalf(format string, args ...interface{})
+	// WithValues returns a new Logger with additional key-value pairs
+	// that will be included in all subsequent log messages.
+	//
+	// Example:
+	//   log := logger.WithValues("component", "auth", "version", "1.0")
+	//   log.Infof("User logged in") // Will include component=auth version=1.0
 	WithValues(keysAndValues ...interface{}) Logger
 	IsTraceEnabled() bool
 	IsDebugEnabled() bool
@@ -20,14 +58,33 @@ type Logger interface {
 	GetLevel() LogLevel
 	SetLogLevel(level any)
 	SetMinLogLevel(level any)
+	// V returns a Verbose logger that only logs if the specified level is enabled.
+	// Level can be an integer or a named level (Debug, Trace, etc.).
+	//
+	// Example:
+	//   logger.V(2).Infof("This only logs at verbosity 2+")
+	//   logger.V(logger.Trace).Infof("This only logs at trace level")
 	V(level any) Verbose
 	WithV(level any) Logger
+	// Named returns a new Logger with the specified name added to the logging context.
+	// This helps identify which component or subsystem generated the log.
+	//
+	// Example:
+	//   dbLogger := logger.Named("database")
+	//   dbLogger.Infof("Connected to database") // Logs with name="database"
 	Named(name string) Logger
 	WithoutName() Logger
 	WithSkipReportLevel(i int) Logger
 	GetSlogLogger() *slog.Logger
 }
 
+// Verbose provides conditional logging based on verbosity levels.
+// It's returned by Logger.V() and only logs if the specified level is enabled.
+//
+// Example:
+//
+//	// Only logs if verbosity is 2 or higher
+//	logger.V(2).Infof("Detailed debug information: %v", data)
 type Verbose interface {
 	io.Writer
 	Infof(format string, args ...interface{})
@@ -35,6 +92,8 @@ type Verbose interface {
 	Enabled() bool
 }
 
+// LogLevel represents the severity of a log message.
+// Higher values indicate more verbose logging.
 type LogLevel int
 
 const (

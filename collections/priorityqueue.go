@@ -2,17 +2,6 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package priorityqueue implements a priority queue backed by binary queue.
-//
-// A thread-safe priority queue based on a priority queue.
-// The elements of the priority queue are ordered by a comparator provided at queue construction time.
-//
-// The heap of this queue is the least/smallest element with respect to the specified ordering.
-// If multiple elements are tied for least value, the heap is one of those elements arbitrarily.
-//
-// Structure is thread safe.
-//
-// References: https://en.wikipedia.org/wiki/Priority_queue
 package collections
 
 import (
@@ -182,6 +171,20 @@ type queueItem[T comparable] struct {
 var _ queues.Queue[int] = (*Queue[int])(nil)
 
 // Queue holds elements in an array-list
+// Queue is a thread-safe priority queue implementation.
+// Elements are ordered by a comparator function and can optionally
+// be deduplicated using an equality function.
+//
+// Example:
+//
+//	queue, _ := collections.NewQueue(collections.QueueOpts[int]{
+//		Comparator: func(a, b int) int { return a - b }, // Min heap
+//		Dedupe: true,
+//		Equals: func(a, b int) bool { return a == b },
+//	})
+//	queue.Enqueue(5)
+//	queue.Enqueue(1)
+//	item, _ := queue.Dequeue() // Returns 1
 type Queue[T comparable] struct {
 	heap       *binaryheap.Heap[queueItem[T]]
 	Comparator utils.Comparator[T]
@@ -191,6 +194,7 @@ type Queue[T comparable] struct {
 	Dedupe     bool
 }
 
+// QueueOpts configures a priority queue.
 type QueueOpts[T comparable] struct {
 	Comparator utils.Comparator[T]
 	Dedupe     bool
@@ -198,6 +202,17 @@ type QueueOpts[T comparable] struct {
 	Metrics    MetricsOpts[T]
 }
 
+// NewQueue creates a new priority queue with the specified options.
+// Returns an error if Dedupe is true but no Equals function is provided.
+//
+// Example:
+//
+//	// Create a min-heap priority queue for tasks
+//	queue, err := collections.NewQueue(collections.QueueOpts[Task]{
+//		Comparator: func(a, b Task) int {
+//			return a.Priority - b.Priority // Lower priority first
+//		},
+//	})
 func NewQueue[T comparable](opts QueueOpts[T]) (*Queue[T], error) {
 	if opts.Dedupe && opts.Equals == nil {
 		return nil, errors.New("dedupe requires Equals function")

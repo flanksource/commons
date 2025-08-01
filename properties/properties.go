@@ -1,3 +1,54 @@
+// Package properties provides a thread-safe properties management system with
+// file loading, hot-reloading, and change notification support.
+//
+// The package offers a simple key-value store for application configuration
+// with support for loading from properties files, command-line overrides,
+// and dynamic updates with file watching.
+//
+// Key features:
+//   - Load properties from files (key=value format)
+//   - Command-line property overrides via -P flag
+//   - File watching with automatic hot-reloading
+//   - Thread-safe operations with read-write locks
+//   - Change listeners for reactive configuration
+//   - Type-safe accessors for common data types
+//
+// Basic usage:
+//
+//	// Load properties from file
+//	err := properties.LoadFile("app.properties")
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//	
+//	// Get property values with defaults
+//	host := properties.String("localhost", "server.host")
+//	port := properties.Int(8080, "server.port")
+//	debug := properties.On(false, "debug.enabled", "debug")
+//	timeout := properties.Duration(30*time.Second, "request.timeout")
+//	
+//	// Set properties dynamically
+//	properties.Set("api.key", "secret-key")
+//	
+//	// Register change listener
+//	properties.RegisterListener(func(p *properties.Properties) {
+//		log.Println("Properties updated")
+//	})
+//
+// Command-line usage:
+//
+//	./app -P db.host=localhost -P db.port=5432
+//
+// Properties file format:
+//
+//	# Comments start with #
+//	server.host=localhost
+//	server.port=8080
+//	debug.enabled=true
+//	request.timeout=30s
+//
+// The package maintains a global instance for convenience, but you can also
+// create isolated Properties instances for different configuration contexts.
 package properties
 
 import (
@@ -18,25 +69,40 @@ import (
 
 var commandlineProperties map[string]string
 
+// Global is the default properties instance used by package-level functions.
+// It's automatically initialized and ready to use.
 var Global = &Properties{
 	m: make(map[string]string),
 }
 
+// LoadFile is a convenience function that loads properties from a file
+// into the global properties instance. It's equivalent to Global.LoadFile(filename).
 var LoadFile = func(filename string) error {
 	return Global.LoadFile(filename)
 }
 
+// BindFlags binds the -P/--properties flag to the given flag set, allowing
+// properties to be set via command line.
+//
+// Example:
+//
+//	flags := pflag.NewFlagSet("app", pflag.ContinueOnError)
+//	properties.BindFlags(flags)
+//	flags.Parse(os.Args[1:])
+//	// Now you can use: ./app -P key1=value1 -P key2=value2
 func BindFlags(flags *pflag.FlagSet) {
 	flags.StringToStringVarP(&commandlineProperties, "properties", "P", nil, "System properties")
 }
 
+// Properties represents a thread-safe key-value store for application configuration.
+// It supports loading from files, dynamic updates, file watching, and change notifications.
 type Properties struct {
-	m         map[string]string
-	filename  string
-	listeners []func(*Properties)
-	lock      sync.RWMutex
-	close     func()
-	Reload    func()
+	m         map[string]string      // The property map
+	filename  string                 // Currently loaded file
+	listeners []func(*Properties)    // Change listeners
+	lock      sync.RWMutex           // Protects concurrent access
+	close     func()                 // Cleanup function for file watcher
+	Reload    func()                 // Function to manually trigger reload
 }
 
 func (p *Properties) RegisterListener(fn func(*Properties)) {
@@ -60,6 +126,7 @@ func (p *Properties) GetAll() map[string]string {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 	m := p.m
+	//command line properties take priority
 	for k, v := range commandlineProperties {
 		m[k] = v
 	}
@@ -67,6 +134,7 @@ func (p *Properties) GetAll() map[string]string {
 }
 
 func (p *Properties) Get(key string) string {
+	//command line properties take priority
 	if v, ok := commandlineProperties[key]; ok {
 		return v
 	}

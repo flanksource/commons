@@ -41,7 +41,7 @@ var (
 	LightCyan     = cyan + Light
 	BrightCyan    = cyan + Bright
 	white         = "\x1b[38"
-	White         = white + Light
+	White         = white
 	BoldOn        = "\x1b[1m"
 	BoldOff       = "\x1b[22m"
 	DarkWhite     = "\x1b[38;5;244m"
