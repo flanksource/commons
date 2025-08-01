@@ -13,3 +13,5 @@
 
 # Intellij
 .idea/
+.vscode/
+cliff.toml

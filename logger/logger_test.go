@@ -11,6 +11,12 @@ import (
 var log = StandardLogger()
 var _ = ginkgo.Describe("LogLevel Parsing", func() {
 
+	ginkgo.It("Logger Names", func() {
+		gomega.Expect(camelCaseWords("JohnDoe")).To((gomega.ContainElements("John", "Doe")))
+		gomega.Expect(camelCaseWords("johnDoe")).To((gomega.ContainElements("john", "Doe")))
+		gomega.Expect(camelCaseWords("john-doe")).To((gomega.ContainElements("john-doe")))
+
+	})
 	ginkgo.It("Default log level", func() {
 		gomega.Expect(GetLogger().GetLevel()).To(gomega.Equal(Info))
 	})

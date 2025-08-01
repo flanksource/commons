@@ -74,63 +74,122 @@ func BindFlags(flags *pflag.FlagSet) {
 	flags.Bool("log-to-stderr", false, "Log to stderr instead of stdout")
 }
 
+// UseCobraFlags initializes the logger using values from parsed cobra flags.
+// This should be called after cobra has parsed the command line arguments.
+func UseCobraFlags(flags *pflag.FlagSet) {
+	// Get the verbosity count from the parsed flags
+	if v, err := flags.GetCount("loglevel"); err == nil && v > 0 {
+		currentLogger.SetLogLevel(v)
+	} else if level, err := flags.GetString("log-level"); err == nil && level != "" && level != "info" {
+		currentLogger.SetLogLevel(level)
+	}
+	
+	// Apply other flags
+	if jsonLogs, err := flags.GetBool("json-logs"); err == nil && jsonLogs {
+		currentLogger = New("")
+	}
+}
+
+// Warnf logs a warning message with formatting support.
+// These are messages about potentially harmful situations.
 func Warnf(format string, args ...interface{}) {
 	currentLogger.Warnf(format, args...)
 }
 
+// Infof logs an informational message with formatting support.
+// These are general informational messages about normal operations.
 func Infof(format string, args ...interface{}) {
 	currentLogger.Infof(format, args...)
 }
 
-// Secretf is like Tracef, but attempts to strip any secrets from the text
+// Secretf logs a trace message after attempting to strip any secrets from the text.
+// It automatically redacts common secret patterns like passwords, tokens, and API keys.
+//
+// Example:
+//   logger.Secretf("Connecting with password=%s", password) // password will be redacted
 func Secretf(format string, args ...interface{}) {
 	currentLogger.Tracef(StripSecrets(fmt.Sprintf(format, args...)))
 }
 
-// Prettyf is like Tracef, but pretty prints the entire struct
+// Prettyf logs a trace message with a pretty-printed representation of the given object.
+// Useful for debugging complex data structures.
+//
+// Example:
+//   logger.Prettyf("User data:", userStruct) // Logs formatted struct
 func Prettyf(msg string, obj interface{}) {
 	currentLogger.Tracef(msg, Pretty(obj))
 }
 
+// Errorf logs an error message with formatting support.
+// Use this for errors that need attention but don't terminate the program.
 func Errorf(format string, args ...interface{}) {
 	currentLogger.Errorf(format, args...)
 }
 
+// Debugf logs a debug message with formatting support.
+// These messages are only shown when debug logging is enabled.
 func Debugf(format string, args ...interface{}) {
 	currentLogger.Debugf(format, args...)
 }
 
+// Tracef logs a trace message with formatting support.
+// These are very detailed messages for troubleshooting, only shown at trace level.
 func Tracef(format string, args ...interface{}) {
 	currentLogger.Tracef(format, args...)
 }
 
+// Fatalf logs a fatal error message and terminates the program.
+// Use this for unrecoverable errors.
 func Fatalf(format string, args ...interface{}) {
 	currentLogger.Fatalf(format, args...)
 }
+// V returns a verbose logger for conditional logging at the specified level.
+// The level can be an integer or a LogLevel constant.
+//
+// Example:
+//   logger.V(2).Infof("Detailed info") // Only logs at verbosity 2+
 func V(level any) Verbose {
 	return currentLogger.V(level)
 }
 
+// IsTraceEnabled returns true if trace level logging is enabled.
 func IsTraceEnabled() bool {
 	return currentLogger.IsTraceEnabled()
 }
 
+// IsLevelEnabled returns true if the specified verbosity level is enabled.
+//
+// Example:
+//   if logger.IsLevelEnabled(3) {
+//       // Perform expensive operation only if logging at level 3
+//   }
 func IsLevelEnabled(level int) bool {
 	return currentLogger.V(level).Enabled()
 }
 
+// IsDebugEnabled returns true if debug level logging is enabled.
 func IsDebugEnabled() bool {
 	return currentLogger.IsDebugEnabled()
 }
 
+// WithValues returns a new logger with additional key-value pairs.
+// These values will be included in all log messages from the returned logger.
+//
+// Example:
+//   userLogger := logger.WithValues("user_id", 123, "session", "abc")
+//   userLogger.Infof("User action") // Logs with user_id=123 session=abc
 func WithValues(keysAndValues ...interface{}) Logger {
 	return currentLogger.WithValues(keysAndValues...)
 }
 
+// SetLogger replaces the global logger instance.
+// Use this to configure a custom logger implementation.
 func SetLogger(logger Logger) {
 	currentLogger = logger
 }
 
+// StandardLogger returns the current global logger instance.
+// This is equivalent to GetLogger().
 func StandardLogger() Logger {
 	return currentLogger
 }

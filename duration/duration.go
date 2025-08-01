@@ -9,7 +9,53 @@
 
 // FORKED from https://git.maze.io/go/duration/src/branch/master/duration.go
 
-// Package duration contains routines to parse standard units of time.
+// Package duration provides enhanced duration parsing and formatting with support
+// for extended time units beyond the standard library.
+//
+// This package extends Go's standard time.Duration to support larger units like
+// days, weeks, months, and years, making it more suitable for human-readable
+// time representations and configuration files.
+//
+// Key features:
+//   - Parse durations with extended units: "d" (days), "w" (weeks), "y" (years)
+//   - Human-readable string formatting: "3d12h" instead of "84h"
+//   - Automatic precision adjustment based on magnitude
+//   - Compatible with standard time.Duration
+//
+// Supported time units:
+//   - ns: nanoseconds
+//   - us/µs/μs: microseconds
+//   - ms: milliseconds
+//   - s: seconds
+//   - m: minutes
+//   - h: hours
+//   - d: days (24 hours)
+//   - w: weeks (7 days)
+//   - y: years (365 days, approximation)
+//
+// Basic usage:
+//
+//	// Parse duration strings
+//	d, err := duration.ParseDuration("3d12h30m")
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//	fmt.Println(d) // Output: 3d12h30m
+//	
+//	// Create from standard units
+//	d = duration.Day * 7 + duration.Hour * 6
+//	fmt.Println(d) // Output: 1w6h
+//	
+//	// Convert to standard time.Duration
+//	td := time.Duration(d)
+//	
+//	// Get components
+//	fmt.Printf("Hours: %.2f, Days: %.2f\n", d.Hours(), d.Days())
+//
+// The formatting automatically adjusts precision based on the duration magnitude:
+//   - Durations over a week: formatted as weeks, days, hours (1w2d3h)
+//   - Durations over a day: formatted as days, hours, minutes (2d3h45m)
+//   - Smaller durations: include seconds and sub-second precision
 package duration
 
 import (
@@ -18,7 +64,9 @@ import (
 	"time"
 )
 
-// Duration is a standard unit of time.
+// Duration represents a time duration with support for extended units.
+// It embeds time.Duration and can be used anywhere a time.Duration is expected,
+// but provides enhanced parsing and formatting capabilities.
 type Duration time.Duration
 
 // String returns a string representing the duration in the form "3d1h3m".
@@ -301,11 +349,28 @@ var unitMap = map[string]int64{
 	"y":  int64(Year), // Approximation
 }
 
-// ParseDuration parses a duration string.
-// A duration string is a possibly signed sequence of
-// decimal numbers, each with optional fraction and a unit suffix,
-// such as "300ms", "-1.5h" or "2h45m".
-// Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h", "d", "w", "y".
+// ParseDuration parses a duration string with support for extended time units.
+// A duration string is a possibly signed sequence of decimal numbers, each with
+// optional fraction and a unit suffix, such as "300ms", "-1.5h", "2h45m", or "3d12h".
+//
+// Valid time units are:
+//   - "ns": nanoseconds
+//   - "us" (or "µs"/"μs"): microseconds  
+//   - "ms": milliseconds
+//   - "s": seconds
+//   - "m": minutes
+//   - "h": hours
+//   - "d": days (24 hours)
+//   - "w": weeks (7 days)
+//   - "y": years (365 days)
+//
+// Examples:
+//
+//	ParseDuration("2h30m")      // 2 hours 30 minutes
+//	ParseDuration("1.5d")       // 1.5 days (36 hours)
+//	ParseDuration("3w2d")       // 3 weeks 2 days
+//	ParseDuration("-30m")       // negative 30 minutes
+//	ParseDuration("1d12h30m")   // 1 day 12 hours 30 minutes
 func ParseDuration(s string) (Duration, error) {
 	// [-+]?([0-9]*(\.[0-9]*)?[a-z]+)+
 	orig := s

@@ -162,6 +162,13 @@ func camelCaseWords(s string) []string {
 	return lo.Map(strings.Fields(result.String()), func(s string, _ int) string { return strings.TrimSpace(s) })
 }
 
+// GetLogger returns a logger instance, optionally with the specified names.
+// If no names are provided, returns the root logger.
+// Multiple names create a hierarchical logger (e.g., GetLogger("app", "db") creates "app.db").
+//
+// Example:
+//   dbLogger := logger.GetLogger("database")
+//   apiLogger := logger.GetLogger("api", "v1")
 func GetLogger(names ...string) *SlogLogger {
 	parent, _ := namedLoggers.Load(rootName)
 	if len(names) == 0 {

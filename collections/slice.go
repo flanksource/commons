@@ -6,6 +6,13 @@ import (
 	"strings"
 )
 
+// Dedup removes duplicate elements from a slice while preserving order.
+// Returns a new slice containing only the first occurrence of each element.
+//
+// Example:
+//
+//	nums := []int{1, 2, 2, 3, 1, 4}
+//	unique := collections.Dedup(nums) // [1, 2, 3, 4]
 func Dedup[T comparable](arr []T) []T {
 	set := make(map[T]bool)
 	retArr := []T{}
@@ -18,7 +25,13 @@ func Dedup[T comparable](arr []T) []T {
 	return retArr
 }
 
-// ReplaceAllInSlice runs strings.Replace on all elements in a slice and returns the result
+// ReplaceAllInSlice applies strings.ReplaceAll to each element in the slice.
+//
+// Example:
+//
+//	urls := []string{"http://api.com", "http://web.com"}
+//	secure := collections.ReplaceAllInSlice(urls, "http://", "https://")
+//	// Result: ["https://api.com", "https://web.com"]
 func ReplaceAllInSlice(a []string, find string, replacement string) (replaced []string) {
 	for _, s := range a {
 		replaced = append(replaced, strings.ReplaceAll(s, find, replacement))
@@ -26,7 +39,13 @@ func ReplaceAllInSlice(a []string, find string, replacement string) (replaced []
 	return
 }
 
-// SplitAllInSlice runs strings.Split on all elements in a slice and returns the results at the given index
+// SplitAllInSlice splits each element and returns the part at the specified index.
+//
+// Example:
+//
+//	emails := []string{"john@example.com", "jane@test.org"}
+//	domains := collections.SplitAllInSlice(emails, "@", 1)
+//	// Result: ["example.com", "test.org"]
 func SplitAllInSlice(a []string, split string, index int) (replaced []string) {
 	for _, s := range a {
 		replaced = append(replaced, strings.Split(s, split)[index])
@@ -34,8 +53,13 @@ func SplitAllInSlice(a []string, split string, index int) (replaced []string) {
 	return
 }
 
-// Find returns the smallest index i at which x == a[i],
-// or len(a) if there is no such index.
+// Find returns the index of the first occurrence of x in the slice,
+// or len(a) if x is not found.
+//
+// Example:
+//
+//	fruits := []string{"apple", "banana", "orange"}
+//	idx := collections.Find(fruits, "banana") // Returns 1
 func Find(a []string, x string) int {
 	for i, n := range a {
 		if x == n {
@@ -45,7 +69,14 @@ func Find(a []string, x string) int {
 	return len(a)
 }
 
-// Contains tells whether a contains x.
+// Contains checks if a slice contains the specified element.
+//
+// Example:
+//
+//	nums := []int{1, 2, 3, 4, 5}
+//	if collections.Contains(nums, 3) {
+//		// Element found
+//	}
 func Contains[T comparable](a []T, x T) bool {
 	for _, n := range a {
 		if x == n {
