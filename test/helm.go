@@ -22,11 +22,11 @@ type HelmChart struct {
 	passwordSecret string
 	colorOutput    bool
 	dryRun         bool
-	
+
 	// Command execution state
-	runner         *CommandRunner
-	lastResult     CommandResult
-	lastError      error
+	runner     *CommandRunner
+	lastResult CommandResult
+	lastError  error
 }
 
 // NewHelmChart creates a new HelmChart builder
@@ -621,9 +621,6 @@ func (h *HelmChart) collectDiagnostics() {
 
 	h.runner.Printf(colorYellow, colorBold, "=== End of Diagnostics ===")
 }
-
-
-
 
 // Similar runCommand methods for Pod, StatefulSet, etc.
 func (p *Pod) runCommand(name string, args ...string) CommandResult {
