@@ -1,42 +1,15 @@
 package test
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os/exec"
 	"strings"
-	"sync"
 	"time"
 
 	"sigs.k8s.io/yaml"
 )
-
-// ANSI color codes for terminal output
-const (
-	colorReset  = "\033[0m"
-	colorGray   = "\033[90m"
-	colorRed    = "\033[91m"
-	colorYellow = "\033[93m"
-	colorBlue   = "\033[94m"
-	colorBold   = "\033[1m"
-)
-
-// CommandResult holds the result of a command execution
-type CommandResult struct {
-	Stdout   string
-	Stderr   string
-	ExitCode int
-	Err      error
-}
-
-// String returns a formatted string of the command result
-func (r CommandResult) String() string {
-	return fmt.Sprintf("ExitCode: %d\nStdout:\n%s\nStderr:\n%s\nError: %v",
-		r.ExitCode, r.Stdout, r.Stderr, r.Err)
-}
 
 // HelmChart represents a Helm chart with fluent interface
 type HelmChart struct {
@@ -51,6 +24,7 @@ type HelmChart struct {
 	dryRun         bool
 	
 	// Command execution state
+	runner         *CommandRunner
 	lastResult     CommandResult
 	lastError      error
 }
@@ -62,6 +36,7 @@ func NewHelmChart(chartPath string) *HelmChart {
 		colorOutput: true,
 		timeout:     5 * time.Minute,
 		values:      make(map[string]interface{}),
+		runner:      NewCommandRunner(true),
 	}
 }
 
@@ -130,6 +105,7 @@ func (h *HelmChart) DryRun() *HelmChart {
 // NoColor disables colored output
 func (h *HelmChart) NoColor() *HelmChart {
 	h.colorOutput = false
+	h.runner = NewCommandRunner(false)
 	return h
 }
 
@@ -140,7 +116,7 @@ func (h *HelmChart) Install() *HelmChart {
 		return h
 	}
 
-	h.printf(colorYellow, colorBold, "=== Helm Install: %s ===", h.releaseName)
+	h.runner.Printf(colorYellow, colorBold, "=== Helm Install: %s ===", h.releaseName)
 
 	// Handle password secret if specified
 	if h.passwordSecret != "" {
@@ -157,7 +133,7 @@ func (h *HelmChart) Install() *HelmChart {
 		args = append(args, "--dry-run")
 	}
 
-	h.lastResult = h.runCommand("helm", args...)
+	h.lastResult = h.runner.RunCommand("helm", args...)
 	if h.lastResult.Err != nil {
 		h.lastError = fmt.Errorf("helm install failed: %s", h.lastResult.String())
 		h.collectDiagnostics()
@@ -172,7 +148,7 @@ func (h *HelmChart) Upgrade() *HelmChart {
 		return h
 	}
 
-	h.printf(colorYellow, colorBold, "=== Helm Upgrade: %s ===", h.releaseName)
+	h.runner.Printf(colorYellow, colorBold, "=== Helm Upgrade: %s ===", h.releaseName)
 
 	// Handle password secret if specified
 	if h.passwordSecret != "" {
@@ -189,7 +165,7 @@ func (h *HelmChart) Upgrade() *HelmChart {
 		args = append(args, "--dry-run")
 	}
 
-	h.lastResult = h.runCommand("helm", args...)
+	h.lastResult = h.runner.RunCommand("helm", args...)
 	if h.lastResult.Err != nil {
 		h.lastError = fmt.Errorf("helm upgrade failed: %s", h.lastResult.String())
 		h.collectDiagnostics()
@@ -212,7 +188,7 @@ func (h *HelmChart) Delete() *HelmChart {
 		args = append(args, "--wait")
 	}
 
-	h.lastResult = h.runCommand("helm", args...)
+	h.lastResult = h.runner.RunCommand("helm", args...)
 	if h.lastResult.Err != nil && !strings.Contains(h.lastResult.Stderr, "not found") {
 		h.lastError = fmt.Errorf("helm delete failed: %s", h.lastResult.String())
 	}
@@ -275,7 +251,7 @@ func (h *HelmChart) Status() (string, error) {
 	if h.namespace != "" {
 		args = append(args, "-n", h.namespace)
 	}
-	result := h.runCommand("helm", args...)
+	result := h.runner.RunCommand("helm", args...)
 	return result.Stdout, result.Err
 }
 
@@ -486,7 +462,6 @@ type Secret struct {
 	helm        *HelmChart
 	colorOutput bool
 	lastResult  CommandResult
-	lastError   error
 }
 
 // Get retrieves a secret value by key
@@ -516,7 +491,6 @@ type ConfigMap struct {
 	helm        *HelmChart
 	colorOutput bool
 	lastResult  CommandResult
-	lastError   error
 }
 
 // Get retrieves a ConfigMap value by key
@@ -535,7 +509,6 @@ type PVC struct {
 	helm        *HelmChart
 	colorOutput bool
 	lastResult  CommandResult
-	lastError   error
 }
 
 // Status returns the PVC status
@@ -594,10 +567,10 @@ func (h *HelmChart) appendCommonArgs(args []string) []string {
 func (h *HelmChart) createPasswordSecret() error {
 	password := fmt.Sprintf("pass-%d", time.Now().Unix())
 
-	h.printf(colorYellow, colorBold, "Creating password secret: %s", h.passwordSecret)
+	h.runner.Printf(colorYellow, colorBold, "Creating password secret: %s", h.passwordSecret)
 
 	// Create the secret
-	result := h.runCommand("kubectl", "create", "secret", "generic", h.passwordSecret,
+	result := h.runner.RunCommand("kubectl", "create", "secret", "generic", h.passwordSecret,
 		"--from-literal=password="+password,
 		"-n", h.namespace,
 		"--dry-run=client", "-o", "yaml")
@@ -622,7 +595,7 @@ func (h *HelmChart) createPasswordSecret() error {
 		"secretKey":      "password",
 	}
 
-	h.printf(colorGray, "", "Secret created with password: %s", password)
+	h.runner.Printf(colorGray, "", "Secret created with password: %s", password)
 	return nil
 }
 
@@ -631,135 +604,46 @@ func (h *HelmChart) collectDiagnostics() {
 		return
 	}
 
-	h.printf(colorRed, colorBold, "=== Collecting Diagnostics ===")
+	h.runner.Printf(colorRed, colorBold, "=== Collecting Diagnostics ===")
 
 	// Get Helm release status
-	h.printf(colorBlue, "", "● Helm Release Status:")
-	h.runCommand("helm", "status", h.releaseName, "-n", h.namespace)
+	h.runner.Printf(colorBlue, "", "● Helm Release Status:")
+	h.runner.RunCommand("helm", "status", h.releaseName, "-n", h.namespace)
 
 	// Get pods
-	h.printf(colorBlue, "", "● Pods in namespace %s:", h.namespace)
-	h.runCommand("kubectl", "get", "pods", "-n", h.namespace, "-o", "wide")
+	h.runner.Printf(colorBlue, "", "● Pods in namespace %s:", h.namespace)
+	h.runner.RunCommand("kubectl", "get", "pods", "-n", h.namespace, "-o", "wide")
 
 	// Get events
-	h.printf(colorBlue, "", "● Recent Events:")
-	h.runCommand("kubectl", "get", "events", "-n", h.namespace,
+	h.runner.Printf(colorBlue, "", "● Recent Events:")
+	h.runner.RunCommand("kubectl", "get", "events", "-n", h.namespace,
 		"--sort-by=.lastTimestamp")
 
-	h.printf(colorYellow, colorBold, "=== End of Diagnostics ===")
+	h.runner.Printf(colorYellow, colorBold, "=== End of Diagnostics ===")
 }
 
-func (h *HelmChart) printf(color, style, format string, args ...interface{}) {
-	if h.colorOutput {
-		fmt.Printf("%s%s%s%s\n", color, style, fmt.Sprintf(format, args...), colorReset)
-	} else {
-		fmt.Printf(format+"\n", args...)
-	}
-}
 
-func (h *HelmChart) runCommand(name string, args ...string) CommandResult {
-	if h.colorOutput {
-		fmt.Printf("%s%s>>> Executing: %s %s%s\n", colorBlue, colorBold, name, strings.Join(args, " "), colorReset)
-	}
 
-	cmd := exec.Command(name, args...)
-
-	// Create pipes for stdout and stderr
-	stdoutPipe, err := cmd.StdoutPipe()
-	if err != nil {
-		return CommandResult{
-			Err:      fmt.Errorf("failed to create stdout pipe: %w", err),
-			ExitCode: -1,
-		}
-	}
-
-	stderrPipe, err := cmd.StderrPipe()
-	if err != nil {
-		return CommandResult{
-			Err:      fmt.Errorf("failed to create stderr pipe: %w", err),
-			ExitCode: -1,
-		}
-	}
-
-	// Buffers to capture output
-	var stdout, stderr bytes.Buffer
-
-	// Start the command
-	if err := cmd.Start(); err != nil {
-		return CommandResult{
-			Err:      fmt.Errorf("failed to start command: %w", err),
-			ExitCode: -1,
-		}
-	}
-
-	// Stream output in real-time with colors
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	go h.streamOutput(stdoutPipe, "stdout", colorGray, &stdout, &wg)
-	go h.streamOutput(stderrPipe, "stderr", colorRed, &stderr, &wg)
-
-	// Wait for output streaming to complete
-	wg.Wait()
-
-	// Wait for command to complete
-	err = cmd.Wait()
-	exitCode := 0
-	if exitErr, ok := err.(*exec.ExitError); ok {
-		exitCode = exitErr.ExitCode()
-	}
-
-	result := CommandResult{
-		Stdout:   stdout.String(),
-		Stderr:   stderr.String(),
-		ExitCode: exitCode,
-		Err:      err,
-	}
-
-	// Print exit status
-	if h.colorOutput {
-		if result.Err != nil {
-			fmt.Printf("%s%s<<< Command failed with exit code %d%s\n", colorRed, colorBold, result.ExitCode, colorReset)
-		} else {
-			fmt.Printf("%s<<< Command completed successfully%s\n", colorGray, colorReset)
-		}
-		fmt.Println() // Add blank line for readability
-	}
-
-	return result
-}
-
-func (h *HelmChart) streamOutput(reader io.Reader, prefix string, color string, buffer *bytes.Buffer, wg *sync.WaitGroup) {
-	defer wg.Done()
-	scanner := bufio.NewScanner(reader)
-	for scanner.Scan() {
-		line := scanner.Text()
-		buffer.WriteString(line + "\n")
-		if h.colorOutput {
-			fmt.Printf("%s%s%s: %s%s\n", color, prefix, colorReset, color, line+colorReset)
-		}
-	}
-}
 
 // Similar runCommand methods for Pod, StatefulSet, etc.
 func (p *Pod) runCommand(name string, args ...string) CommandResult {
-	return p.helm.runCommand(name, args...)
+	return p.helm.runner.RunCommand(name, args...)
 }
 
 func (s *StatefulSet) runCommand(name string, args ...string) CommandResult {
-	return s.helm.runCommand(name, args...)
+	return s.helm.runner.RunCommand(name, args...)
 }
 
 func (sec *Secret) runCommand(name string, args ...string) CommandResult {
-	return sec.helm.runCommand(name, args...)
+	return sec.helm.runner.RunCommand(name, args...)
 }
 
 func (c *ConfigMap) runCommand(name string, args ...string) CommandResult {
-	return c.helm.runCommand(name, args...)
+	return c.helm.runner.RunCommand(name, args...)
 }
 
 func (p *PVC) runCommand(name string, args ...string) CommandResult {
-	return p.helm.runCommand(name, args...)
+	return p.helm.runner.RunCommand(name, args...)
 }
 
 func (p *Pod) resolvePodName() error {
@@ -780,6 +664,7 @@ func (p *Pod) resolvePodName() error {
 type Namespace struct {
 	name        string
 	colorOutput bool
+	runner      *CommandRunner
 	lastResult  CommandResult
 	lastError   error
 }
@@ -789,6 +674,7 @@ func NewNamespace(name string) *Namespace {
 	return &Namespace{
 		name:        name,
 		colorOutput: true,
+		runner:      NewCommandRunner(true),
 	}
 }
 
@@ -824,35 +710,5 @@ func (n *Namespace) MustSucceed() *Namespace {
 }
 
 func (n *Namespace) runCommand(name string, args ...string) CommandResult {
-	if n.colorOutput {
-		fmt.Printf("%s%s>>> Executing: %s %s%s\n", colorBlue, colorBold, name, strings.Join(args, " "), colorReset)
-	}
-
-	cmd := exec.Command(name, args...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
-	exitCode := 0
-	if exitErr, ok := err.(*exec.ExitError); ok {
-		exitCode = exitErr.ExitCode()
-	}
-
-	result := CommandResult{
-		Stdout:   stdout.String(),
-		Stderr:   stderr.String(),
-		ExitCode: exitCode,
-		Err:      err,
-	}
-
-	if n.colorOutput {
-		if result.Err != nil {
-			fmt.Printf("%s%s<<< Command failed with exit code %d%s\n", colorRed, colorBold, result.ExitCode, colorReset)
-		} else {
-			fmt.Printf("%s<<< Command completed successfully%s\n", colorGray, colorReset)
-		}
-	}
-
-	return result
+	return n.runner.RunCommand(name, args...)
 }
