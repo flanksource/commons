@@ -187,7 +187,7 @@ func (c *CommandRunner) Errorf(format string, args ...interface{}) CommandResult
 	} else {
 		fmt.Printf(format+"\n", args...)
 	}
-	return CommandResult{ExitCode: 1, Err: fmt.Errorf(fmt.Sprintf(format, args...))}
+	return CommandResult{ExitCode: 1, Err: fmt.Errorf(format, args...)}
 }
 
 func (c *CommandRunner) Statusf(format string, args ...interface{}) CommandResult {

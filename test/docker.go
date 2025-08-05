@@ -534,7 +534,9 @@ func (c *Container) StreamLogs(ctx context.Context, writer io.Writer) error {
 
 	// Wait for context cancellation
 	<-ctx.Done()
-	cmd.Process.Kill()
+	if err := cmd.Process.Kill(); err != nil {
+		return fmt.Errorf("failed to kill process: %w", err)
+	}
 
 	return nil
 }
@@ -902,7 +904,11 @@ func (v *Volume) CopyFromVolume(volumePath, hostPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create temporary container: %w", err)
 	}
-	defer container.Delete()
+	defer func() {
+		if err := container.Delete(); err != nil {
+			v.client.runner.Printf(colorRed, "", "Failed to delete container: %v", err)
+		}
+	}()
 
 	// Copy the file from the container
 	containerPath := filepath.Join("/volume", volumePath)
@@ -927,7 +933,11 @@ func (v *Volume) CopyToVolume(hostPath, volumePath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create temporary container: %w", err)
 	}
-	defer container.Delete()
+	defer func() {
+		if err := container.Delete(); err != nil {
+			v.client.runner.Printf(colorRed, "", "Failed to delete container: %v", err)
+		}
+	}()
 
 	// Copy the file to the container
 	containerPath := filepath.Join("/volume", volumePath)
@@ -957,7 +967,11 @@ func (v *Volume) BackupVolume(backupPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create backup container: %w", err)
 	}
-	defer container.Delete()
+	defer func() {
+		if err := container.Delete(); err != nil {
+			v.client.runner.Printf(colorRed, "", "Failed to delete container: %v", err)
+		}
+	}()
 
 	// Wait for tar to complete
 	time.Sleep(2 * time.Second)
@@ -994,7 +1008,11 @@ func (v *Volume) RestoreVolume(backupPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create restore container: %w", err)
 	}
-	defer container.Delete()
+	defer func() {
+		if err := container.Delete(); err != nil {
+			v.client.runner.Printf(colorRed, "", "Failed to delete container: %v", err)
+		}
+	}()
 
 	// Copy backup to container
 	if err := container.CopyTo(backupPath, "/backup.tar.gz"); err != nil {
@@ -1036,10 +1054,16 @@ func (v *Volume) CloneVolume(newName string) (*Volume, error) {
 		Detach: true,
 	})
 	if err != nil {
-		newVolume.Delete()
+		if deleteErr := newVolume.Delete(); deleteErr != nil {
+			v.client.runner.Printf(colorRed, "", "Failed to delete volume: %v", deleteErr)
+		}
 		return nil, fmt.Errorf("failed to create source container: %w", err)
 	}
-	defer sourceContainer.Delete()
+	defer func() {
+		if err := sourceContainer.Delete(); err != nil {
+			v.client.runner.Printf(colorRed, "", "Failed to delete container: %v", err)
+		}
+	}()
 
 	destContainer, err := Run(ContainerOptions{
 		Name:    fmt.Sprintf("volume-clone-dest-%d", time.Now().Unix()),
@@ -1052,10 +1076,16 @@ func (v *Volume) CloneVolume(newName string) (*Volume, error) {
 		Detach: true,
 	})
 	if err != nil {
-		newVolume.Delete()
+		if deleteErr := newVolume.Delete(); deleteErr != nil {
+			v.client.runner.Printf(colorRed, "", "Failed to delete volume: %v", deleteErr)
+		}
 		return nil, fmt.Errorf("failed to create destination container: %w", err)
 	}
-	defer destContainer.Delete()
+	defer func() {
+		if err := destContainer.Delete(); err != nil {
+			v.client.runner.Printf(colorRed, "", "Failed to delete container: %v", err)
+		}
+	}()
 
 	// Copy data between volumes using tar
 	_, err = sourceContainer.Exec("sh", "-c", "cd /source && tar -cf - . | docker exec -i "+destContainer.ID+" tar -xf - -C /dest")
@@ -1066,28 +1096,36 @@ func (v *Volume) CloneVolume(newName string) (*Volume, error) {
 		// Create tar in source
 		_, err = sourceContainer.Exec("tar", "-czf", "/tmp/data.tar.gz", "-C", "/source", ".")
 		if err != nil {
-			newVolume.Delete()
+			if deleteErr := newVolume.Delete(); deleteErr != nil {
+				v.client.runner.Printf(colorRed, "", "Failed to delete volume: %v", deleteErr)
+			}
 			return nil, fmt.Errorf("failed to create tar: %w", err)
 		}
 
 		// Copy tar to host
 		tempFile := fmt.Sprintf("/tmp/volume-clone-%d.tar.gz", time.Now().Unix())
 		if err := sourceContainer.GetFile("/tmp/data.tar.gz", tempFile); err != nil {
-			newVolume.Delete()
+			if deleteErr := newVolume.Delete(); deleteErr != nil {
+				v.client.runner.Printf(colorRed, "", "Failed to delete volume: %v", deleteErr)
+			}
 			return nil, fmt.Errorf("failed to copy tar to host: %w", err)
 		}
 		defer os.Remove(tempFile)
 
 		// Copy tar to destination
 		if err := destContainer.CopyTo(tempFile, "/tmp/data.tar.gz"); err != nil {
-			newVolume.Delete()
+			if deleteErr := newVolume.Delete(); deleteErr != nil {
+				v.client.runner.Printf(colorRed, "", "Failed to delete volume: %v", deleteErr)
+			}
 			return nil, fmt.Errorf("failed to copy tar to destination: %w", err)
 		}
 
 		// Extract in destination
 		_, err = destContainer.Exec("tar", "-xzf", "/tmp/data.tar.gz", "-C", "/dest")
 		if err != nil {
-			newVolume.Delete()
+			if deleteErr := newVolume.Delete(); deleteErr != nil {
+				v.client.runner.Printf(colorRed, "", "Failed to delete volume: %v", deleteErr)
+			}
 			return nil, fmt.Errorf("failed to extract tar: %w", err)
 		}
 	}
