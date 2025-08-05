@@ -5,9 +5,11 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
+	"testing"
 )
 
 // CommandResult holds the result of a command execution
@@ -27,6 +29,23 @@ func (r CommandResult) String() string {
 // CommandRunner provides command execution with optional colored output
 type CommandRunner struct {
 	ColorOutput bool
+}
+
+// isVerboseMode checks if we're running in verbose test mode
+func isVerboseMode() bool {
+	// Check if testing.Verbose() is available (when running in test context)
+	if testing.Testing() {
+		return testing.Verbose()
+	}
+	
+	// Fallback: check for -v flag in command line args
+	for _, arg := range os.Args {
+		if arg == "-v" || arg == "-test.v" || arg == "-test.v=true" {
+			return true
+		}
+	}
+	
+	return false
 }
 
 // NewCommandRunner creates a new CommandRunner
@@ -131,13 +150,62 @@ func (c *CommandRunner) RunCommandQuiet(name string, args ...string) CommandResu
 func (c *CommandRunner) streamOutput(reader io.Reader, prefix string, color string, buffer *bytes.Buffer, wg *sync.WaitGroup) {
 	defer wg.Done()
 	scanner := bufio.NewScanner(reader)
+	isVerbose := isVerboseMode()
+	lineCount := 0
+	
 	for scanner.Scan() {
 		line := scanner.Text()
 		buffer.WriteString(line + "\n")
+		lineCount++
+		
 		if c.ColorOutput {
-			fmt.Printf("%s%s%s: %s%s\n", color, prefix, colorReset, color, line+colorReset)
+			// Always print command outputs (from stdout), but limit log statements unless verbose
+			shouldPrint := prefix == "stdout" || isVerbose || lineCount == 1
+			
+			if shouldPrint {
+				fmt.Printf("%s%s%s: %s%s\n", color, prefix, colorReset, color, line+colorReset)
+			} else if lineCount == 2 && prefix == "stderr" {
+				// Show truncation indicator for stderr when not verbose
+				fmt.Printf("%s%s%s: %s... (use -v for full output)%s\n", color, prefix, colorReset, color, colorReset)
+			}
 		}
 	}
+}
+
+func (c *CommandRunner) Successf(format string, args ...interface{}) CommandResult {
+	if c.ColorOutput {
+		fmt.Printf("%s%s%s\n", colorGreen, colorBold, fmt.Sprintf(format, args...))
+	} else {
+		fmt.Printf(format+"\n", args...)
+	}
+	return CommandResult{ExitCode: 0}
+}
+
+func (c *CommandRunner) Errorf(format string, args ...interface{}) CommandResult {
+	if c.ColorOutput {
+		fmt.Printf("%s%s%s\n", colorRed, colorBold, fmt.Sprintf(format, args...))
+	} else {
+		fmt.Printf(format+"\n", args...)
+	}
+	return CommandResult{ExitCode: 1, Err: fmt.Errorf(fmt.Sprintf(format, args...))}
+}
+
+func (c *CommandRunner) Statusf(format string, args ...interface{}) CommandResult {
+	if c.ColorOutput {
+		fmt.Printf("%s%s%s\n", colorYellow, colorBold, fmt.Sprintf(format, args...))
+	} else {
+		fmt.Printf(format+"\n", args...)
+	}
+	return CommandResult{ExitCode: 0}
+}
+
+func (c *CommandRunner) Infof(format string, args ...interface{}) CommandResult {
+	if c.ColorOutput {
+		fmt.Printf("%s%s%s\n", colorYellow, colorBold, fmt.Sprintf(format, args...))
+	} else {
+		fmt.Printf(format+"\n", args...)
+	}
+	return CommandResult{ExitCode: 0}
 }
 
 // Printf prints a formatted colored message
