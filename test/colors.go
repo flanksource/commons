@@ -8,4 +8,5 @@ const (
 	colorYellow = "\033[93m"
 	colorBlue   = "\033[94m"
 	colorBold   = "\033[1m"
+	colorGreen  = "\033[92m"
 )
