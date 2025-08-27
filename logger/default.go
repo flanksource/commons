@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/flanksource/commons/properties"
 	"github.com/spf13/pflag"
 )
 
@@ -63,6 +64,40 @@ func IsJsonLogs() bool {
 	return flags.jsonLogs
 }
 
+type Flags struct {
+	Color, ReportCaller, JsonLogs, LogToStderr bool
+	Level                                      string
+	LevelCount                                 int
+}
+
+func Configure(flags Flags) {
+	// Get the verbosity count from the parsed flags
+	if flags.LevelCount > 0 {
+		currentLogger.SetLogLevel(flags.LevelCount)
+	} else if level := flags.Level; level != "" && level != "info" {
+		currentLogger.SetLogLevel(level)
+	}
+
+	// Apply other flags
+	if flags.JsonLogs {
+		properties.Set("log.json", "true")
+	}
+
+	if flags.ReportCaller {
+		properties.Set("log.report.caller", "true")
+	}
+
+	if flags.LogToStderr {
+		properties.Set("log.stderr", "true")
+	}
+	if !flags.Color {
+		properties.Set("log.color", "false")
+	}
+
+	currentLogger = *New("")
+
+}
+
 // BindFlags add flags to an existing flag set,
 // note that this is not an actual binding which occurs later during initialization
 func BindFlags(flags *pflag.FlagSet) {
@@ -83,7 +118,7 @@ func UseCobraFlags(flags *pflag.FlagSet) {
 	} else if level, err := flags.GetString("log-level"); err == nil && level != "" && level != "info" {
 		currentLogger.SetLogLevel(level)
 	}
-	
+
 	// Apply other flags
 	if jsonLogs, err := flags.GetBool("json-logs"); err == nil && jsonLogs {
 		currentLogger = New("")
@@ -106,7 +141,8 @@ func Infof(format string, args ...interface{}) {
 // It automatically redacts common secret patterns like passwords, tokens, and API keys.
 //
 // Example:
-//   logger.Secretf("Connecting with password=%s", password) // password will be redacted
+//
+//	logger.Secretf("Connecting with password=%s", password) // password will be redacted
 func Secretf(format string, args ...interface{}) {
 	currentLogger.Tracef(StripSecrets(fmt.Sprintf(format, args...)))
 }
@@ -115,7 +151,8 @@ func Secretf(format string, args ...interface{}) {
 // Useful for debugging complex data structures.
 //
 // Example:
-//   logger.Prettyf("User data:", userStruct) // Logs formatted struct
+//
+//	logger.Prettyf("User data:", userStruct) // Logs formatted struct
 func Prettyf(msg string, obj interface{}) {
 	currentLogger.Tracef(msg, Pretty(obj))
 }
@@ -143,11 +180,13 @@ func Tracef(format string, args ...interface{}) {
 func Fatalf(format string, args ...interface{}) {
 	currentLogger.Fatalf(format, args...)
 }
+
 // V returns a verbose logger for conditional logging at the specified level.
 // The level can be an integer or a LogLevel constant.
 //
 // Example:
-//   logger.V(2).Infof("Detailed info") // Only logs at verbosity 2+
+//
+//	logger.V(2).Infof("Detailed info") // Only logs at verbosity 2+
 func V(level any) Verbose {
 	return currentLogger.V(level)
 }
@@ -160,9 +199,10 @@ func IsTraceEnabled() bool {
 // IsLevelEnabled returns true if the specified verbosity level is enabled.
 //
 // Example:
-//   if logger.IsLevelEnabled(3) {
-//       // Perform expensive operation only if logging at level 3
-//   }
+//
+//	if logger.IsLevelEnabled(3) {
+//	    // Perform expensive operation only if logging at level 3
+//	}
 func IsLevelEnabled(level int) bool {
 	return currentLogger.V(level).Enabled()
 }
@@ -176,8 +216,9 @@ func IsDebugEnabled() bool {
 // These values will be included in all log messages from the returned logger.
 //
 // Example:
-//   userLogger := logger.WithValues("user_id", 123, "session", "abc")
-//   userLogger.Infof("User action") // Logs with user_id=123 session=abc
+//
+//	userLogger := logger.WithValues("user_id", 123, "session", "abc")
+//	userLogger.Infof("User action") // Logs with user_id=123 session=abc
 func WithValues(keysAndValues ...interface{}) Logger {
 	return currentLogger.WithValues(keysAndValues...)
 }

@@ -48,7 +48,13 @@ var SlogTraceLevel slog.Level = slog.LevelDebug - 1
 var SlogFatal = slog.LevelError + 1
 
 func GetSlogLogger() SlogLogger {
-	return currentLogger.(SlogLogger)
+	switch currentLogger := currentLogger.(type) {
+	case SlogLogger:
+		return currentLogger
+	case *SlogLogger:
+		return *currentLogger
+	}
+	return SlogLogger{}
 }
 
 func onPropertyUpdate(props *properties.Properties) {
@@ -167,8 +173,9 @@ func camelCaseWords(s string) []string {
 // Multiple names create a hierarchical logger (e.g., GetLogger("app", "db") creates "app.db").
 //
 // Example:
-//   dbLogger := logger.GetLogger("database")
-//   apiLogger := logger.GetLogger("api", "v1")
+//
+//	dbLogger := logger.GetLogger("database")
+//	apiLogger := logger.GetLogger("api", "v1")
 func GetLogger(names ...string) *SlogLogger {
 	parent, _ := namedLoggers.Load(rootName)
 	if len(names) == 0 {

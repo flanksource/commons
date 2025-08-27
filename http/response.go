@@ -2,10 +2,14 @@ package http
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/flanksource/commons/console"
+	"github.com/flanksource/commons/logger"
 )
 
 // Response extends the stdlib http.Response type and extends its functionality
@@ -87,4 +91,34 @@ func (h *Response) IsJSON() bool {
 	}
 
 	return false
+}
+
+func (h *Response) HeaderMap() map[string]string {
+	headers := make(map[string]string)
+	for k, v := range h.Header {
+		headers[k] = strings.Join(v, ", ")
+	}
+	return headers
+}
+
+func (h *Response) Debug() string {
+	// mimic the response, + add content-type and size
+	var sb strings.Builder
+
+	if h.Request != nil {
+		sb.WriteString(h.Request.Debug())
+	}
+
+	sb.WriteString(fmt.Sprintf("\n====> Status: %d\n", h.StatusCode))
+	for k, v := range logger.StripSecretsFromMap(h.HeaderMap()) {
+		sb.WriteString(fmt.Sprintf("  %s: %s\n", console.Grayf(k), v))
+	}
+	if h.IsJSON() {
+		r, _ := h.AsJSON()
+		sb.WriteString(logger.Pretty(r))
+	} else {
+		body, _ := io.ReadAll(h.Body)
+		sb.WriteString(string(body))
+	}
+	return sb.String()
 }
