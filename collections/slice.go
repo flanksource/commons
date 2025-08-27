@@ -105,6 +105,68 @@ func Append[T any](slices ...[]T) []T {
 	return output
 }
 
+func MatchAny(items []string, patterns ...string) (matches, negated bool) {
+	var matched = false
+	for _, item := range items {
+		matches, negated = MatchItem(item, patterns...)
+		matched = matched || matches
+		if negated {
+			return false, true
+		}
+	}
+
+	return matched, false
+}
+
+// matchItems returns true if any of the patterns in the list match the item.
+// negative matches are supported by prefixing the item with a "!" and
+// takes precendence over positive match.
+// * matches everything
+// to match prefix and suffix use "*" accordingly.
+func MatchItem(item string, patterns ...string) (matches, negated bool) {
+	if len(patterns) == 0 {
+		return true, false
+	}
+
+	slices.SortFunc(patterns, sortPatterns)
+
+	//process negations first
+	for _, p := range patterns {
+		pattern, err := url.QueryUnescape(strings.TrimSpace(p))
+		if err != nil {
+			continue
+		}
+
+		if strings.HasPrefix(pattern, "!") {
+			if matchPattern(item, strings.TrimPrefix(pattern, "!")) {
+				return false, true
+			}
+		}
+
+	}
+
+	// then normal filters
+	for _, p := range patterns {
+		pattern, err := url.QueryUnescape(strings.TrimSpace(p))
+		if err != nil {
+			continue
+		}
+
+		if matchPattern(item, pattern) {
+			return true, false
+		}
+	}
+
+	//nolint:gosimple
+	//lint:ignore S1008 ...
+	if IsExclusionOnlyPatterns(patterns) {
+		// If all the filters were exlusions, and none of the exclusions excluded the item, then it's a match
+		return true, false
+	}
+
+	return false, false
+}
+
 // matchItems returns true if any of the patterns in the list match the item.
 // negative matches are supported by prefixing the item with a "!" and
 // takes precendence over positive match.

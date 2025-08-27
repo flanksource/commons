@@ -10,6 +10,9 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/flanksource/commons/console"
+	"github.com/flanksource/commons/logger"
 )
 
 // Request represents an HTTP request that can be customized and executed.
@@ -161,7 +164,7 @@ func (r *Request) Retry(maxRetries uint, baseDuration time.Duration, exponent fl
 //	// JSON body
 //	req.Body(map[string]string{"key": "value"})
 //
-//	// String body  
+//	// String body
 //	req.Body("raw text data")
 //
 //	// Reader body
@@ -228,4 +231,23 @@ func (r *Request) do() (resp *Response, err error) {
 
 		return response, nil
 	}
+}
+
+func (r *Request) HeaderMap() map[string]string {
+	headers := make(map[string]string)
+	for k, v := range r.headers {
+		headers[k] = strings.Join(v, ", ")
+	}
+	return headers
+}
+
+func (r *Request) Debug() string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("%s %s\n", r.method, logger.StripSecrets(r.url.String())))
+	for k, v := range logger.StripSecretsFromMap(r.HeaderMap()) {
+		sb.WriteString(fmt.Sprintf("  %s: %s\n", console.Grayf(k), v))
+	}
+	body, _ := io.ReadAll(r.body)
+	sb.WriteString(logger.StripSecrets(string(body)))
+	return sb.String()
 }
