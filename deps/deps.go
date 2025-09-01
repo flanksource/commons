@@ -216,6 +216,16 @@ var dependencies = map[string]Dependency{
 		MacosxARM:  "https://github.com/PostgREST/postgrest/releases/download/{{.version}}/postgrest-{{.version}}-macos-aarch64.tar.xz",
 		BinaryName: "postgrest",
 	},
+
+	"postgrestV13": {
+		Version:    "v13.0.5",
+		Linux:      "https://github.com/PostgREST/postgrest/releases/download/{{.version}}/postgrest-{{.version}}-linux-static-x86-64.tar.xz",
+		LinuxARM:   "https://github.com/PostgREST/postgrest/releases/download/{{.version}}/postgrest-{{.version}}-ubuntu-aarch64.tar.xz ",
+		Windows:    "https://github.com/PostgREST/postgrest/releases/download/{{.version}}/postgrest-{{.version}}-windows-x86-64.zip",
+		Macosx:     "https://github.com/PostgREST/postgrest/releases/download/{{.version}}/postgrest-{{.version}}-macos-x86-64.tar.xz",
+		MacosxARM:  "https://github.com/PostgREST/postgrest/releases/download/{{.version}}/postgrest-{{.version}}-macos-aarch64.tar.xz",
+		BinaryName: "postgrest",
+	},
 	"yq": {
 		Version:  "v4.16.2",
 		Template: "https://github.com/mikefarah/yq/releases/download/{{.version}}/yq_{{.os}}_{{.platform}}",

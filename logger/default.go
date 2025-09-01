@@ -34,7 +34,6 @@ func (f *flagSet) Parse() error {
 	logFlagset := pflag.NewFlagSet("logger", pflag.ContinueOnError)
 	// standalone parsing of flags to ensure we always have the correct values
 	f.bindFlags(logFlagset)
-	logFlagset.ParseErrorsWhitelist.UnknownFlags = true
 	if err := logFlagset.Parse(os.Args[1:]); err != nil {
 		return err
 	}
