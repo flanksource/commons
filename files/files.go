@@ -153,7 +153,7 @@ func UnarchiveExecutables(src, dest string) error {
 	logger.Debugf("Unarchiving %s to %s", src, dest)
 	if strings.HasSuffix(src, ".zip") {
 		return Unzip(src, dest)
-	} else if strings.HasSuffix(src, ".tar") || strings.HasSuffix(src, ".tgz") || strings.HasSuffix(src, ".tar.gz") || strings.HasSuffix(src, ".tar.xz") {
+	} else if strings.HasSuffix(src, ".tar") || strings.HasSuffix(src, ".tgz") || strings.HasSuffix(src, ".tar.gz") || strings.HasSuffix(src, ".tar.xz") || strings.HasSuffix(src, ".txz") {
 		return UntarWithFilter(src, dest, func(header os.FileInfo) string {
 			if fmt.Sprintf("%v", header.Mode()&0100) != "---x------" {
 				return ""
@@ -290,7 +290,7 @@ func UntarWithFilter(tarball, target string, filter FileFilter) error {
 		if err != nil {
 			return err
 		}
-	} else if strings.HasSuffix(tarball, ".tar.xz") {
+	} else if strings.HasSuffix(tarball, ".tar.xz") || strings.HasSuffix(tarball, ".txz") {
 		reader, err = xz.NewReader(reader)
 		if err != nil {
 			return err
@@ -326,15 +326,42 @@ func UntarWithFilter(tarball, target string, filter FileFilter) error {
 			continue
 		}
 
-		file, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode())
-		if err != nil {
-			return err
+		parent := filepath.Dir(path)
+
+		if _, err := os.Stat(parent); os.IsNotExist(err) {
+			if err := os.MkdirAll(parent, 0755); err != nil {
+				return fmt.Errorf("failed to create directory %s: %w", parent, err)
+			}
 		}
-		defer file.Close()
-		_, err = io.Copy(file, tarReader)
-		if err != nil {
-			return err
+
+		switch header.Typeflag {
+		case tar.TypeReg:
+			file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
+			if err != nil {
+				return fmt.Errorf("failed to create file %s (mode=%v) %s", path, info.Mode(), err)
+			}
+			defer file.Close()
+			_, err = io.Copy(file, tarReader)
+			if err != nil {
+				return err
+			}
+
+		case tar.TypeSymlink:
+			if err := os.RemoveAll(path); err != nil {
+				return fmt.Errorf("failed to remove symlink %s: %w", path, err)
+			}
+
+			if err := os.Symlink(header.Linkname, path); err != nil {
+				return fmt.Errorf("failed to create symlink %s -> %s: %w", path, header.Linkname, err)
+			}
+
+		case tar.TypeDir:
+			if err := os.MkdirAll(path, os.FileMode(header.Mode)); err != nil {
+				return fmt.Errorf("failed to create directory %s: %w", path, err)
+			}
+			continue
 		}
+
 	}
 	return nil
 }
