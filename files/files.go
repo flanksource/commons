@@ -25,6 +25,35 @@ import (
 var blacklistedPathSymbols = "${}[]?*:<>|"
 var blockedPrefixes = []string{"/run/", "/proc/", "/etc/", "/var/", "/tmp/", "/dev/"}
 
+// safeJoinEvalSymlinks joins base and path, resolves symlinks, and ensures result is inside base
+func safeJoinEvalSymlinks(base, p string) (string, error) {
+	joined := filepath.Join(base, p)
+	resolved, err := filepath.EvalSymlinks(joined)
+	if err != nil && !os.IsNotExist(err) {
+		return "", err
+	}
+	// If file does not exist yet (may be new), fallback to cleaned join
+	if err != nil && os.IsNotExist(err) {
+		resolved = filepath.Clean(joined)
+	}
+	absBase, err := filepath.Abs(base)
+	if err != nil {
+		return "", err
+	}
+	absResolved, err := filepath.Abs(resolved)
+	if err != nil {
+		return "", err
+	}
+	rel, err := filepath.Rel(absBase, absResolved)
+	if err != nil {
+		return "", err
+	}
+	if strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
+		return "", fmt.Errorf("illegal file path: %s escapes base directory %s", absResolved, absBase)
+	}
+	return absResolved, nil
+}
+
 func isASCII(s string) bool {
 	for i := 0; i < len(s); i++ {
 
@@ -311,13 +340,21 @@ func UntarWithFilter(tarball, target string, filter FileFilter) error {
 		if err := ValidatePath(header.Name); err != nil {
 			return err
 		}
-		path := filepath.Join(target, header.Name)
+		extractPath, err := safeJoinEvalSymlinks(target, header.Name)
+		if err != nil {
+			return fmt.Errorf("invalid extracted path: %w", err)
+		}
+		path := extractPath
 		if filter != nil {
-			path = filter(info)
-			if path == "" {
+			fp := filter(info)
+			if fp == "" {
 				continue
 			}
-			path = filepath.Join(target, path)
+			newPath, err := safeJoinEvalSymlinks(target, fp)
+			if err != nil {
+				return fmt.Errorf("invalid filtered path: %w", err)
+			}
+			path = newPath
 		}
 		if info.IsDir() {
 			if err = os.MkdirAll(path, info.Mode()); err != nil {
@@ -351,8 +388,21 @@ func UntarWithFilter(tarball, target string, filter FileFilter) error {
 				return fmt.Errorf("failed to remove symlink %s: %w", path, err)
 			}
 
-			if err := os.Symlink(header.Linkname, path); err != nil {
-				return fmt.Errorf("failed to create symlink %s -> %s: %w", path, header.Linkname, err)
+			// Validate the symlink target stays within extraction dir
+			linkTarget := header.Linkname
+			// Only check relative paths; absolute always forbidden
+			if filepath.IsAbs(linkTarget) {
+				return fmt.Errorf("symlink target %s is absolute and not allowed", linkTarget)
+			evalTarget, err := safeJoinEvalSymlinks(filepath.Dir(path), linkTarget)
+			if err != nil {
+				return fmt.Errorf("invalid symlink target from %s to %s: %w", path, linkTarget, err)
+			}
+			if !strings.HasPrefix(evalTarget, filepath.Clean(target)+string(os.PathSeparator)) && filepath.Clean(evalTarget) != filepath.Clean(target) {
+				return fmt.Errorf("symlink %s target %s would escape extraction root", path, linkTarget)
+			}
+			if err := os.Symlink(linkTarget, path); err != nil {
+				return fmt.Errorf("failed to create symlink %s -> %s: %w", path, linkTarget, err)
+			}
 			}
 
 		case tar.TypeDir:
