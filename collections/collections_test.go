@@ -1,121 +1,133 @@
 package collections
 
 import (
-	"reflect"
-	"testing"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
-func Test_MergeMap(t *testing.T) {
-	type args struct {
-		a map[string]string
-		b map[string]string
-	}
-	tests := []struct {
-		name string
-		args args
-		want map[string]string
-	}{
-		{
-			name: "no overlaps",
-			args: args{
-				a: map[string]string{"name": "flanksource"},
-				b: map[string]string{"foo": "bar"},
-			},
-			want: map[string]string{
-				"name": "flanksource",
-				"foo":  "bar",
-			},
-		},
-		{
-			name: "overlaps",
-			args: args{
-				a: map[string]string{"name": "flanksource", "foo": "baz"},
-				b: map[string]string{"foo": "bar"},
-			},
-			want: map[string]string{
-				"name": "flanksource",
-				"foo":  "bar",
-			},
-		},
-		{
-			name: "overlaps II",
-			args: args{
-				a: map[string]string{"name": "github", "foo": "baz"},
-				b: map[string]string{"name": "flanksource", "foo": "bar"},
-			},
-			want: map[string]string{
-				"name": "flanksource",
-				"foo":  "bar",
-			},
-		},
-		{
-			name: "ditto",
-			args: args{
-				a: map[string]string{"name": "flanksource", "foo": "bar"},
-				b: map[string]string{"name": "flanksource", "foo": "bar"},
-			},
-			want: map[string]string{
-				"name": "flanksource",
-				"foo":  "bar",
-			},
-		},
-		{
-			name: "nil a",
-			args: args{
-				a: nil,
-				b: map[string]string{"name": "flanksource", "foo": "bar"},
-			},
-			want: map[string]string{
-				"name": "flanksource",
-				"foo":  "bar",
-			},
-		},
-		{
-			name: "nil b",
-			args: args{
-				a: map[string]string{"name": "flanksource", "foo": "bar"},
-				b: nil,
-			},
-			want: map[string]string{
-				"name": "flanksource",
-				"foo":  "bar",
-			},
-		},
-		{
-			name: "both nil",
-			args: args{
-				a: nil,
-				b: nil,
-			},
-			want: map[string]string{},
-		},
-	}
+var _ = Describe("MergeMap", func() {
+	It("should merge maps with no overlaps", func() {
+		a := map[string]string{"name": "flanksource"}
+		b := map[string]string{"foo": "bar"}
+		expected := map[string]string{
+			"name": "flanksource",
+			"foo":  "bar",
+		}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := MergeMap(tt.args.a, tt.args.b); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("got %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
+		result := MergeMap(a, b)
 
-func Test_KeyValueSliceToMap(t *testing.T) {
-	tests := []struct {
-		name string
-		args []string
-		want map[string]string
-	}{
-		{name: "simple", args: []string{"name=flanksource"}, want: map[string]string{"name": "flanksource"}},
-		{name: "white space", args: []string{"    name  =  flanksource   "}, want: map[string]string{"name": "flanksource"}},
-		{name: "multiple-simple", args: []string{"name=flanksource", "foo=bar"}, want: map[string]string{"name": "flanksource", "foo": "bar"}},
-		{name: "double-equal", args: []string{"name=foo=bar"}, want: map[string]string{"name": "foo=bar"}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := KeyValueSliceToMap(tt.args); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("got %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
+		Expect(result).To(Equal(expected))
+	})
+
+	It("should merge maps with overlaps, b takes precedence", func() {
+		a := map[string]string{"name": "flanksource", "foo": "baz"}
+		b := map[string]string{"foo": "bar"}
+		expected := map[string]string{
+			"name": "flanksource",
+			"foo":  "bar",
+		}
+
+		result := MergeMap(a, b)
+
+		Expect(result).To(Equal(expected))
+	})
+
+	It("should merge maps with multiple overlaps", func() {
+		a := map[string]string{"name": "github", "foo": "baz"}
+		b := map[string]string{"name": "flanksource", "foo": "bar"}
+		expected := map[string]string{
+			"name": "flanksource",
+			"foo":  "bar",
+		}
+
+		result := MergeMap(a, b)
+
+		Expect(result).To(Equal(expected))
+	})
+
+	It("should handle identical maps", func() {
+		a := map[string]string{"name": "flanksource", "foo": "bar"}
+		b := map[string]string{"name": "flanksource", "foo": "bar"}
+		expected := map[string]string{
+			"name": "flanksource",
+			"foo":  "bar",
+		}
+
+		result := MergeMap(a, b)
+
+		Expect(result).To(Equal(expected))
+	})
+
+	It("should handle nil first map", func() {
+		var a map[string]string
+		b := map[string]string{"name": "flanksource", "foo": "bar"}
+		expected := map[string]string{
+			"name": "flanksource",
+			"foo":  "bar",
+		}
+
+		result := MergeMap(a, b)
+
+		Expect(result).To(Equal(expected))
+	})
+
+	It("should handle nil second map", func() {
+		a := map[string]string{"name": "flanksource", "foo": "bar"}
+		var b map[string]string
+		expected := map[string]string{
+			"name": "flanksource",
+			"foo":  "bar",
+		}
+
+		result := MergeMap(a, b)
+
+		Expect(result).To(Equal(expected))
+	})
+
+	It("should handle both maps nil", func() {
+		var a, b map[string]string
+		expected := map[string]string{}
+
+		result := MergeMap(a, b)
+
+		Expect(result).To(Equal(expected))
+	})
+})
+
+var _ = Describe("KeyValueSliceToMap", func() {
+	It("should convert simple key=value pair", func() {
+		args := []string{"name=flanksource"}
+		expected := map[string]string{"name": "flanksource"}
+
+		result := KeyValueSliceToMap(args)
+
+		Expect(result).To(Equal(expected))
+	})
+
+	It("should handle whitespace around key=value pairs", func() {
+		args := []string{"    name  =  flanksource   "}
+		expected := map[string]string{"name": "flanksource"}
+
+		result := KeyValueSliceToMap(args)
+
+		Expect(result).To(Equal(expected))
+	})
+
+	It("should convert multiple key=value pairs", func() {
+		args := []string{"name=flanksource", "foo=bar"}
+		expected := map[string]string{"name": "flanksource", "foo": "bar"}
+
+		result := KeyValueSliceToMap(args)
+
+		Expect(result).To(Equal(expected))
+	})
+
+	It("should handle values with equal signs", func() {
+		args := []string{"name=foo=bar"}
+		expected := map[string]string{"name": "foo=bar"}
+
+		result := KeyValueSliceToMap(args)
+
+		Expect(result).To(Equal(expected))
+	})
+})
