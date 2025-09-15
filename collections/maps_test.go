@@ -1,34 +1,20 @@
 package collections
 
-import "testing"
+import (
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+)
 
-func TestSortedMap(t *testing.T) {
-	type args struct {
-		labels map[string]string
-	}
-	tests := []struct {
-		name string
-		args args
-		want string
-	}{
-		{
-			name: "simple",
-			args: args{
-				labels: map[string]string{
-					"b": "b",
-					"a": "a",
-					"c": "c",
-				},
-			},
-			want: "a=a,b=b,c=c",
-		},
-	}
+var _ = Describe("SortedMap", func() {
+	It("should sort map entries alphabetically", func() {
+		labels := map[string]string{
+			"b": "b",
+			"a": "a",
+			"c": "c",
+		}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := SortedMap(tt.args.labels); got != tt.want {
-				t.Errorf("SortedMap() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
+		result := SortedMap(labels)
+
+		Expect(result).To(Equal("a=a,b=b,c=c"))
+	})
+})

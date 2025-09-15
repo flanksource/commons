@@ -2,70 +2,101 @@ package set
 
 import (
 	"encoding/json"
-	"testing"
 
-	"github.com/stretchr/testify/assert"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
-func Test_StringSet(t *testing.T) {
-	s := New("a", "b", "c", "d")
-	s.Add("e")
+var _ = Describe("Set", func() {
+	Describe("String Set", func() {
+		It("should handle basic string set operations", func() {
+			s := New("a", "b", "c", "d")
+			s.Add("e")
 
-	assert.ElementsMatch(t, s.ToSlice(), []string{"a", "b", "c", "d", "e"})
+			Expect(s.ToSlice()).To(ConsistOf("a", "b", "c", "d", "e"))
 
-	s.Add("a")
-	assert.ElementsMatch(t, s.ToSlice(), []string{"a", "b", "c", "d", "e"})
+			s.Add("a") // Adding duplicate
+			Expect(s.ToSlice()).To(ConsistOf("a", "b", "c", "d", "e"))
 
-	s.Remove("b")
-	s.Remove("c")
-	assert.ElementsMatch(t, s.ToSlice(), []string{"a", "d", "e"})
+			s.Remove("b")
+			s.Remove("c")
+			Expect(s.ToSlice()).To(ConsistOf("a", "d", "e"))
 
-	assert.Equal(t, s.Contains("a"), true)
-	assert.Equal(t, s.Contains("z"), false)
+			Expect(s.Contains("a")).To(BeTrue())
+			Expect(s.Contains("z")).To(BeFalse())
+		})
 
-	s2 := New("d", "e", "f", "g", "h")
-	assert.ElementsMatch(t, s.Union(s2).ToSlice(), []string{"a", "d", "e", "f", "g", "h"})
+		It("should handle union operations", func() {
+			s := New("a", "d", "e")
+			s2 := New("d", "e", "f", "g", "h")
 
-	assert.ElementsMatch(t, s.Intersection(s2).ToSlice(), []string{"d", "e"})
-}
+			result := s.Union(s2)
+			Expect(result.ToSlice()).To(ConsistOf("a", "d", "e", "f", "g", "h"))
+		})
 
-func Test_IntSet(t *testing.T) {
-	s := New(1, 2, 3, 4)
-	s.Add(5)
+		It("should handle intersection operations", func() {
+			s := New("a", "d", "e")
+			s2 := New("d", "e", "f", "g", "h")
 
-	assert.ElementsMatch(t, s.ToSlice(), []int{1, 2, 3, 4, 5})
+			result := s.Intersection(s2)
+			Expect(result.ToSlice()).To(ConsistOf("d", "e"))
+		})
+	})
 
-	s.Add(1)
-	assert.ElementsMatch(t, s.ToSlice(), []int{1, 2, 3, 4, 5})
+	Describe("Integer Set", func() {
+		It("should handle basic integer set operations", func() {
+			s := New(1, 2, 3, 4)
+			s.Add(5)
 
-	s.Remove(2)
-	s.Remove(3)
-	assert.ElementsMatch(t, s.ToSlice(), []int{1, 4, 5})
+			Expect(s.ToSlice()).To(ConsistOf(1, 2, 3, 4, 5))
 
-	assert.Equal(t, s.Contains(1), true)
-	assert.Equal(t, s.Contains(100), false)
+			s.Add(1) // Adding duplicate
+			Expect(s.ToSlice()).To(ConsistOf(1, 2, 3, 4, 5))
 
-	s2 := New(4, 5, 6, 7, 8)
-	assert.ElementsMatch(t, s.Union(s2).ToSlice(), []int{1, 4, 5, 6, 7, 8})
+			s.Remove(2)
+			s.Remove(3)
+			Expect(s.ToSlice()).To(ConsistOf(1, 4, 5))
 
-	assert.ElementsMatch(t, s.Intersection(s2).ToSlice(), []int{4, 5})
-}
+			Expect(s.Contains(1)).To(BeTrue())
+			Expect(s.Contains(100)).To(BeFalse())
+		})
 
-func Test_JSON(t *testing.T) {
-	type Fruits struct {
-		Names Set[string] `json:"names"`
-	}
+		It("should handle union operations", func() {
+			s := New(1, 4, 5)
+			s2 := New(4, 5, 6, 7, 8)
 
-	f := Fruits{Names: New("orange", "apple", "orange", "banana", "mango")}
+			result := s.Union(s2)
+			Expect(result.ToSlice()).To(ConsistOf(1, 4, 5, 6, 7, 8))
+		})
 
-	b, err := json.Marshal(f)
-	assert.NoError(t, err)
+		It("should handle intersection operations", func() {
+			s := New(1, 4, 5)
+			s2 := New(4, 5, 6, 7, 8)
 
-	assert.Equal(t, len(`{"names":["banana","mango","orange","apple"]}`), len(string(b)))
+			result := s.Intersection(s2)
+			Expect(result.ToSlice()).To(ConsistOf(4, 5))
+		})
+	})
 
-	var jsonFruits Fruits
-	err = json.Unmarshal(b, &jsonFruits)
-	assert.NoError(t, err)
+	Describe("JSON Serialization", func() {
+		It("should marshal and unmarshal sets correctly", func() {
+			type Fruits struct {
+				Names Set[string] `json:"names"`
+			}
 
-	assert.ElementsMatch(t, f.Names.ToSlice(), jsonFruits.Names.ToSlice())
-}
+			f := Fruits{Names: New("orange", "apple", "orange", "banana", "mango")}
+
+			b, err := json.Marshal(f)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Check that the JSON has the expected length (order may vary)
+			Expect(len(string(b))).To(Equal(len(`{"names":["banana","mango","orange","apple"]}`)))
+
+			var jsonFruits Fruits
+			err = json.Unmarshal(b, &jsonFruits)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(jsonFruits.Names.ToSlice()).To(ConsistOf(f.Names.ToSlice()))
+		})
+	})
+})
