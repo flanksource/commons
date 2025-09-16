@@ -245,7 +245,7 @@ func (r *Request) Debug() string {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("%s %s\n", r.method, logger.StripSecrets(r.url.String())))
 	for k, v := range logger.StripSecretsFromMap(r.HeaderMap()) {
-		sb.WriteString(fmt.Sprintf("  %s: %s\n", console.Grayf(k), v))
+		sb.WriteString(fmt.Sprintf("  %s: %s\n", console.Grayf("%s", k), v))
 	}
 	body, _ := io.ReadAll(r.body)
 	sb.WriteString(logger.StripSecrets(string(body)))

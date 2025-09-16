@@ -1,10 +1,9 @@
 module github.com/flanksource/commons
 
-go 1.23.0
-
-toolchain go1.23.4
+go 1.25.1
 
 require (
+	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/Snawoot/go-http-digest-auth-client v1.1.3
 	github.com/bsm/gomega v1.27.10
 	github.com/emirpasic/gods/v2 v2.0.0-alpha
@@ -31,7 +30,6 @@ require (
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/pflag v1.0.6
-	github.com/stretchr/testify v1.10.0
 	github.com/ulikunitz/xz v0.5.12
 	github.com/vadimi/go-http-ntlm v1.0.3
 	github.com/vadimi/go-http-ntlm/v2 v2.5.0

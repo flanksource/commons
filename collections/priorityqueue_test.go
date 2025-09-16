@@ -217,6 +217,7 @@ var _ = Describe("PriorityQueue", func() {
 			// 500ms delayed item should not be available immediately
 			item, ok = pq.Dequeue()
 			Expect(ok).To(BeFalse())
+			Expect(item).To(BeEmpty())
 
 			// After 600ms, the 500ms delayed item should be available
 			Eventually(func() string {
@@ -246,6 +247,7 @@ var _ = Describe("PriorityQueue", func() {
 			Expect(pq.Size()).To(BeZero())
 			item, ok = pq.Dequeue()
 			Expect(ok).To(BeFalse())
+			Expect(item).To(BeEmpty())
 		})
 	})
 })

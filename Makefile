@@ -4,9 +4,11 @@ test:
 
 .PHONY: lint
 lint:
-	golangci-lint run
+	mkdir -p bin
+	GOBIN=$(shell realpath bin) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.4.0
+	./bin/golangci-lint run
 
 .PHONY: tidy
 tidy:
-	go mod tidy	
+	go mod tidy
 
