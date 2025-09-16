@@ -228,7 +228,7 @@ func (s SlogLogger) Infof(format string, args ...interface{}) {
 }
 
 func (s SlogLogger) Secretf(format string, args ...interface{}) {
-	s.Debugf(StripSecrets(fmt.Sprintf(format, args...)))
+	s.Debugf("%s", StripSecrets(fmt.Sprintf(format, args...)))
 }
 
 func (s SlogLogger) Prettyf(msg string, obj interface{}) {
@@ -265,7 +265,7 @@ func (s SlogLogger) handleRaw(r slog.Record, msg string) {
 		}
 		r.Message = msg
 	} else if s.Prefix != "" {
-		r.Message = fmt.Sprintf("(%s) %s", BrightF(s.Prefix), msg)
+		r.Message = fmt.Sprintf("(%s) %s", BrightF("%s", s.Prefix), msg)
 	} else {
 		r.Message = msg
 	}

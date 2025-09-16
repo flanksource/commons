@@ -137,7 +137,7 @@ func (c *TestResults) Tracef(s string, args ...interface{}) {
 
 func (c *TestResults) Assert(name string, expect, actual interface{}) {
 	if expect == actual {
-		c.Passf(name, name)
+		c.Passf(name, "%s", name)
 	} else {
 		c.Failf(name, "expected \"%v\", got \"%vs\"", expect, actual)
 	}

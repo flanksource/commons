@@ -111,7 +111,7 @@ func (h *Response) Debug() string {
 
 	sb.WriteString(fmt.Sprintf("\n====> Status: %d\n", h.StatusCode))
 	for k, v := range logger.StripSecretsFromMap(h.HeaderMap()) {
-		sb.WriteString(fmt.Sprintf("  %s: %s\n", console.Grayf(k), v))
+		sb.WriteString(fmt.Sprintf("  %s: %s\n", console.Grayf("%s", k), v))
 	}
 	if h.IsJSON() {
 		r, _ := h.AsJSON()
