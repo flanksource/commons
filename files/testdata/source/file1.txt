@@ -1,0 +1,2 @@
+This is file1 content.
+It has multiple lines.
