@@ -57,12 +57,12 @@ func getDefaultRetentionConfig(maxLogs int) RetentionConfig {
 
 	// Base retention strategy
 	baseConfig := map[LogLevel]int{
-		Fatal: maxLogs * 20 / 100, // 20% for Fatal
-		Error: maxLogs * 25 / 100, // 25% for Error
-		Warn:  maxLogs * 20 / 100, // 20% for Warn
-		Info:  maxLogs * 20 / 100, // 20% for Info
-		Debug: maxLogs * 10 / 100, // 10% for Debug
-		Trace: maxLogs * 5 / 100,  // 5% for Trace
+		Fatal: maxLogs,
+		Error: maxLogs,
+		Warn:  maxLogs,
+		Info:  maxLogs,
+		Debug: maxLogs,
+		Trace: maxLogs,
 	}
 
 	// Ensure minimum of 1 for each level
@@ -186,18 +186,18 @@ func (b *BufferedLogger) ScaleRetentionByLogLevel() {
 	defer b.mu.Unlock()
 
 	// Calculate scaling factor based on current log level
-	var scaleFactor float64 = 1.0
+	var scaleFactor float64
 	switch {
 	case b.logLevel >= Trace4:
-		scaleFactor = 3.0  // Very verbose, keep lots of logs
+		scaleFactor = 1000 // Very verbose, keep lots of logs
 	case b.logLevel >= Trace2:
-		scaleFactor = 2.5
+		scaleFactor = 100
 	case b.logLevel >= Trace:
-		scaleFactor = 2.0
+		scaleFactor = 10
 	case b.logLevel >= Debug:
-		scaleFactor = 1.5
+		scaleFactor = 2
 	default:
-		scaleFactor = 1.0  // Base retention for Info and below
+		scaleFactor = 1.0 // Base retention for Info and below
 	}
 
 	// Apply scaling to all configured levels
