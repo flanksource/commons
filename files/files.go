@@ -137,10 +137,11 @@ func isASCII(s string) bool {
 
 // ValidatePath validates a single path for security issues
 func ValidatePath(path string) error {
-
-	// Check for non-ASCII characters
-	if !isASCII(path) {
-		return fmt.Errorf("path %s contains non-ASCII characters", path)
+	// Check for control characters that could be dangerous
+	for _, r := range path {
+		if unicode.IsControl(r) && r != '\t' { // Allow tabs, but not other control chars
+			return fmt.Errorf("path %s contains control characters", path)
+		}
 	}
 
 	// Check for illegal characters
@@ -149,7 +150,6 @@ func ValidatePath(path string) error {
 	}
 
 	// Check for path traversal attempts
-
 	if strings.Contains(path, "../") || strings.Contains(path, "..\\") {
 		return fmt.Errorf("path %s attempts to access parent directories which is not allowed", path)
 	}
@@ -496,7 +496,6 @@ func Unzip(src, dest string) error {
 	return err
 }
 
-
 // Untar extracts all files in tarball to the target directory (backwards compatibility wrapper)
 func Untar(tarball, target string) error {
 	_, err := Unarchive(tarball, target)
@@ -640,7 +639,9 @@ func UntarWithFilterAndResult(tarball, target string, filter FileFilter, opts *U
 			if fileExists && opts.Overwrite {
 				flags |= os.O_TRUNC
 			}
-			file, err := root.OpenFile(path, flags, os.FileMode(header.Mode))
+			// Extract only permission bits, not file type bits
+			fileMode := os.FileMode(header.Mode) & os.ModePerm
+			file, err := root.OpenFile(path, flags, fileMode)
 			if err != nil {
 				return archive, fmt.Errorf("failed to create file %s (mode=%v) %s", path, info.Mode(), err)
 			}
@@ -655,9 +656,19 @@ func UntarWithFilterAndResult(tarball, target string, filter FileFilter, opts *U
 		case tar.TypeSymlink:
 			// Validate the symlink target stays within extraction dir
 			linkTarget := header.Linkname
-			// Only check relative paths; absolute always forbidden
-			if filepath.IsAbs(linkTarget) || !filepath.IsLocal(linkTarget) {
+			// Check if symlink target is absolute - always reject
+			if filepath.IsAbs(linkTarget) {
 				return archive, fmt.Errorf("symlink target %s is absolute and not allowed", linkTarget)
+			}
+
+			// For relative targets, resolve them relative to the symlink's directory
+			symlinkDir := filepath.Dir(path)
+			resolvedPath := filepath.Join(symlinkDir, linkTarget)
+			cleanPath := filepath.Clean(resolvedPath)
+
+			// Check if the clean path escapes the extraction directory
+			if cleanPath == ".." || strings.HasPrefix(cleanPath, "../") {
+				return archive, fmt.Errorf("symlink target %s escapes extraction directory", linkTarget)
 			}
 
 			if err := root.Symlink(linkTarget, path); err != nil {
@@ -699,7 +710,9 @@ func UntarWithFilterAndResult(tarball, target string, filter FileFilter, opts *U
 			if fileExists && opts.Overwrite {
 				flags |= os.O_TRUNC
 			}
-			file, err := root.OpenFile(path, flags, os.FileMode(header.Mode))
+			// Extract only permission bits, not file type bits
+			fileMode := os.FileMode(header.Mode) & os.ModePerm
+			file, err := root.OpenFile(path, flags, fileMode)
 			if err != nil {
 				_ = targetFile.Close()
 				return nil, fmt.Errorf("failed to create hard link file %s (mode=%v): %w", path, info.Mode(), err)
