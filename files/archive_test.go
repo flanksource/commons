@@ -80,9 +80,20 @@ var _ = Describe("Unarchive", func() {
 			},
 		},
 		{
+			name:        "tar with nodejs-style symlinks",
+			archivePath: "testdata/archives/nodejs_symlinks.tar",
+			expectedArchive: &Archive{
+				Files:       []string{"./lib/node_modules/corepack/dist/corepack.js"},
+				Directories: []string{"./", "./bin/", "./lib/", "./lib/node_modules/", "./lib/node_modules/corepack/", "./lib/node_modules/corepack/dist/"},
+				Symlinks:    []string{"./bin/corepack"},
+				Skipped:     []string{},
+				Errors:      []error{},
+			},
+		},
+		{
 			name:          "tar with dangerous symlinks should fail",
 			archivePath:   "testdata/archives/parent_symlinks.tar",
-			expectedError: "is absolute and not allowed",
+			expectedError: "escapes extraction directory",
 		},
 		{
 			name:        "simple zip archive",
@@ -140,9 +151,20 @@ var _ = Describe("Unarchive", func() {
 			},
 		},
 		{
+			name:        "tar.xz with safe symlinks",
+			archivePath: "testdata/archives/symlinks.tar.xz",
+			expectedArchive: &Archive{
+				Files:       []string{"./bin/postgres", "./lib/libpq.so", "./share/postgresql.conf"},
+				Directories: []string{"./", "./bin/", "./lib/", "./share/"},
+				Symlinks:    []string{"./bin/libpq_link", "./share/postgres.conf"},
+				Skipped:     []string{},
+				Errors:      []error{},
+			},
+		},
+		{
 			name:          "tar.xz with parent symlinks should fail",
-			archivePath:   "testdata/archives/symlinks.tar.xz",
-			expectedError: "is absolute and not allowed",
+			archivePath:   "testdata/archives/dangerous_symlinks.tar.xz",
+			expectedError: "escapes extraction directory",
 		},
 		{
 			name:        "empty archive",
@@ -182,6 +204,17 @@ var _ = Describe("Unarchive", func() {
 			archivePath: "testdata/archives/special_chars.zip",
 			expectedArchive: &Archive{
 				Files:       []string{"special_chars/file with spaces.txt", "special_chars/file_with_underscore.txt"},
+				Directories: []string{},
+				Symlinks:    []string{},
+				Skipped:     []string{},
+				Errors:      []error{},
+			},
+		},
+		{
+			name:        "unicode characters in tar.gz",
+			archivePath: "testdata/archives/unicode.tar.gz",
+			expectedArchive: &Archive{
+				Files:       []string{"café.txt", "测试.txt", "файл.txt", "日本語.txt", "émojis😀.txt", "simple.txt"},
 				Directories: []string{},
 				Symlinks:    []string{},
 				Skipped:     []string{},
