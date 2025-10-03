@@ -44,7 +44,7 @@ type NamedLock struct {
 // Example:
 //
 //	lock := &NamedLock{}
-//	
+//
 //	// Try to acquire lock with 5-second timeout
 //	if unlocker := lock.TryLock("user-123", 5*time.Second); unlocker != nil {
 //		defer unlocker.Release()
@@ -64,7 +64,7 @@ type NamedLock struct {
 //			// Work with resource A
 //		}
 //	}()
-//	
+//
 //	go func() {
 //		if u := lock.TryLock("resource-B", time.Second); u != nil {
 //			defer u.Release()

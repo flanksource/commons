@@ -11,11 +11,11 @@
 //
 //	ctx := context.NewContext(context.Background())
 //	ctx.Infof("Processing request %s", requestID)
-//	
+//
 //	// Enable debug logging
 //	debugCtx := ctx.WithDebug()
 //	debugCtx.Debugf("Detailed information: %v", details)
-//	
+//
 //	// Start a traced operation
 //	ctx, span := ctx.StartSpan("database-query")
 //	defer span.End()
@@ -110,7 +110,7 @@ func WithLogger(log logger.Logger) ContextOptions {
 //
 //	// Basic context with defaults
 //	ctx := NewContext(context.Background())
-//	
+//
 //	// Context with custom configuration
 //	ctx := NewContext(
 //		context.Background(),

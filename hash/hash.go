@@ -7,7 +7,7 @@
 //
 // Key features:
 //   - JSON object hashing with MD5
-//   - SHA256 string hashing  
+//   - SHA256 string hashing
 //   - Deterministic UUID generation from any JSON-serializable data
 //
 // Basic usage:
@@ -23,11 +23,11 @@
 //		log.Fatal(err)
 //	}
 //	fmt.Printf("MD5: %s\n", hash)
-//	
+//
 //	// Generate SHA256 hash
 //	sha := hash.Sha256Hex("hello world")
 //	fmt.Printf("SHA256: %s\n", sha)
-//	
+//
 //	// Create deterministic UUID
 //	id, err := hash.DeterministicUUID(user)
 //	if err != nil {
@@ -109,7 +109,7 @@ func Sha256Hex(in string) string {
 //	}
 //	id, err := DeterministicUUID(userData)
 //	// The same userData will always generate the same UUID
-//	
+//
 //	// Generate UUID from string
 //	id2, err := DeterministicUUID("unique-resource-name")
 func DeterministicUUID(seed any) (uuid.UUID, error) {

@@ -41,14 +41,14 @@
 //		log.Fatal(err)
 //	}
 //	fmt.Println(d) // Output: 3d12h30m
-//	
+//
 //	// Create from standard units
 //	d = duration.Day * 7 + duration.Hour * 6
 //	fmt.Println(d) // Output: 1w6h
-//	
+//
 //	// Convert to standard time.Duration
 //	td := time.Duration(d)
-//	
+//
 //	// Get components
 //	fmt.Printf("Hours: %.2f, Days: %.2f\n", d.Hours(), d.Days())
 //
@@ -355,7 +355,7 @@ var unitMap = map[string]int64{
 //
 // Valid time units are:
 //   - "ns": nanoseconds
-//   - "us" (or "µs"/"μs"): microseconds  
+//   - "us" (or "µs"/"μs"): microseconds
 //   - "ms": milliseconds
 //   - "s": seconds
 //   - "m": minutes

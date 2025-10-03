@@ -21,7 +21,7 @@
 //	for _, ip := range ips {
 //		fmt.Printf("IP: %s\n", ip)
 //	}
-//	
+//
 //	// Direct lookup without caching
 //	ips, err := dns.Lookup("A", "https://example.com")
 //	// Automatically extracts hostname from URL

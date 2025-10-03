@@ -38,7 +38,7 @@ as noted in the LICENSE file.
 //
 //	size := int64(1536)
 //	fmt.Println(text.HumanizeBytes(size))  // "1.5K"
-//	
+//
 //	size = 1073741824
 //	fmt.Println(text.HumanizeBytes(size))  // "1G"
 //
@@ -46,7 +46,7 @@ as noted in the LICENSE file.
 //
 //	count := 1500
 //	fmt.Println(text.HumanizeInt(count))   // "1.5k"
-//	
+//
 //	count = 2000000
 //	fmt.Println(text.HumanizeInt(count))   // "2m"
 //
@@ -54,7 +54,7 @@ as noted in the LICENSE file.
 //
 //	d := 3*time.Hour + 30*time.Minute
 //	fmt.Println(text.HumanizeDuration(d))  // "3h30m"
-//	
+//
 //	age := text.Age(time.Now().Add(-24 * time.Hour))
 //	fmt.Println(age)  // "1d"
 //
@@ -84,7 +84,7 @@ const (
 	EXABYTE
 )
 
-// HumanizeBytes returns a human-readable byte string of the form 10M, 12.5K, and so forth.  
+// HumanizeBytes returns a human-readable byte string of the form 10M, 12.5K, and so forth.
 // The following units are available:
 //
 //	E: Exabyte  (1024^6 bytes)
@@ -171,7 +171,7 @@ const (
 // Examples:
 //
 //	HumanizeInt(1500)        // "1.5k"
-//	HumanizeInt(2000000)     // "2m"  
+//	HumanizeInt(2000000)     // "2m"
 //	HumanizeInt(1500000000)  // "1.5b"
 //	HumanizeInt("1000")      // "1k"
 func HumanizeInt(size interface{}) string {
