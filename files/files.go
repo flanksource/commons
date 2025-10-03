@@ -124,17 +124,6 @@ func (a *Archive) String() string {
 var blacklistedPathSymbols = "{}[]?*:<>|"
 var blockedPrefixes = []string{"/run/", "/proc/", "/etc/", "/var/", "/tmp/", "/dev/"}
 
-func isASCII(s string) bool {
-	for i := 0; i < len(s); i++ {
-
-		if s[i] > unicode.MaxASCII || unicode.IsControl(rune(s[i])) {
-			return false
-		}
-	}
-	return true
-
-}
-
 // ValidatePath validates a single path for security issues
 func ValidatePath(path string) error {
 	// Check for control characters that could be dangerous
