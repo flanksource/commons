@@ -370,29 +370,6 @@ var dependencies = map[string]Dependency{
 	},
 }
 
-// verifyChecksum verifies the SHA256 checksum of a file
-func verifyChecksum(filepath, expectedChecksum string) error {
-	file, err := os.Open(filepath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	hash := sha256.New()
-	if _, err := io.Copy(hash, file); err != nil {
-		return err
-	}
-
-	actualChecksum := fmt.Sprintf("%x", hash.Sum(nil))
-	expectedChecksum = strings.TrimSpace(expectedChecksum)
-
-	if actualChecksum != expectedChecksum {
-		return fmt.Errorf("checksum mismatch: expected %s, got %s", expectedChecksum, actualChecksum)
-	}
-
-	return nil
-}
-
 // Install installs a dependency with configurable options
 func Install(name, version string, opts ...InstallOption) error {
 	name = strings.ToLower(name)
