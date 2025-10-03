@@ -2,6 +2,7 @@ package logger
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"regexp"
 	"strings"
@@ -229,6 +230,17 @@ func WithValues(keysAndValues ...interface{}) Logger {
 // Use this to configure a custom logger implementation.
 func SetLogger(logger Logger) {
 	currentLogger = logger
+}
+
+// Use configures the logger to write to the specified writer.
+// This replaces the current logger with one that outputs to the given writer.
+// Useful for integrating with test frameworks like Ginkgo.
+//
+// Example:
+//
+//	logger.Use(GinkgoWriter) // Route logger output to Ginkgo's test writer
+func Use(writer io.Writer) {
+	currentLogger = NewWithWriter(writer)
 }
 
 // StandardLogger returns the current global logger instance.

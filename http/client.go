@@ -459,15 +459,16 @@ func (c *Client) TraceToStdout(config TraceConfig) *Client {
 }
 
 // WithHttpLogging enables HTTP request/response logging based on the provided log levels.
-// 
+//
 // Parameters:
 //   - headerLevel: The minimum log level required to log HTTP headers (e.g., logger.Debug)
 //   - bodyLevel: The minimum log level required to log request/response bodies (e.g., logger.Trace)
 //
 // Example:
-//   client.WithHttpLogging(logger.Debug, logger.Trace)
-//   
-// This will log headers when debug logging is enabled (-v or -v 1) and 
+//
+//	client.WithHttpLogging(logger.Debug, logger.Trace)
+//
+// This will log headers when debug logging is enabled (-v or -v 1) and
 // bodies when trace logging is enabled (-vv or -v 2 or higher).
 //
 // Note: When using with cobra commands, ensure UseCobraFlags is called

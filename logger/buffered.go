@@ -288,42 +288,7 @@ func (b *BufferedLogger) GetLevel() LogLevel {
 func (b *BufferedLogger) SetLogLevel(level any) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-
-	oldLevel := b.logLevel
-
-	switch v := level.(type) {
-	case LogLevel:
-		b.logLevel = v
-	case int:
-		b.logLevel = LogLevel(v)
-	case string:
-		// Parse string level
-		switch v {
-		case "trace":
-			b.logLevel = Trace
-		case "debug":
-			b.logLevel = Debug
-		case "info":
-			b.logLevel = Info
-		case "warn":
-			b.logLevel = Warn
-		case "error":
-			b.logLevel = Error
-		case "fatal":
-			b.logLevel = Fatal
-		default:
-			b.logLevel = Info
-		}
-	default:
-		b.logLevel = Info
-	}
-
-	// Auto-scale retention if log level changed
-	if oldLevel != b.logLevel {
-		b.mu.Unlock() // Unlock temporarily for ScaleRetentionByLogLevel
-		b.ScaleRetentionByLogLevel()
-		b.mu.Lock() // Re-lock for defer
-	}
+	b.logLevel = ParseLevel(b, level)
 }
 
 // SetMinLogLevel sets the minimum log level (same as SetLogLevel for BufferedLogger)

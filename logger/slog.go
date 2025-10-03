@@ -3,6 +3,7 @@ package logger
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -135,6 +136,48 @@ func New(prefix string) *SlogLogger {
 	// logger.V(4).Infof("new logger created name=%v flags=%s level=%s", prefix, flags.level, FromSlogLevel(lvl.Level()).String())
 	return logger
 }
+
+// NewWithWriter creates a new SlogLogger that writes to the specified writer.
+// This is useful for integrating with test frameworks or custom output destinations.
+func NewWithWriter(writer io.Writer) *SlogLogger {
+	var logger *SlogLogger
+	var lvl = &slog.LevelVar{}
+
+	reportCaller := properties.On(flags.reportCaller, "log.caller")
+	logJson := properties.On(flags.jsonLogs, "log.json")
+	logColor := properties.On(flags.color, "log.color")
+
+	var rootLevel string
+	if flags.level != "" {
+		rootLevel = flags.level
+	} else {
+		rootLevel = properties.String("info", "log.level")
+	}
+
+	if logJson {
+		logger = &SlogLogger{
+			Level: lvl,
+			Logger: slog.New(slog.NewJSONHandler(writer, &slog.HandlerOptions{
+				AddSource: reportCaller,
+				Level:     lvl,
+			})),
+		}
+	} else {
+		logger = &SlogLogger{
+			Logger: slog.New(tint.NewHandler(writer, &tint.Options{
+				Level:      lvl,
+				NoColor:    !logColor,
+				AddSource:  reportCaller,
+				TimeFormat: properties.String("15:04:05.999", "log.time.format"),
+			})),
+			Level: lvl,
+		}
+	}
+
+	logger.SetLogLevel(rootLevel)
+	return logger
+}
+
 func UseSlog() {
 	if currentLogger != nil {
 		return
