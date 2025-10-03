@@ -101,6 +101,29 @@ func (h *Response) HeaderMap() map[string]string {
 	return headers
 }
 
+func (h *Response) AsMap() (map[string]any, error) {
+
+	m := make(map[string]any)
+
+	m["headers"] = map[string]any{}
+	for k, v := range logger.StripSecretsFromMap(h.HeaderMap()) {
+		m["headers"].(map[string]any)[k] = v
+	}
+
+	if h.Request != nil && h.Request.url != nil {
+		m["url"] = h.Request.url.String()
+	}
+	m["status"] = h.StatusCode
+
+	if h.IsJSON() {
+		m["body"], _ = h.AsJSON()
+	} else {
+		m["body"], _ = h.AsString()
+	}
+
+	return m, nil
+}
+
 func (h *Response) Debug() string {
 	// mimic the response, + add content-type and size
 	var sb strings.Builder

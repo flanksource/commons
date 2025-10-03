@@ -16,7 +16,7 @@ var SensitiveHeaders = []string{
 
 // NewHttpLogger creates an HTTP logger that logs at predefined levels.
 // Deprecated: Use NewHttpLoggerWithLevels for more control over logging levels.
-// 
+//
 // Default behavior:
 //   - Headers and timing: Requires log level 5 (Trace3)
 //   - Request body: Requires log level 6 (Trace4)
@@ -51,8 +51,9 @@ func NewHttpLogger(logger Logger, rt http.RoundTripper) http.RoundTripper {
 //   - bodyLevel: Minimum log level required to log request/response bodies
 //
 // Example:
-//   // Log headers at debug level (-v) and bodies at trace level (-vv)
-//   transport := NewHttpLoggerWithLevels(logger, http.DefaultTransport, logger.Debug, logger.Trace)
+//
+//	// Log headers at debug level (-v) and bodies at trace level (-vv)
+//	transport := NewHttpLoggerWithLevels(logger, http.DefaultTransport, logger.Debug, logger.Trace)
 func NewHttpLoggerWithLevels(logger Logger, rt http.RoundTripper, headerLevel, bodyLevel LogLevel) http.RoundTripper {
 	if !logger.IsLevelEnabled(headerLevel) {
 		return rt
