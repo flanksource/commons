@@ -121,7 +121,7 @@ func (a *Archive) String() string {
 	return result
 }
 
-var blacklistedPathSymbols = "${}[]?*:<>|"
+var blacklistedPathSymbols = "{}[]?*:<>|"
 var blockedPrefixes = []string{"/run/", "/proc/", "/etc/", "/var/", "/tmp/", "/dev/"}
 
 func isASCII(s string) bool {
@@ -399,7 +399,9 @@ func unzipWithResult(src, dest string, opts *UnarchiveOptions) (*Archive, error)
 		if info.IsDir() {
 			_ = rc.Close()
 			dirMode := info.Mode() & os.ModePerm
-			if dirMode == 0 {
+			// Ensure directory has owner write+execute permissions to prevent extraction failures
+			// Directories need execute bit to be traversable
+			if dirMode == 0 || dirMode&0300 != 0300 {
 				dirMode = 0755
 			}
 			if err := root.MkdirAll(path, dirMode); err != nil {
@@ -605,7 +607,9 @@ func UntarWithFilterAndResult(tarball, target string, filter FileFilter, opts *U
 
 		if info.IsDir() {
 			dirMode := info.Mode() & os.ModePerm // Extract permission bits only
-			if dirMode == 0 {
+			// Ensure directory has owner write+execute permissions to prevent extraction failures
+			// Directories need execute bit to be traversable
+			if dirMode == 0 || dirMode&0300 != 0300 {
 				dirMode = 0755 // Default directory permissions
 			}
 			if err = root.MkdirAll(path, dirMode); err != nil {
@@ -678,7 +682,9 @@ func UntarWithFilterAndResult(tarball, target string, filter FileFilter, opts *U
 
 		case tar.TypeDir:
 			dirMode := os.FileMode(header.Mode) & os.ModePerm // Extract permission bits only
-			if dirMode == 0 {
+			// Ensure directory has owner write+execute permissions to prevent extraction failures
+			// Directories need execute bit to be traversable
+			if dirMode == 0 || dirMode&0300 != 0300 {
 				dirMode = 0755 // Default directory permissions
 			}
 			if err := root.MkdirAll(path, dirMode); err != nil {
