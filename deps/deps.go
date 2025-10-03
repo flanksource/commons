@@ -414,18 +414,6 @@ func Install(name, version string, opts ...InstallOption) error {
 		opt(options)
 	}
 
-	// Handle PostgreSQL specially due to complex extraction process
-	if name == "postgres" {
-		if version == "" {
-			if dependency, ok := dependencies[name]; ok {
-				version = dependency.Version
-			} else {
-				version = "16.1.0"
-			}
-		}
-		return InstallPostgres(version, options.BinDir)
-	}
-
 	dependency, ok := dependencies[name]
 	if !ok {
 		return fmt.Errorf("dependency %s not found", name)

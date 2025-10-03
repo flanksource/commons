@@ -3,6 +3,7 @@ module github.com/flanksource/commons
 go 1.25.1
 
 require (
+	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/Snawoot/go-http-digest-auth-client v1.1.3
 	github.com/bsm/gomega v1.27.10
 	github.com/emirpasic/gods/v2 v2.0.0-alpha
