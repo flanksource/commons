@@ -10,7 +10,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-//SafeExec executes the sh script and returns the stdout and stderr, errors will result in a nil return only.
+// SafeExec executes the sh script and returns the stdout and stderr, errors will result in a nil return only.
 func SafeExec(sh string, args ...interface{}) (string, bool) {
 	cmd := exec.Command("bash", "-c", fmt.Sprintf(sh, args...))
 	data, err := cmd.CombinedOutput()
@@ -27,12 +27,12 @@ func SafeExec(sh string, args ...interface{}) (string, bool) {
 
 }
 
-//Exec runs the sh script and forwards stderr/stdout to the console
+// Exec runs the sh script and forwards stderr/stdout to the console
 func Exec(sh string) error {
 	return Execf(sh)
 }
 
-//ExecfWithEnv runs the sh script and forwards stderr/stdout to the console
+// ExecfWithEnv runs the sh script and forwards stderr/stdout to the console
 func ExecfWithEnv(sh string, env map[string]string, args ...interface{}) error {
 	if log.IsLevelEnabled(log.TraceLevel) {
 		envString := ""
@@ -67,7 +67,7 @@ func ExecfWithEnv(sh string, env map[string]string, args ...interface{}) error {
 	return nil
 }
 
-//Execf runs the sh script and forwards stderr/stdout to the console
+// Execf runs the sh script and forwards stderr/stdout to the console
 func Execf(sh string, args ...interface{}) error {
 	return ExecfWithEnv(sh, make(map[string]string), args...)
 }

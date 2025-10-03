@@ -21,7 +21,7 @@ import "time"
 //	t2 := utils.ParseTime("2023-12-25 10:30:00")       // MySQL format
 //	t3 := utils.ParseTime("2023-12-25")                // Date only
 //	t4 := utils.ParseTime("Mon Jan 2 15:04:05 2006")   // ANSIC
-//	
+//
 //	if t := utils.ParseTime(userInput); t != nil {
 //		fmt.Printf("Parsed time: %v\n", t)
 //	} else {

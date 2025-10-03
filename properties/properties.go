@@ -20,16 +20,16 @@
 //	if err != nil {
 //		log.Fatal(err)
 //	}
-//	
+//
 //	// Get property values with defaults
 //	host := properties.String("localhost", "server.host")
 //	port := properties.Int(8080, "server.port")
 //	debug := properties.On(false, "debug.enabled", "debug")
 //	timeout := properties.Duration(30*time.Second, "request.timeout")
-//	
+//
 //	// Set properties dynamically
 //	properties.Set("api.key", "secret-key")
-//	
+//
 //	// Register change listener
 //	properties.RegisterListener(func(p *properties.Properties) {
 //		log.Println("Properties updated")
@@ -97,12 +97,12 @@ func BindFlags(flags *pflag.FlagSet) {
 // Properties represents a thread-safe key-value store for application configuration.
 // It supports loading from files, dynamic updates, file watching, and change notifications.
 type Properties struct {
-	m         map[string]string      // The property map
-	filename  string                 // Currently loaded file
-	listeners []func(*Properties)    // Change listeners
-	lock      sync.RWMutex           // Protects concurrent access
-	close     func()                 // Cleanup function for file watcher
-	Reload    func()                 // Function to manually trigger reload
+	m         map[string]string   // The property map
+	filename  string              // Currently loaded file
+	listeners []func(*Properties) // Change listeners
+	lock      sync.RWMutex        // Protects concurrent access
+	close     func()              // Cleanup function for file watcher
+	Reload    func()              // Function to manually trigger reload
 }
 
 func (p *Properties) RegisterListener(fn func(*Properties)) {

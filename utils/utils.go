@@ -18,7 +18,7 @@
 //	// Create pointer to value
 //	strPtr := utils.Ptr("hello")
 //	intPtr := utils.Ptr(42)
-//	
+//
 //	// Safely dereference (returns zero value if nil)
 //	val := utils.Deref(strPtr) // "hello"
 //	val2 := utils.Deref(nil)   // "" (zero value)
@@ -33,7 +33,7 @@
 //
 //	// Generate random hex key
 //	apiKey := utils.RandomKey(32)
-//	
+//
 //	// Generate random alphanumeric string
 //	sessionID := utils.RandomString(16)
 //
@@ -83,7 +83,7 @@ import (
 //	// Instead of:
 //	temp := "hello"
 //	ptr := &temp
-//	
+//
 //	// You can write:
 //	ptr := utils.Ptr("hello")
 func Ptr[T any](value T) *T {
@@ -97,7 +97,7 @@ func Ptr[T any](value T) *T {
 //
 //	var strPtr *string = nil
 //	val := utils.Deref(strPtr)  // Returns "" (zero value for string)
-//	
+//
 //	strPtr = utils.Ptr("hello")
 //	val = utils.Deref(strPtr)   // Returns "hello"
 func Deref[T any](v *T) T {
@@ -117,10 +117,10 @@ func Deref[T any](v *T) T {
 //
 //	// String coalescing
 //	name := utils.Coalesce("", "", "John", "Jane") // Returns "John"
-//	
-//	// Number coalescing  
+//
+//	// Number coalescing
 //	port := utils.Coalesce(0, 0, 8080, 9090)      // Returns 8080
-//	
+//
 //	// With variables
 //	result := utils.Coalesce(config.URL, os.Getenv("API_URL"), "http://localhost")
 func Coalesce[T comparable](arr ...T) T {
@@ -142,7 +142,7 @@ func Coalesce[T comparable](arr ...T) T {
 //
 //	// Check multiple possible names
 //	dbHost := utils.GetEnvOrDefault("DATABASE_HOST", "DB_HOST", "POSTGRES_HOST")
-//	
+//
 //	// With fallback handling
 //	apiKey := utils.GetEnvOrDefault("API_KEY", "SECRET_KEY")
 //	if apiKey == "" {
