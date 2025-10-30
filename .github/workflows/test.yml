@@ -14,8 +14,13 @@ jobs:
           - 1.25.x
     runs-on: ${{ matrix.platform }}
     steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.13.1
+        with:
+          egress-policy: audit
+
       - name: Install Go
-        uses: buildjet/setup-go@v5
+        uses: buildjet/setup-go@555ce355a95ff01018ffcf8fbbd9c44654db8374 # v5.0.2
         with:
           go-version: ${{ matrix.go-version }}
       - name: Checkout code

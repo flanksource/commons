@@ -11,8 +11,13 @@ jobs:
       release-version: ${{ steps.semantic.outputs.release-version }}
       new-release-published: ${{ steps.semantic.outputs.new-release-published }}
     steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.13.1
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
-      - uses: codfish/semantic-release-action@v3
+      - uses: codfish/semantic-release-action@b621d34fabe0940f031e89b6ebfea28322892a10 # v3.5.0
         id: semantic
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -25,15 +30,20 @@ jobs:
       matrix:
         repos: ["duty"]
     steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.13.1
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@1d96c772d19495a3b5c517cd2bc0cb401ea0529f # v4.1.3
         with:
           repository: flanksource/${{ matrix.repos }}
           token: ${{ secrets.FLANKBOT }}
       - name: Setup Go
-        uses: buildjet/setup-go@v5
+        uses: buildjet/setup-go@555ce355a95ff01018ffcf8fbbd9c44654db8374 # v5.0.2
         with:
           go-version: v1.25.x
-      - uses: buildjet/cache@v4
+      - uses: buildjet/cache@2bbce90d3097805dadebea12a89c47be69eb1b64 # v4.0.0
         with:
           path: |
             ~/go/pkg/mod
@@ -64,7 +74,7 @@ jobs:
 
       - name: Enable Pull Request Automerge
         if: steps.cpr.outputs.pull-request-operation == 'created'
-        uses: peter-evans/enable-pull-request-automerge@v3
+        uses: peter-evans/enable-pull-request-automerge@a660677d5469627102a1c1e11409dd063606628d # v3.0.0
         with:
           token: ${{ secrets.FLANKBOT }}
           pull-request-number: ${{ steps.cpr.outputs.pull-request-number }}
