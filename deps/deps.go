@@ -309,7 +309,7 @@ var dependencies = map[string]Dependency{
 
 	"postgrest": {
 		Version:        "v13.0.5",
-		Linux:          "https://github.com/PostgREST/postgrest/releases/download/{{.version}}/postgrest-{{.version}}-linux-static-x86-64.tar.xz",
+		Linux:          "https://github.com/PostgREST/postgrest/releases/download/{{.version}}/postgrest-{{.version}}-linux-static-x64.tar.xz",
 		LinuxARM:       "https://github.com/PostgREST/postgrest/releases/download/{{.version}}/postgrest-{{.version}}-ubuntu-aarch64.tar.xz ",
 		Windows:        "https://github.com/PostgREST/postgrest/releases/download/{{.version}}/postgrest-{{.version}}-windows-x86-64.zip",
 		Macosx:         "https://github.com/PostgREST/postgrest/releases/download/{{.version}}/postgrest-{{.version}}-macos-x86-64.tar.xz",
