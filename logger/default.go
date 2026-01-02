@@ -1,14 +1,16 @@
 package logger
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"regexp"
 	"strings"
 
-	"github.com/flanksource/commons/properties"
 	"github.com/spf13/pflag"
+
+	"github.com/flanksource/commons/properties"
 )
 
 var currentLogger Logger
@@ -33,11 +35,14 @@ func (f *flagSet) bindFlags(flags *pflag.FlagSet) {
 
 func (f *flagSet) Parse() error {
 	logFlagset := pflag.NewFlagSet("logger", pflag.ContinueOnError)
-	logFlagset.ParseErrorsWhitelist = pflag.ParseErrorsWhitelist{UnknownFlags: true}
+	logFlagset.ParseErrorsAllowlist = pflag.ParseErrorsAllowlist{UnknownFlags: true}
 
 	// standalone parsing of flags to ensure we always have the correct values
 	f.bindFlags(logFlagset)
 	if err := logFlagset.Parse(os.Args[1:]); err != nil {
+		if errors.Is(err, pflag.ErrHelp) {
+			return nil
+		}
 		return err
 	}
 
