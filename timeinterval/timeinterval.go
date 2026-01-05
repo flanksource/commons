@@ -58,6 +58,18 @@ func NewIntervener(ti map[string][]TimeInterval) *Intervener {
 	}
 }
 
+type TimeIntervals []TimeInterval
+
+func (t TimeIntervals) ContainsTime(target time.Time) bool {
+	for _, ti := range t {
+		if ti.ContainsTime(target) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // TimeInterval describes intervals of time. ContainsTime will tell you if a golang time is contained
 // within the interval.
 type TimeInterval struct {
