@@ -53,6 +53,7 @@ package properties
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -65,7 +66,11 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/pflag"
+
+	"github.com/flanksource/commons/timeinterval"
 )
+
+const businessHoursKey = "business_hours"
 
 var commandlineProperties map[string]string
 
@@ -225,6 +230,7 @@ func Update(props map[string]string) {
 func On(def bool, keys ...string) bool {
 	return Global.On(def, keys...)
 }
+
 func Duration(def time.Duration, keys ...string) time.Duration {
 	return Global.Duration(def, keys...)
 }
@@ -235,6 +241,36 @@ func String(def string, keys ...string) string {
 
 func Int(def int, key string) int {
 	return Global.Int(def, key)
+}
+
+func BusinessHours() (timeinterval.TimeIntervals, error) {
+	hours, err := Global.TimeIntervals(businessHoursKey)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(hours) == 0 {
+		return []timeinterval.TimeInterval{{
+			Times: []timeinterval.TimeRange{
+				{
+					StartMinute: 540,  // 9am
+					EndMinute:   1020, // 5pm
+				},
+			},
+			Weekdays: []timeinterval.WeekdayRange{
+				{InclusiveRange: timeinterval.InclusiveRange{
+					Begin: 1, // Monday
+					End:   5, // Friday
+				}},
+			},
+		}}, nil
+	}
+
+	return hours, nil
+}
+
+func TimeIntervals(keys ...string) (timeinterval.TimeIntervals, error) {
+	return Global.TimeIntervals(keys...)
 }
 
 func (p *Properties) On(def bool, keys ...string) bool {
@@ -274,6 +310,34 @@ func (p *Properties) Int(def int, key string) int {
 		}
 	}
 	return def
+}
+
+// TimeIntervals returns the parsed time intervals from the specified property keys.
+// Properties are looked up under "time_interval.<key>" prefix.
+// If no keys are provided, defaults to "business_hours".
+// The property value should be a JSON array in alertmanager time interval format.
+// Example: [{"weekdays":["monday:friday"],"times":[{"start_time":"09:00","end_time":"17:00"}]}]
+func (p *Properties) TimeIntervals(keys ...string) (timeinterval.TimeIntervals, error) {
+	if len(keys) == 0 {
+		keys = []string{businessHoursKey}
+	}
+
+	var output []timeinterval.TimeInterval
+	for _, key := range keys {
+		propKey := "time_interval." + key
+		v := p.Get(propKey)
+		if v == "" {
+			continue
+		}
+
+		var intervals []timeinterval.TimeInterval
+		if err := json.Unmarshal([]byte(v), &intervals); err != nil {
+			return nil, fmt.Errorf("failed to parse time interval from property %s: %w", propKey, err)
+		}
+		output = append(output, intervals...)
+	}
+
+	return output, nil
 }
 
 func (p *Properties) Watch() func() {
