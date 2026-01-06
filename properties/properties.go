@@ -250,7 +250,20 @@ func BusinessHours() (timeinterval.TimeIntervals, error) {
 	}
 
 	if len(hours) == 0 {
-		return nil, err
+		return []timeinterval.TimeInterval{{
+			Times: []timeinterval.TimeRange{
+				{
+					StartMinute: 540,  // 9am
+					EndMinute:   1020, // 5pm
+				},
+			},
+			Weekdays: []timeinterval.WeekdayRange{
+				{InclusiveRange: timeinterval.InclusiveRange{
+					Begin: 1, // Monday
+					End:   5, // Friday
+				}},
+			},
+		}}, nil
 	}
 
 	return hours, nil
