@@ -1,4 +1,5 @@
 bin
+.bin
 y
 # Binaries for programs and plugins
 *.exe
@@ -17,3 +18,5 @@ y
 .idea/
 .vscode/
 cliff.toml
+.todos/
+cmd/hx/fixtures/hx
