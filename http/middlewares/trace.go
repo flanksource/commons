@@ -55,6 +55,9 @@ type TraceConfig struct {
 	TLS bool
 
 	Timing bool
+
+	// Auth controls whether auth middleware (AWS SigV4, OAuth) logs trace messages
+	Auth bool
 }
 
 type traceTransport struct {

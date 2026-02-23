@@ -125,6 +125,9 @@ func (h *Response) AsMap() (map[string]any, error) {
 }
 
 func (h *Response) Debug() string {
+	if h.Response == nil {
+		return "nil response"
+	}
 	// mimic the response, + add content-type and size
 	var sb strings.Builder
 
@@ -132,9 +135,9 @@ func (h *Response) Debug() string {
 		sb.WriteString(h.Request.Debug())
 	}
 
-	sb.WriteString(fmt.Sprintf("\n====> Status: %d\n", h.StatusCode))
+	fmt.Fprintf(&sb, "\n====> Status: %d\n", h.StatusCode)
 	for k, v := range logger.StripSecretsFromMap(h.HeaderMap()) {
-		sb.WriteString(fmt.Sprintf("  %s: %s\n", console.Grayf("%s", k), v))
+		fmt.Fprintf(&sb, "  %s: %s\n", console.Grayf("%s", k), v)
 	}
 	if h.IsJSON() {
 		r, _ := h.AsJSON()

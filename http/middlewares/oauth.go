@@ -66,6 +66,12 @@ func toUrlValues(m map[string]string) url.Values {
 	return values
 }
 
+func (t *oauthRoundTripper) trace(format string, args ...any) {
+	if t.Tracer != nil {
+		t.Tracer(fmt.Sprintf(format, args...))
+	}
+}
+
 func (t *oauthRoundTripper) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundTripper {
 	return RoundTripperFunc(func(ogRequest *netHttp.Request) (*netHttp.Response, error) {
 		config := clientcredentials.Config{
@@ -81,15 +87,17 @@ func (t *oauthRoundTripper) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundT
 		var token *oauth2.Token
 		if val, ok := t.cache.Get(cacheKey); ok {
 			token, _ = val.(*oauth2.Token)
+			t.trace("oauth: using cached token (expires %s)", token.Expiry.Format(time.RFC3339))
 		}
 
 		var err error
 		if token == nil {
+			t.trace("oauth: fetching token from %s", t.TokenURL)
 			token, err = config.Token(ogRequest.Context())
 			if err != nil {
 				return nil, fmt.Errorf("error fetching oauth access token: %w", err)
 			}
-
+			t.trace("oauth: token acquired (expires %s)", token.Expiry.Format(time.RFC3339))
 			t.cache.Set(cacheKey, token, time.Until(token.Expiry))
 		}
 

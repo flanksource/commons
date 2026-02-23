@@ -239,3 +239,69 @@ func createCert(parent *x509.Certificate, signerKey any, cn string) (*x509.Certi
 
 	return template, &certificate, pemBytes, privateKeyBytes, nil
 }
+
+func TestTLSLogging(t *testing.T) {
+	// Enable trace logging to see TLS output
+	logger.StandardLogger().SetLogLevel(5)
+	
+	caX509, caCrt, caPEM, _, err := createCert(nil, nil, "Flanksource")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, serverCrt, _, _, err := createCert(caX509, caCrt.PrivateKey, "localhost")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	certPool := x509.NewCertPool()
+	if !certPool.AppendCertsFromPEM(caPEM) {
+		t.Fatal(err)
+	}
+
+	t.Run("TLS logging with valid certificate", func(t *testing.T) {
+		port := "18090"
+		server, err := tlsServer(port, &tls.Config{
+			Certificates: []tls.Certificate{*serverCrt},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		serverReady := make(chan struct{})
+		go func() {
+			close(serverReady)
+			err := server.ListenAndServeTLS("", "")
+			logger.Infof("server error: %v", err)
+		}()
+
+		serverTerminate := make(chan struct{})
+		go func() {
+			<-serverTerminate
+			_ = server.Shutdown(context.Background())
+		}()
+
+		<-serverReady
+		defer func() { serverTerminate <- struct{}{} }()
+
+		client, err := chttp.NewClient().TLSConfig(chttp.TLSConfig{CA: string(caPEM)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		client = client.WithHttpLogging(5, 7)
+
+		logger.Infof("\n=== Making HTTPS request to test TLS logging ===")
+		response, err := client.BaseURL(fmt.Sprintf("https://localhost:%s", port)).R(context.Background()).Get("/")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		r, err := response.AsString()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r != "Hello, World!" {
+			t.Fatal(r)
+		}
+	})
+}
