@@ -1,7 +1,7 @@
 // Package http provides an enhanced HTTP client with built-in support for
 // authentication, retries, tracing, and middleware.
 //
-// The client supports multiple authentication methods (Basic, Digest, NTLM, OAuth),
+// The client supports multiple authentication methods (Basic, Digest, NTLM, OAuth, AWS Sigv4),
 // automatic retries with exponential backoff, request/response tracing, and a
 // flexible middleware system.
 //
@@ -15,6 +15,11 @@
 //	client := http.NewClient().
 //		Auth("username", "password").
 //		Digest(true)
+//
+// With AWS Sigv4 Authentication:
+//
+//	cfg, _ := awsconfig.LoadDefaultConfig(ctx)
+//	client := http.NewClient().AWSAuthSigV4(cfg).AWSService("s3")
 //
 // With Retries and Timeout:
 //
@@ -44,6 +49,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+
 	dac "github.com/Snawoot/go-http-digest-auth-client"
 	"github.com/flanksource/commons/dns"
 	"github.com/flanksource/commons/http/middlewares"
@@ -68,6 +76,7 @@ var TraceAll = TraceConfig{
 	Headers:         true,
 	ResponseHeaders: true,
 	TLS:             true,
+	Auth:            true,
 }
 
 var TraceHeaders = TraceConfig{
@@ -77,10 +86,11 @@ var TraceHeaders = TraceConfig{
 	Headers:         true,
 	ResponseHeaders: true,
 	TLS:             false,
+	Auth:            true,
 }
 
 func (a *AuthConfig) IsEmpty() bool {
-	return a.Username == "" && a.Password == ""
+	return a.Username == "" && a.Password == "" && a.AWSCredentialsProvider == nil
 }
 
 type AuthConfig struct {
@@ -98,6 +108,12 @@ type AuthConfig struct {
 
 	// Ntlmv2 controls whether to use NTLMv2
 	Ntlmv2 bool
+
+	// AWS Sigv4 authentication
+	AWSCredentialsProvider aws.CredentialsProvider
+	AWSRegion              string
+	AWSService             string
+	AWSEndpoint            string
 }
 
 // Client is an enhanced HTTP client with built-in support for authentication,
@@ -119,6 +135,9 @@ type Client struct {
 
 	// authConfig specifies the authentication configuration
 	authConfig *AuthConfig
+
+	// traceConfig stores the trace configuration for use by auth middlewares
+	traceConfig TraceConfig
 
 	// transportMiddlewares are like http middlewares for transport
 	transportMiddlewares []middlewares.Middleware
@@ -416,6 +435,56 @@ func (c *Client) Auth(username, password string) *Client {
 	return c
 }
 
+// AWSAuthSigV4 configures AWS Signature Version 4 authentication.
+// With no arguments, it loads the default AWS config (env vars, ~/.aws, IAM role, etc.).
+// Pass an aws.Config to use specific credentials/region.
+//
+// Example with defaults:
+//
+//	client.AWSAuthSigV4()
+//
+// Example with explicit config:
+//
+//	cfg, _ := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion("us-east-1"))
+//	client.AWSAuthSigV4(cfg)
+func (c *Client) AWSAuthSigV4(cfgs ...aws.Config) *Client {
+	if c.authConfig == nil {
+		c.authConfig = &AuthConfig{}
+	}
+
+	if len(cfgs) > 0 {
+		cfg := cfgs[0]
+		c.authConfig.AWSCredentialsProvider = cfg.Credentials
+		c.authConfig.AWSRegion = cfg.Region
+	} else {
+		cfg, err := awsconfig.LoadDefaultConfig(context.Background())
+		if err == nil {
+			c.authConfig.AWSCredentialsProvider = cfg.Credentials
+			c.authConfig.AWSRegion = cfg.Region
+		}
+	}
+	return c
+}
+
+// AWSService sets the AWS service name for SigV4 signing.
+// If not set, the service is inferred from the request URL hostname.
+func (c *Client) AWSService(service string) *Client {
+	if c.authConfig == nil {
+		c.authConfig = &AuthConfig{}
+	}
+	c.authConfig.AWSService = service
+	return c
+}
+
+// AWSEndpoint sets a custom AWS endpoint (e.g., for LocalStack testing).
+func (c *Client) AWSEndpoint(endpoint string) *Client {
+	if c.authConfig == nil {
+		c.authConfig = &AuthConfig{}
+	}
+	c.authConfig.AWSEndpoint = endpoint
+	return c
+}
+
 // OAuth configures OAuth 2.0 authentication for the client.
 // Supports various OAuth flows including client credentials and authorization code.
 //
@@ -449,11 +518,13 @@ func (c *Client) OAuth(config middlewares.OauthConfig) *Client {
 //		MaxBodyLength:   1024,  // Limit body size in traces
 //	})
 func (c *Client) Trace(config TraceConfig) *Client {
+	c.traceConfig = config
 	c.Use(middlewares.NewTracedTransport(config).RoundTripper)
 	return c
 }
 
 func (c *Client) TraceToStdout(config TraceConfig) *Client {
+	c.traceConfig = config
 	c.Use(middlewares.NewLogger(config))
 	return c
 }
@@ -573,7 +644,8 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 		}
 	}
 	req.URL.RawQuery = queryParam.Encode()
-	if r.client.authConfig != nil && !r.client.authConfig.IsEmpty() {
+	// Set basic auth only if not using AWS Sigv4
+	if r.client.authConfig != nil && !r.client.authConfig.IsEmpty() && r.client.authConfig.AWSCredentialsProvider == nil {
 		req.SetBasicAuth(r.client.authConfig.Username, r.client.authConfig.Password)
 	}
 
@@ -587,27 +659,40 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 	}
 
 	if c.authConfig != nil {
-		parts := strings.Split(c.authConfig.Username, "@")
-		domain := ""
-		if len(parts) > 1 {
-			domain = parts[1]
-		}
+		if c.authConfig.AWSCredentialsProvider != nil {
+			awsCfg := middlewares.AWSSigv4Config{
+				Region:              c.authConfig.AWSRegion,
+				Service:             c.authConfig.AWSService,
+				Endpoint:            c.authConfig.AWSEndpoint,
+				CredentialsProvider: c.authConfig.AWSCredentialsProvider,
+			}
+			if c.traceConfig.Auth {
+				awsCfg.Tracer = func(msg string) { logger.Tracef(msg) }
+			}
+			r.client.httpClient.Transport = middlewares.NewAWSSigv4Transport(awsCfg, r.client.httpClient.Transport)
+		} else {
+			parts := strings.Split(c.authConfig.Username, "@")
+			domain := ""
+			if len(parts) > 1 {
+				domain = parts[1]
+			}
 
-		if c.authConfig.Ntlmv2 {
-			r.client.httpClient.Transport = &httpntlmv2.NtlmTransport{
-				Domain:       domain,
-				User:         parts[0],
-				Password:     c.authConfig.Password,
-				RoundTripper: r.client.httpClient.Transport,
+			if c.authConfig.Ntlmv2 {
+				r.client.httpClient.Transport = &httpntlmv2.NtlmTransport{
+					Domain:       domain,
+					User:         parts[0],
+					Password:     c.authConfig.Password,
+					RoundTripper: r.client.httpClient.Transport,
+				}
+			} else if c.authConfig.Ntlm {
+				r.client.httpClient.Transport = &httpntlm.NtlmTransport{
+					Domain:   domain,
+					User:     parts[0],
+					Password: c.authConfig.Password,
+				}
+			} else if c.authConfig.Digest {
+				r.client.httpClient.Transport = dac.NewDigestTransport(c.authConfig.Username, c.authConfig.Password, r.client.httpClient.Transport)
 			}
-		} else if c.authConfig.Ntlm {
-			r.client.httpClient.Transport = &httpntlm.NtlmTransport{
-				Domain:   domain,
-				User:     parts[0],
-				Password: c.authConfig.Password,
-			}
-		} else if c.authConfig.Digest {
-			r.client.httpClient.Transport = dac.NewDigestTransport(c.authConfig.Username, c.authConfig.Password, r.client.httpClient.Transport)
 		}
 	}
 

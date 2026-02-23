@@ -219,6 +219,12 @@ func (r *Request) do() (resp *Response, err error) {
 	var retriesRemaining = r.retryConfig.MaxRetries
 	for {
 		response, err := r.client.roundTrip(r)
+		if response == nil {
+			response = &Response{}
+		}
+		if response.Request == nil {
+			response.Request = r
+		}
 		if err != nil {
 			if retriesRemaining <= 0 {
 				return nil, err
@@ -242,10 +248,23 @@ func (r *Request) HeaderMap() map[string]string {
 }
 
 func (r *Request) Debug() string {
+	if r == nil {
+		return "<nil request>"
+	}
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("%s %s\n", r.method, logger.StripSecrets(r.url.String())))
+	sb.WriteString(r.method)
+	if r.url != nil {
+		sb.WriteString(" " + r.url.String() + "\n")
+	} else if r.client != nil && r.client.baseURL != "" {
+		sb.WriteString(r.client.baseURL + "\n")
+	} else {
+		sb.WriteString(" <nil url>\n")
+	}
 	for k, v := range logger.StripSecretsFromMap(r.HeaderMap()) {
-		sb.WriteString(fmt.Sprintf("  %s: %s\n", console.Grayf("%s", k), v))
+		fmt.Fprintf(&sb, "  %s: %s\n", console.Grayf("%s", k), v)
+	}
+	if !r.client.authConfig.IsEmpty() {
+		sb.WriteString("  " + console.Grayf("%s", "Authorization: ") + r.client.authConfig.Username + ":" + logger.PrintableSecret(r.client.authConfig.Password) + "\n")
 	}
 	body, _ := io.ReadAll(r.body)
 	sb.WriteString(logger.StripSecrets(string(body)))
