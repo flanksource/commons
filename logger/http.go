@@ -3,7 +3,7 @@ package logger
 import (
 	"net/http"
 
-	"github.com/henvic/httpretty"
+	"github.com/flanksource/commons/logger/httpretty"
 )
 
 var SensitiveHeaders = []string{

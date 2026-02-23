@@ -4,8 +4,7 @@ import (
 	"net/http"
 
 	"github.com/flanksource/commons/logger"
-
-	"github.com/henvic/httpretty"
+	"github.com/flanksource/commons/logger/httpretty"
 )
 
 func NewLogger(config TraceConfig) Middleware {
