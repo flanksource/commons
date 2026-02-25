@@ -15,6 +15,7 @@ func NewLogger(config TraceConfig) Middleware {
 		RequestBody:    config.Body,
 		ResponseHeader: config.ResponseHeaders,
 		ResponseBody:   config.Body,
+		Auth:           config.Auth,
 		Colors:         true, // erase line if you don't like colors
 		Formatters:     []httpretty.Formatter{&httpretty.JSONFormatter{}},
 	}
