@@ -114,6 +114,9 @@ type Logger struct {
 	// SkipSanitize bypasses sanitizing headers containing credentials (such as Authorization).
 	SkipSanitize bool
 
+	// Auth set to print OAuth / AWSSigned requests with redacted Authorization header and additional information about the signature.
+	Auth bool
+
 	// Colors set ANSI escape codes that terminals use to print text in different colors.
 	Colors bool
 
@@ -216,7 +219,7 @@ func (l *Logger) SetFlusher(f Flusher) {
 
 func (l *Logger) getWriter() io.Writer {
 	if l.w == nil {
-		return os.Stdout
+		return os.Stderr
 	}
 
 	return l.w
