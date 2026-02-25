@@ -164,6 +164,8 @@ type Client struct {
 	userAgent string
 
 	tlsConfig *tls.Config
+
+	curlLog bool
 }
 
 // RoundTrip implements http.RoundTripper.
@@ -393,6 +395,11 @@ func (c *Client) InsecureSkipVerify(val bool) *Client {
 	customTransport.TLSClientConfig.InsecureSkipVerify = val
 	c.tlsConfig = customTransport.TLSClientConfig
 	c.httpClient.Transport = customTransport
+	return c
+}
+
+func (c *Client) CurlLog() *Client {
+	c.curlLog = true
 	return c
 }
 
@@ -637,13 +644,18 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 		req.Header.Set("Accept", "*/*")
 	}
 
-	queryParam := req.URL.Query()
-	for k, v := range r.queryParams {
-		for _, vv := range v {
-			queryParam.Set(k, vv)
+	if len(r.queryParams) > 0 {
+		raw := req.URL.RawQuery
+		for k, v := range r.queryParams {
+			for _, vv := range v {
+				if raw != "" {
+					raw += "&"
+				}
+				raw += url.QueryEscape(k) + "=" + url.QueryEscape(vv)
+			}
 		}
+		req.URL.RawQuery = raw
 	}
-	req.URL.RawQuery = queryParam.Encode()
 	// Set basic auth only if not using AWS Sigv4
 	if r.client.authConfig != nil && !r.client.authConfig.IsEmpty() && r.client.authConfig.AWSCredentialsProvider == nil {
 		req.SetBasicAuth(r.client.authConfig.Username, r.client.authConfig.Password)
@@ -656,6 +668,14 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 		}
 
 		c.setProxy(proxyURL)
+	}
+
+	if c.curlLog {
+		base := r.client.httpClient.Transport
+		if base == nil {
+			base = http.DefaultTransport
+		}
+		r.client.httpClient.Transport = &curlLogTransport{base: base}
 	}
 
 	if c.authConfig != nil {

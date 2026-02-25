@@ -227,6 +227,58 @@ func TestHTTP(t *testing.T) {
 	}
 }
 
+func TestQueryParamsPreserveRawKeys(t *testing.T) {
+	var capturedURL string
+	srv := netHTTP.Server{
+		Handler: netHTTP.HandlerFunc(func(w netHTTP.ResponseWriter, r *netHTTP.Request) {
+			capturedURL = r.URL.RequestURI()
+			w.WriteHeader(200)
+		}),
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go srv.Serve(ln) //nolint:errcheck
+	defer srv.Close()
+
+	base := "http://" + ln.Addr().String()
+
+	tests := []struct {
+		name     string
+		url      string
+		expected string
+	}{
+		{
+			name:     "OData params in URL stay unencoded",
+			url:      "/v1.0/groups/abc/members?$count=true&$filter=startswith(displayName,'A')",
+			expected: "/v1.0/groups/abc/members?$count=true&$filter=startswith(displayName,'A')",
+		},
+		{
+			name:     "URL without query params is unchanged",
+			url:      "/v1.0/users",
+			expected: "/v1.0/users",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			capturedURL = ""
+			resp, err := http.NewClient().R(context.Background()).Get(base + tc.url)
+			if err != nil {
+				t.Fatalf("request failed: %v", err)
+			}
+			if !resp.IsOK() {
+				t.Fatalf("unexpected status: %d", resp.StatusCode)
+			}
+			if capturedURL != tc.expected {
+				t.Errorf("expected %q, got %q", tc.expected, capturedURL)
+			}
+		})
+	}
+}
+
 // nolint:unused
 func loggerMiddlware(next netHTTP.RoundTripper) netHTTP.RoundTripper {
 	x := func(req *netHTTP.Request) (*netHTTP.Response, error) {
