@@ -12,6 +12,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
+	"github.com/flanksource/commons/logger"
 )
 
 type AWSSigv4Config struct {
@@ -41,6 +42,7 @@ func NewAWSSigv4Transport(config AWSSigv4Config, transport http.RoundTripper) ht
 }
 
 func (t *awsSigv4RoundTripper) trace(format string, args ...any) {
+	logger.V(logger.Trace4).Infof(format, args...)
 	if t.config.Tracer != nil {
 		t.config.Tracer(fmt.Sprintf(format, args...))
 	}

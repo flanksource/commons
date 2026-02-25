@@ -6,7 +6,10 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/flanksource/clicky"
+	"github.com/flanksource/clicky/api"
 	"github.com/flanksource/commons/hash"
+	"github.com/flanksource/commons/logger"
 	"github.com/patrickmn/go-cache"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
@@ -32,6 +35,20 @@ type OauthConfig struct {
 	Tracer       func(msg string)
 }
 
+func (c OauthConfig) Pretty() api.Text {
+	t := clicky.Text(c.TokenURL)
+	t = t.Space().
+		Append("id=", "text-muted").Append(c.ClientID).
+		Append(" scopes=", "text-muted").Append(c.Scopes).
+		Append(c.Params)
+
+	return t
+}
+
+func (c OauthConfig) String() string {
+	return c.Pretty().String()
+}
+
 func (c *OauthConfig) AuthStyleInHeader() *OauthConfig {
 	c.AuthStyle = AuthStyleInHeader
 	return c
@@ -40,17 +57,6 @@ func (c *OauthConfig) AuthStyleInHeader() *OauthConfig {
 func (c *OauthConfig) AuthStyleInParams() *OauthConfig {
 	c.AuthStyle = AuthStyleInParams
 	return c
-}
-
-func (c *OauthConfig) getSanitizedSecret() string {
-	if len(c.ClientSecret) <= 4 {
-		return c.ClientSecret
-	}
-	return c.ClientSecret[0:4] + "****"
-}
-
-func (c OauthConfig) String() string {
-	return fmt.Sprintf("url=%s id=%s, secret=%s scopes=%s params=%s", c.TokenURL, c.ClientID, c.getSanitizedSecret(), c.Scopes, c.Params)
 }
 
 type oauthRoundTripper struct {
@@ -67,6 +73,7 @@ func toUrlValues(m map[string]string) url.Values {
 }
 
 func (t *oauthRoundTripper) trace(format string, args ...any) {
+	logger.V(logger.Trace4).Infof(format, args...)
 	if t.Tracer != nil {
 		t.Tracer(fmt.Sprintf(format, args...))
 	}
@@ -92,12 +99,15 @@ func (t *oauthRoundTripper) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundT
 
 		var err error
 		if token == nil {
-			t.trace("oauth: fetching token from %s", t.TokenURL)
+			t.trace("fetching oauth token from %s", t.Pretty().ANSI())
 			token, err = config.Token(ogRequest.Context())
 			if err != nil {
 				return nil, fmt.Errorf("error fetching oauth access token: %w", err)
 			}
-			t.trace("oauth: token acquired (expires %s)", token.Expiry.Format(time.RFC3339))
+			if !token.Valid() {
+				return nil, fmt.Errorf("fetched invalid oauth token: type=%s expires in=%s", token.TokenType, time.Until(token.Expiry))
+			}
+			t.trace("oauth: token acquired (expires %s): access=%s, refresh=%s", token.Expiry.Format(time.RFC3339), logger.PrintableSecret(token.AccessToken), logger.PrintableSecret(token.RefreshToken))
 			t.cache.Set(cacheKey, token, time.Until(token.Expiry))
 		}
 
