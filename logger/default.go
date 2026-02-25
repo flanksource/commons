@@ -114,7 +114,7 @@ func BindFlags(flags *pflag.FlagSet) {
 	flags.Bool("json-logs", false, "Print logs in json format to stderr")
 	flags.Bool("color", true, "Print logs using color")
 	flags.Bool("report-caller", false, "Report log caller info")
-	flags.Bool("log-to-stderr", false, "Log to stderr instead of stdout")
+	flags.Bool("log-to-stderr", true, "Log to stderr instead of stdout")
 }
 
 // UseCobraFlags initializes the logger using values from parsed cobra flags.
