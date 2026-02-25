@@ -95,19 +95,18 @@ func (p *printer) printRequest(req *http.Request) {
 }
 
 func (p *printer) printRequestInfo(req *http.Request) {
-	to := req.URL.String()
-	// req.URL.Host is empty on the request received by a server
-	if req.URL.Host == "" {
-		to = req.Host + to
-		schema := "http://"
-		if req.TLS != nil {
-			schema = "https://"
-		}
-		to = schema + to
+	host := req.URL.Host
+	if host == "" {
+		host = req.Host
 	}
-	p.printf("%s", p.format(color.FgBlue, to))
-	if req.RemoteAddr != "" {
-		p.printf("* Request from %s ", p.format(color.FgBlue, req.RemoteAddr))
+	p.printf("%s\n", p.format(color.FgBlue, host))
+	p.printf("%s %s\n",
+		p.format(color.FgBlue, color.Bold, req.Method),
+		p.format(color.FgYellow, req.URL.Path))
+	for key, values := range req.URL.Query() {
+		p.printf("  %s: %s\n",
+			p.format(color.FgBlue, key),
+			p.format(color.FgYellow, strings.Join(values, ",")))
 	}
 }
 

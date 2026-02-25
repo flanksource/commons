@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/flanksource/commons/logger/httpretty"
+	"github.com/flanksource/commons/properties"
 )
 
 var SensitiveHeaders = []string{
@@ -28,7 +29,8 @@ func NewHttpLogger(logger Logger, rt http.RoundTripper) http.RoundTripper {
 
 	l := &httpretty.Logger{
 		Time:           logger.IsLevelEnabled(5),
-		TLS:            logger.IsLevelEnabled(5),
+		TLS:            logger.IsLevelEnabled(6),
+		Auth:           logger.IsLevelEnabled(6),
 		RequestHeader:  logger.IsLevelEnabled(5),
 		RequestBody:    logger.IsLevelEnabled(6),
 		ResponseHeader: logger.IsLevelEnabled(5),
@@ -60,14 +62,16 @@ func NewHttpLoggerWithLevels(logger Logger, rt http.RoundTripper, headerLevel, b
 	}
 
 	l := &httpretty.Logger{
-		Time:           logger.IsLevelEnabled(headerLevel),
-		TLS:            logger.IsLevelEnabled(headerLevel),
-		RequestHeader:  logger.IsLevelEnabled(headerLevel),
-		RequestBody:    logger.IsLevelEnabled(bodyLevel),
-		ResponseHeader: logger.IsLevelEnabled(headerLevel),
-		ResponseBody:   logger.IsLevelEnabled(bodyLevel),
-		Colors:         true, // erase line if you don't like colors
-		Formatters:     []httpretty.Formatter{&httpretty.JSONFormatter{}},
+		Time:            logger.IsLevelEnabled(headerLevel),
+		TLS:             logger.IsLevelEnabled(headerLevel),
+		RequestHeader:   logger.IsLevelEnabled(headerLevel),
+		RequestBody:     logger.IsLevelEnabled(bodyLevel),
+		ResponseHeader:  logger.IsLevelEnabled(headerLevel),
+		ResponseBody:    logger.IsLevelEnabled(bodyLevel),
+		Auth:            logger.IsLevelEnabled(headerLevel),
+		Colors:          true, // erase line if you don't like colors
+		Formatters:      []httpretty.Formatter{&httpretty.JSONFormatter{}},
+		MaxResponseBody: int64(properties.Int(4*1024, "http.log.response.body.length")),
 	}
 
 	l.SkipHeader(SensitiveHeaders)

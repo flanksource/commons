@@ -30,7 +30,7 @@ func (f *flagSet) bindFlags(flags *pflag.FlagSet) {
 	flags.BoolVar(&f.jsonLogs, "json-logs", false, "Print logs in json format to stderr")
 	flags.BoolVar(&f.color, "color", true, "Print logs using color")
 	flags.BoolVar(&f.reportCaller, "report-caller", false, "Report log caller info")
-	flags.BoolVar(&f.logToStderr, "log-to-stderr", false, "Log to stderr instead of stdout")
+	flags.BoolVar(&f.logToStderr, "log-to-stderr", true, "Log to stderr instead of stdout")
 }
 
 func (f *flagSet) Parse() error {
@@ -95,8 +95,8 @@ func Configure(flags Flags) {
 		properties.Set("log.report.caller", "true")
 	}
 
-	if flags.LogToStderr {
-		properties.Set("log.stderr", "true")
+	if !flags.LogToStderr {
+		properties.Set("log.stderr", "false")
 	}
 	if !flags.Color {
 		properties.Set("log.color", "false")
