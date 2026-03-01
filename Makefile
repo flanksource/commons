@@ -1,3 +1,13 @@
+HX_DIR := cmd/hx
+
+.PHONY: build
+build:
+	$(MAKE) -C $(HX_DIR) build
+
+.PHONY: install
+install:
+	$(MAKE) -C $(HX_DIR) install
+
 .PHONY: test
 test:
 	go test ./... -v --count=1

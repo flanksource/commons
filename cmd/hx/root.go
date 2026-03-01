@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"github.com/flanksource/clicky/api"
 	"github.com/flanksource/commons/cmd/hx/output"
 	"github.com/flanksource/commons/cmd/hx/parse"
+	"github.com/flanksource/commons/har"
 	commonshttp "github.com/flanksource/commons/http"
 	"github.com/flanksource/commons/http/middlewares"
 	"github.com/spf13/cobra"
@@ -61,10 +63,10 @@ var (
 	flagDigest         bool
 	flagNTLM           bool
 	flagToken          string
-	flagAWSSigV4    bool
-	flagAWSRegion   string
-	flagAWSService  string
-	flagAWSEndpoint string
+	flagAWSSigV4       bool
+	flagAWSRegion      string
+	flagAWSService     string
+	flagAWSEndpoint    string
 	flagOAuthClientID  string
 	flagOAuthSecret    string
 	flagOAuthTokenURL  string
@@ -86,6 +88,7 @@ var (
 	flagQuiet          bool
 	flagRaw            bool
 	flagUserAgent      string
+	flagHAROutput      string
 )
 
 func init() {
@@ -128,6 +131,7 @@ func init() {
 	f.BoolVar(&flagHeadersOnly, "headers", false, "Show headers only")
 	f.BoolVarP(&flagQuiet, "quiet", "q", false, "Body only, no decoration")
 	f.BoolVar(&flagRaw, "raw", false, "No colors")
+	f.StringVar(&flagHAROutput, "har", "", "Write HAR capture to file (use - for stdout)")
 }
 
 func run(cmd *cobra.Command, args []string) error {
@@ -153,7 +157,7 @@ func run(cmd *cobra.Command, args []string) error {
 	hasBody := body != nil
 	method := parsed.EffectiveMethod(hasBody, flagMethod)
 
-	client := buildClient()
+	client, collector := buildClient()
 	req := client.R(context.Background())
 
 	for _, h := range flagHeaders {
@@ -173,6 +177,7 @@ func run(cmd *cobra.Command, args []string) error {
 	if flagToken != "" {
 		req = req.Header("Authorization", "Bearer "+flagToken)
 	}
+
 
 	opts := outputOpts()
 
@@ -207,10 +212,36 @@ func run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if collector != nil {
+		if err := writeHAR(collector.Entries(), flagHAROutput); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: HAR write failed: %v\n", err)
+		}
+	}
+
 	if resp.StatusCode >= 400 {
 		return &httpStatusError{code: resp.StatusCode, status: resp.Status}
 	}
 	return nil
+}
+
+func writeHAR(entries []har.Entry, dest string) error {
+	file := har.File{
+		Log: har.Log{
+			Version: "1.2",
+			Creator: har.Creator{Name: "hx", Version: version},
+			Pages:   []har.Page{},
+			Entries: entries,
+		},
+	}
+	data, err := json.MarshalIndent(file, "", "  ")
+	if err != nil {
+		return err
+	}
+	if dest == "-" {
+		_, err = fmt.Fprintf(os.Stdout, "%s\n", data)
+		return err
+	}
+	return os.WriteFile(dest, append(data, '\n'), 0o644)
 }
 
 func outputOpts() output.Options {
@@ -247,7 +278,7 @@ func printRequestVerbose(method, rawURL string, req *commonshttp.Request, body [
 	output.PrintRequest(stdReq, body, opts)
 }
 
-func buildClient() *commonshttp.Client {
+func buildClient() (*commonshttp.Client, *har.Collector) {
 	var tracer func(string)
 	if flagVerbose >= 1 {
 		useColor := term.IsTerminal(int(os.Stderr.Fd()))
@@ -263,6 +294,12 @@ func buildClient() *commonshttp.Client {
 	client := commonshttp.NewClient().
 		Timeout(flagTimeout).
 		UserAgent(flagUserAgent)
+
+	var collector *har.Collector
+	if flagHAROutput != "" {
+		collector = har.NewCollector(har.DefaultConfig())
+		client = client.HARCollector(collector)
+	}
 
 	if flagUser != "" {
 		user, pass, _ := strings.Cut(flagUser, ":")
@@ -361,7 +398,11 @@ func buildClient() *commonshttp.Client {
 		client = client.Retry(flagRetry, flagRetryWait, flagRetryFactor)
 	}
 
-	// FIXME: redirect control requires commons API change (CheckRedirect on httpClient)
+	if flagNoFollow {
+		client = client.RedirectPolicy(0)
+	} else if flagMaxRedirects != 10 {
+		client = client.RedirectPolicy(flagMaxRedirects)
+	}
 
 	if flagVerbose >= 3 {
 		client = client.TraceToStdout(commonshttp.TraceAll)
@@ -369,7 +410,7 @@ func buildClient() *commonshttp.Client {
 		client = client.TraceToStdout(commonshttp.TraceHeaders)
 	}
 
-	return client
+	return client, collector
 }
 
 func resolveBody(items *parse.ParsedItems) (io.Reader, string, error) {

@@ -128,7 +128,7 @@ jobs:
         run: mv cmd/hx/.bin/hx.exe cmd/hx/.bin/hx_${{ matrix.goos }}_${{ matrix.goarch }}.exe
 
       - name: Upload artifact
-        uses: actions/upload-artifact@ea165f8d65b6db9a8b9c8a4d5a48f8ca9897de98 # v4.6.2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: hx-${{ matrix.goos }}-${{ matrix.goarch }}
           path: cmd/hx/.bin/hx_*
