@@ -54,6 +54,7 @@ import (
 
 	dac "github.com/Snawoot/go-http-digest-auth-client"
 	"github.com/flanksource/commons/dns"
+	"github.com/flanksource/commons/har"
 	"github.com/flanksource/commons/http/middlewares"
 	"github.com/flanksource/commons/logger"
 	httpntlm "github.com/vadimi/go-http-ntlm"
@@ -166,6 +167,17 @@ type Client struct {
 	tlsConfig *tls.Config
 
 	curlLog bool
+
+	// harCollector accumulates HAR entries from all sources (main requests,
+	// OAuth token fetches, redirect hops, retries).
+	harCollector *har.Collector
+
+	// harMiddlewares are applied innermost (closest to transport) so they
+	// capture the final request after auth middleware has added headers.
+	harMiddlewares []middlewares.Middleware
+
+	// maxRedirects controls how many redirects to follow. -1 means no following.
+	maxRedirects int
 }
 
 // RoundTrip implements http.RoundTripper.
@@ -205,9 +217,10 @@ func NewClient() *Client {
 	}
 
 	return &Client{
-		httpClient: client,
-		userAgent:  "flanksource-commons/0",
-		headers:    http.Header{},
+		httpClient:   client,
+		userAgent:    "flanksource-commons/0",
+		headers:      http.Header{},
+		maxRedirects: 10,
 	}
 }
 
@@ -504,6 +517,9 @@ func (c *Client) AWSEndpoint(endpoint string) *Client {
 //		Scopes:       []string{"read", "write"},
 //	})
 func (c *Client) OAuth(config middlewares.OauthConfig) *Client {
+	if c.harCollector != nil {
+		config.TokenTransport = c.harCollector.Middleware()
+	}
 	c.Use(middlewares.NewOauthTransport(config).RoundTripper)
 	return c
 }
@@ -533,6 +549,34 @@ func (c *Client) Trace(config TraceConfig) *Client {
 func (c *Client) TraceToStdout(config TraceConfig) *Client {
 	c.traceConfig = config
 	c.Use(middlewares.NewLogger(config))
+	return c
+}
+
+// HAR enables HAR capture with default config.
+// handler is called with each request/response entry after the round-trip.
+// HAR(nil) is a no-op.
+func (c *Client) HAR(handler func(*har.Entry)) *Client {
+	return c.HARWithConfig(har.DefaultConfig(), handler)
+}
+
+// HARWithConfig enables HAR capture with a custom HARConfig.
+func (c *Client) HARWithConfig(config har.HARConfig, handler func(*har.Entry)) *Client {
+	c.harMiddlewares = append(c.harMiddlewares, har.NewMiddleware(config, handler))
+	return c
+}
+
+// HARCollector enables HAR capture using a Collector that accumulates all
+// entries (including OAuth token fetches, redirect hops, and retry attempts).
+func (c *Client) HARCollector(collector *har.Collector) *Client {
+	c.harCollector = collector
+	c.harMiddlewares = append(c.harMiddlewares, collector.Middleware())
+	return c
+}
+
+// RedirectPolicy controls redirect following. maxRedirects=0 disables
+// redirect following entirely. Values >0 limit the number of redirects.
+func (c *Client) RedirectPolicy(maxRedirects int) *Client {
+	c.maxRedirects = maxRedirects
 	return c
 }
 
@@ -716,7 +760,12 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 		}
 	}
 
-	roundTripper := applyMiddleware(middlewares.RoundTripperFunc(r.client.httpClient.Do), r.client.transportMiddlewares...)
+	c.httpClient.CheckRedirect = c.checkRedirectFunc()
+
+	// HAR middlewares are applied innermost (closest to transport) so they see
+	// the final request after auth middleware has added headers.
+	inner := applyMiddleware(middlewares.RoundTripperFunc(r.client.httpClient.Do), r.client.harMiddlewares...)
+	roundTripper := applyMiddleware(inner, r.client.transportMiddlewares...)
 	httpResponse, err := roundTripper.RoundTrip(req)
 	if err != nil {
 		return nil, err
@@ -753,6 +802,25 @@ func toMap(h http.Header) map[string]string {
 func (c *Client) Use(middlewares ...middlewares.Middleware) *Client {
 	c.transportMiddlewares = append(c.transportMiddlewares, middlewares...)
 	return c
+}
+
+func (c *Client) checkRedirectFunc() func(req *http.Request, via []*http.Request) error {
+	return func(req *http.Request, via []*http.Request) error {
+		if c.maxRedirects == 0 {
+			return http.ErrUseLastResponse
+		}
+		if len(via) >= c.maxRedirects {
+			return fmt.Errorf("stopped after %d redirects", c.maxRedirects)
+		}
+
+		// req.Response is the redirect response that caused this redirect
+		if c.harCollector != nil && req.Response != nil {
+			prev := via[len(via)-1]
+			c.harCollector.Add(har.CaptureRedirect(prev, req.Response, c.harCollector.Config))
+		}
+
+		return nil
+	}
 }
 
 func applyMiddleware(h http.RoundTripper, middleware ...middlewares.Middleware) http.RoundTripper {

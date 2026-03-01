@@ -1,6 +1,7 @@
 package middlewares
 
 import (
+	"context"
 	"fmt"
 	netHttp "net/http"
 	"net/url"
@@ -33,6 +34,10 @@ type OauthConfig struct {
 	Params       map[string]string
 	AuthStyle    AuthStyle
 	Tracer       func(msg string)
+	// TokenTransport wraps the HTTP transport used for OAuth token requests.
+	// When set, the token fetch HTTP call is routed through this middleware,
+	// allowing HAR capture of the token request without a circular import.
+	TokenTransport Middleware
 }
 
 func (c OauthConfig) Pretty() api.Text {
@@ -100,7 +105,13 @@ func (t *oauthRoundTripper) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundT
 		var err error
 		if token == nil {
 			t.trace("fetching oauth token from %s", t.Pretty().ANSI())
-			token, err = config.Token(ogRequest.Context())
+			ctx := ogRequest.Context()
+			if t.TokenTransport != nil {
+				ctx = context.WithValue(ctx, oauth2.HTTPClient, &netHttp.Client{
+					Transport: t.TokenTransport(netHttp.DefaultTransport),
+				})
+			}
+			token, err = config.Token(ctx)
 			if err != nil {
 				return nil, fmt.Errorf("error fetching oauth access token: %w", err)
 			}
