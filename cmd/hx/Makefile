@@ -1,4 +1,4 @@
-.PHONY: build install test
+.PHONY: build install test fixtures
 
 VERSION ?= dev
 LDFLAGS := -s -w -X main.version=$(VERSION)
@@ -11,3 +11,6 @@ install:
 
 test:
 	go test ./... -v -count=1
+
+fixtures:
+	go run github.com/flanksource/gavel/cmd/gavel@latest fixtures fixtures/hx.md
