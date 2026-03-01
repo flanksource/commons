@@ -99,11 +99,7 @@ func New(prefix string) *SlogLogger {
 	}
 	namedLevel := properties.String(rootLevel, "log.level."+prefix)
 
-	logStderr := properties.On(flags.logToStderr, "log.stderr")
-	destination := os.Stdout
-	if logStderr {
-		destination = os.Stderr
-	}
+	destination := os.Stderr
 	if logJson {
 		flags.color = false
 		flags.jsonLogs = true
