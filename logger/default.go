@@ -17,12 +17,12 @@ var currentLogger Logger
 var flags = &flagSet{}
 
 type flagSet struct {
-	color, reportCaller, jsonLogs, logToStderr bool
-	level                                      string
+	color, reportCaller, jsonLogs bool
+	level                         string
 }
 
 func (f flagSet) String() string {
-	return fmt.Sprintf("level=%v json=%v color=%v caller=%v stderr=%v", f.level, f.jsonLogs, f.color, f.reportCaller, f.logToStderr)
+	return fmt.Sprintf("level=%v json=%v color=%v caller=%v", f.level, f.jsonLogs, f.color, f.reportCaller)
 }
 
 func (f *flagSet) bindFlags(flags *pflag.FlagSet) {
@@ -30,11 +30,14 @@ func (f *flagSet) bindFlags(flags *pflag.FlagSet) {
 	flags.BoolVar(&f.jsonLogs, "json-logs", false, "Print logs in json format to stderr")
 	flags.BoolVar(&f.color, "color", true, "Print logs using color")
 	flags.BoolVar(&f.reportCaller, "report-caller", false, "Report log caller info")
-	flags.BoolVar(&f.logToStderr, "log-to-stderr", true, "Log to stderr instead of stdout")
+	// --log-to-stderr is accepted for backwards compatibility but is a no-op; logs always go to stderr
+	var logToStderrIgnored bool
+	flags.BoolVar(&logToStderrIgnored, "log-to-stderr", true, "Deprecated: logs always go to stderr")
 }
 
 func (f *flagSet) Parse() error {
 	logFlagset := pflag.NewFlagSet("logger", pflag.ContinueOnError)
+	logFlagset.SetOutput(io.Discard)
 	logFlagset.ParseErrorsAllowlist = pflag.ParseErrorsAllowlist{UnknownFlags: true}
 
 	// standalone parsing of flags to ensure we always have the correct values
@@ -73,9 +76,10 @@ func IsJsonLogs() bool {
 }
 
 type Flags struct {
-	Color, ReportCaller, JsonLogs, LogToStderr bool
-	Level                                      string
-	LevelCount                                 int
+	Color, ReportCaller, JsonLogs bool
+	LogToStderr                   bool // Deprecated: logs always go to stderr, this field is ignored
+	Level                         string
+	LevelCount                    int
 }
 
 func Configure(flags Flags) {
@@ -95,9 +99,6 @@ func Configure(flags Flags) {
 		properties.Set("log.report.caller", "true")
 	}
 
-	if !flags.LogToStderr {
-		properties.Set("log.stderr", "false")
-	}
 	if !flags.Color {
 		properties.Set("log.color", "false")
 	}
@@ -114,7 +115,7 @@ func BindFlags(flags *pflag.FlagSet) {
 	flags.Bool("json-logs", false, "Print logs in json format to stderr")
 	flags.Bool("color", true, "Print logs using color")
 	flags.Bool("report-caller", false, "Report log caller info")
-	flags.Bool("log-to-stderr", true, "Log to stderr instead of stdout")
+	flags.Bool("log-to-stderr", true, "Deprecated: logs always go to stderr")
 }
 
 // UseCobraFlags initializes the logger using values from parsed cobra flags.

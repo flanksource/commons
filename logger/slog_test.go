@@ -18,8 +18,8 @@ func Test_walkMap(t *testing.T) {
 				"password": "secret",
 			},
 			want: map[string]any{
-				"username": "****",
-				"password": "****",
+				"username": "j****",
+				"password": "s****",
 			},
 		},
 		{
@@ -29,7 +29,7 @@ func Test_walkMap(t *testing.T) {
 				"password": "secret",
 			},
 			want: map[string]any{
-				"password": "****",
+				"password": "s****",
 			},
 		},
 		{
@@ -45,10 +45,10 @@ func Test_walkMap(t *testing.T) {
 			want: map[string]any{
 				"auth": map[string]any{
 					"role":     "editor",
-					"username": "****",
-					"password": "****",
+					"username": "j****",
+					"password": "s****",
 				},
-				"token": "****",
+				"token": "s****",
 			},
 		},
 		{
@@ -67,11 +67,11 @@ func Test_walkMap(t *testing.T) {
 				"auth": map[string]any{
 					"role": "editor",
 					"cred": map[string]any{
-						"username": "****",
-						"password": "****",
+						"username": "j****",
+						"password": "s****",
 					},
 				},
-				"token": "****",
+				"token": "s****",
 			},
 		},
 	}

@@ -17,18 +17,22 @@ var CommonRedactedHeaders = []string{
 	"Password", "Passwd", "Pwd",
 }
 
-var SensitiveKeys = []string{"user", "pass", "key", "token", "username", "password"}
+var SensitiveKeys = []string{"user", "pass", "key", "token", "username", "password", "authorization"}
 
-const redactedString = "████████████████████"
+var NonSensitiveKeys = []string{"token_type", "grant_type"}
 
 func IsSensitiveKey(v string) bool {
 	v = strings.Trim(strings.TrimSpace(strings.ToLower(v)), "_")
+	for _, k := range NonSensitiveKeys {
+		if v == k {
+			return false
+		}
+	}
 	for _, k := range SensitiveKeys {
 		if v == k || strings.Contains(v, k) {
 			return true
 		}
 	}
-
 	return false
 }
 
@@ -41,7 +45,7 @@ func SanitizeHeaders(headers http.Header, redactedHeaders ...string) http.Header
 		key = http.CanonicalHeaderKey(key)
 
 		if collections.MatchItems(http.CanonicalHeaderKey(key), redactedHeaders...) {
-			redacted.Add(key, redactedString)
+			redacted.Add(key, PrintableSecret(strings.Join(values, ",")))
 			continue
 		}
 
@@ -51,25 +55,52 @@ func SanitizeHeaders(headers http.Header, redactedHeaders ...string) http.Header
 	return redacted
 }
 
-// PrintableSecret returns an approximation of a secret, so that it is possible to compare the secrets rudimentally
-// e.g. for "john-doe-jane" it will return ***e
-// Secrets smaller than 10 characters will always return ***
-// These secrets
+// PrintableSecret returns an approximation of a secret for debugging.
+// Handles structured formats:
+//   - "Basic dXNlcjpwYXNz" → "Basic dXN****c"
+//   - "Bearer tok_abc123"  → "Bearer tok****3"
+//   - "user:password"      → "u****:p****"
+//   - plain strings        → length-based redaction
 func PrintableSecret(secret string) string {
 	if len(secret) == 0 {
 		return ""
-	} else if len(secret) > 64 {
-		sum := md5.Sum([]byte(secret))
-		hash := hex.EncodeToString(sum[:])
-		return fmt.Sprintf("md5(%s),length=%d", hash[0:8], len(secret))
-	} else if len(secret) > 32 {
-		return fmt.Sprintf("%s****%s", secret[0:3], secret[len(secret)-1:])
-	} else if len(secret) >= 16 {
-		return fmt.Sprintf("%s****%s", secret[0:1], secret[len(secret)-2:])
-	} else if len(secret) > 10 {
-		return fmt.Sprintf("****%s", secret[len(secret)-1:])
 	}
-	return "****"
+
+	// "Basic <cred>" or "Bearer <token>" — redact only the credential part
+	if scheme, cred, ok := strings.Cut(secret, " "); ok {
+		lower := strings.ToLower(scheme)
+		if lower == "basic" || lower == "bearer" || lower == "token" {
+			return scheme + " " + printableValue(cred)
+		}
+	}
+
+	// "user:password" — redact each half independently
+	if user, pass, ok := strings.Cut(secret, ":"); ok && !strings.Contains(secret, " ") {
+		return printableValue(user) + ":" + printableValue(pass)
+	}
+
+	return printableValue(secret)
+}
+
+func printableValue(s string) string {
+	switch {
+	case len(s) == 0:
+		return ""
+	case len(s) > 64:
+		sum := md5.Sum([]byte(s))
+		hash := hex.EncodeToString(sum[:])
+		return fmt.Sprintf("md5(%s),length=%d", hash[0:8], len(s))
+	case len(s) > 32:
+		return fmt.Sprintf("%s****%s", s[0:3], s[len(s)-1:])
+	case len(s) >= 16:
+		return fmt.Sprintf("%s****%s", s[0:1], s[len(s)-2:])
+	case len(s) > 10:
+		return fmt.Sprintf("****%s", s[len(s)-1:])
+	case len(s) > 1:
+		return fmt.Sprintf("%s****", s[0:1])
+	default:
+		return "****"
+	}
 }
 
 func StripSecretsFromMap[V comparable](m map[string]V) map[string]any {
