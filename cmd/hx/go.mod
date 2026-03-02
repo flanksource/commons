@@ -173,5 +173,3 @@ require (
 )
 
 replace github.com/flanksource/commons => ../..
-
-replace github.com/flanksource/clicky => /Users/moshe/go/src/github.com/flanksource/clicky

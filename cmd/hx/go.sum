@@ -95,6 +95,8 @@ github.com/emirpasic/gods/v2 v2.0.0-alpha h1:dwFlh8pBg1VMOXWGipNMRt8v96dKAIvBeht
 github.com/emirpasic/gods/v2 v2.0.0-alpha/go.mod h1:W0y4M2dtBB9U5z3YlghmpuUhiaZT2h6yoeE+C1sCp6A=
 github.com/fatih/color v1.18.0 h1:S8gINlzdQ840/4pfAwic/ZE0djQEH3wM94VfqLTZcOM=
 github.com/fatih/color v1.18.0/go.mod h1:4FelSpRwEGDpQ12mAdzqdOukCy4u8WUtOY6lkT/6HfU=
+github.com/flanksource/clicky v1.17.0 h1:YLJphM1hD12n5z37ylc4Uvy0LOGqWpOxza0oW4G/W1M=
+github.com/flanksource/clicky v1.17.0/go.mod h1:GewCkvzGzydyzb7MpC/U/yx2atczwUK11ZZ6Q0XMzGg=
 github.com/flanksource/gomplate/v3 v3.24.68 h1:zK0HvXG+1R89nSJNNzRz9giQ2651G9f5weEcZs7aIR8=
 github.com/flanksource/gomplate/v3 v3.24.68/go.mod h1:vB2mKRrnrEnfUYHpHutifXU8QzJHNYszI2hO3hCsXpo=
 github.com/flanksource/is-healthy v1.0.82 h1:/hjq2hYWVph2Cr6F6qF4v/vTuEqOqgPVnZOh1kfDwvg=
