@@ -240,7 +240,7 @@ func Unarchive(src, dest string, options ...UnarchiveOption) (*Archive, error) {
 		option(opts)
 	}
 
-	logger.Debugf("Unarchiving %s to %s (overwrite=%v)", src, dest, opts.Overwrite)
+	logger.V(3).Infof("Unarchiving %s to %s (overwrite=%v)", src, dest, opts.Overwrite)
 	if strings.HasSuffix(src, ".zip") || strings.HasSuffix(src, ".jar") {
 		return unzipWithResult(src, dest, opts)
 	} else if strings.HasSuffix(src, ".tar") || strings.HasSuffix(src, ".tgz") || strings.HasSuffix(src, ".tar.gz") || strings.HasSuffix(src, ".tar.xz") || strings.HasSuffix(src, ".txz") {
@@ -257,7 +257,7 @@ func UnarchiveWithResult(src, dest string) (*Archive, error) {
 
 // UnarchiveExecutables extracts all executable's to the dest directory, ignoring any path's specified by the archive
 func UnarchiveExecutables(src, dest string) error {
-	logger.Debugf("Unarchiving %s to %s", src, dest)
+	logger.V(3).Infof("Unarchiving %s to %s", src, dest)
 	if strings.HasSuffix(src, ".zip") {
 		return Unzip(src, dest)
 	} else if strings.HasSuffix(src, ".tar") || strings.HasSuffix(src, ".tgz") || strings.HasSuffix(src, ".tar.gz") || strings.HasSuffix(src, ".tar.xz") || strings.HasSuffix(src, ".txz") {
