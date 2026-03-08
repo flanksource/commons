@@ -78,7 +78,6 @@ func toUrlValues(m map[string]string) url.Values {
 }
 
 func (t *oauthRoundTripper) trace(format string, args ...any) {
-	logger.V(logger.Trace4).Infof(format, args...)
 	if t.Tracer != nil {
 		t.Tracer(fmt.Sprintf(format, args...))
 	}

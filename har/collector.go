@@ -28,6 +28,10 @@ func (c *Collector) Add(e *Entry) {
 
 // Entries returns a copy of all collected entries.
 func (c *Collector) Entries() []Entry {
+	if c == nil {
+		return nil
+	}
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	out := make([]Entry, len(c.entries))
