@@ -182,6 +182,13 @@ func UseSlog() {
 	if err := flags.Parse(); err != nil {
 		fmt.Printf("error parsing flags: %v\n", err)
 	}
+	if os.Getenv("LOG_LEVEL") != "" {
+		level := ParseLevel(nil, os.Getenv("LOG_LEVEL"))
+		if level > ParseLevel(nil, flags.level) {
+			fmt.Fprintf(os.Stderr, "Using LOG_LEVEL: %v\n", level)
+			flags.level = os.Getenv("LOG_LEVEL")
+		}
+	}
 
 	root := New(rootName)
 
@@ -420,7 +427,7 @@ func ParseLevel(logger Logger, level any) LogLevel {
 		switch v {
 		case "debug":
 			return Debug
-		case "info":
+		case "info", "":
 			return Info
 		case "warn":
 			return Warn
@@ -434,7 +441,7 @@ func ParseLevel(logger Logger, level any) LogLevel {
 			return Silent
 		default:
 			if logger == nil {
-				fmt.Printf("invalid log level: %v\n", level)
+				fmt.Fprintf(os.Stderr, "invalid log level: %v\n", level)
 			} else {
 				logger.Warnf("invalid log level: %v", level)
 			}
