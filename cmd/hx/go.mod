@@ -50,7 +50,7 @@ require (
 	github.com/emirpasic/gods/v2 v2.0.0-alpha // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/flanksource/gomplate/v3 v3.24.71 // indirect
-	github.com/flanksource/is-healthy v1.0.84 // indirect
+	github.com/flanksource/is-healthy v1.0.85 // indirect
 	github.com/flanksource/kubectl-neat v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
