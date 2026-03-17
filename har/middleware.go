@@ -99,7 +99,7 @@ func buildResponse(resp *http.Response, cfg HARConfig) Response {
 	}
 
 	ct := resp.Header.Get("Content-Type")
-	if resp.Body != nil && shouldCapture(ct, cfg.CaptureContentTypes) {
+	if resp.Body != nil && (shouldCapture(ct, cfg.CaptureContentTypes) || resp.StatusCode >= 400) {
 		body, restored := readBody(resp.Body, cfg.MaxBodySize)
 		resp.Body = restored
 		har.BodySize = body.totalSize
