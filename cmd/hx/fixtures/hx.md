@@ -23,6 +23,8 @@ exec: hx --har "{{ .name | strings.Slug  }}.har"
 | Basic auth success |  -u testuser:testpass https://httpbin.flanksource.com/basic-auth/testuser/testpass |  | json.authenticated == true && json.user == "testuser" |
 | Basic auth failure |  -u wrong:creds https://httpbin.flanksource.com/basic-auth/testuser/testpass | 1 | stdout.size() == 0 |
 | Bearer token |  --token mytoken123 https://httpbin.flanksource.com/bearer |  | json.authenticated == true && json.token == "mytoken123" |
+| Digest auth |  --digest -u user:pass https://httpbin.flanksource.com/digest-auth/auth/user/pass |  | json.authenticated == true && json.user == "user" |
+| Digest auth wrong password |  --digest -u user:wrong https://httpbin.flanksource.com/digest-auth/auth/user/pass | 1 | exitCode == 1 |
 
 ## Status Codes
 

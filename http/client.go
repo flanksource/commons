@@ -52,7 +52,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 
-	dac "github.com/Snawoot/go-http-digest-auth-client"
 	"github.com/flanksource/commons/dns"
 	"github.com/flanksource/commons/har"
 	"github.com/flanksource/commons/http/middlewares"
@@ -755,7 +754,7 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 					Password: c.authConfig.Password,
 				}
 			} else if c.authConfig.Digest {
-				r.client.httpClient.Transport = dac.NewDigestTransport(c.authConfig.Username, c.authConfig.Password, r.client.httpClient.Transport)
+				r.client.httpClient.Transport = newDigestTransport(c.authConfig.Username, c.authConfig.Password, r.client.httpClient.Transport)
 			}
 		}
 	}
