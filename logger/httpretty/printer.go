@@ -616,10 +616,28 @@ func sortHeaderKeys(h http.Header, skipped map[string]struct{}) (int, []string) 
 }
 
 func (p *printer) printRequestHeader(req *http.Request) {
-	p.printf("> %s %s %s\n",
+	uri := req.URL.String()
+	if req.URL.Host == "" {
+		host := req.Host
+		if host == "" {
+			host = req.Header.Get("Host")
+		}
+		scheme := req.URL.Scheme
+		if scheme == "" {
+			scheme = "https"
+		}
+		uri = fmt.Sprintf("%s://%s%s", scheme, host, req.URL.RequestURI())
+	}
+
+	proto := ""
+	if req.Proto != "" && req.Proto != "HTTP/1.1" {
+		proto = " " + p.format(color.FgBlue, req.Proto)
+	}
+
+	p.printf("%s %s%s\n",
 		p.format(color.FgBlue, color.Bold, req.Method),
-		p.format(color.FgYellow, req.URL.RequestURI()),
-		p.format(color.FgBlue, req.Proto))
+		p.format(color.FgYellow, uri),
+		proto)
 	p.printHeaders('>', addRequestHeaders(req))
 	p.println()
 }
@@ -639,7 +657,7 @@ func addRequestHeaders(req *http.Request) http.Header {
 	if host == "" {
 		host = req.URL.Host
 	}
-	if host != "" {
+	if host != "" && host != req.URL.Host {
 		cp.Set("Host", host)
 	}
 	return cp

@@ -2,6 +2,8 @@ package console
 
 import (
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/flanksource/commons/is"
 	"github.com/flanksource/commons/logger"
@@ -49,8 +51,28 @@ var (
 )
 
 var (
-	isTTY = is.TTY()
+	isTTY = is.TTY() && !IsNoColor()
 )
+
+func IsNoColor() bool {
+	if os.Getenv("NO_COLOR") != "" {
+		return true
+	}
+	if v := strings.ToLower(os.Getenv("COLOR")); v == "no" || v == "false" {
+		return true
+	}
+	if os.Getenv("TERM") == "dumb" {
+		return true
+	}
+
+	// also scan os.Args for --no-color in case env vars are not set but the flag is used (e.g., in tests)
+	for _, arg := range os.Args[1:] {
+		if arg != "--no-color=false" && (arg == "--no-color" || arg == "-no-color") {
+			return true
+		}
+	}
+	return false
+}
 
 func ColorOff() {
 	isTTY = false

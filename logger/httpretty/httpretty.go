@@ -61,11 +61,14 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/textproto"
+	"net/url"
 	"os"
 	"regexp"
+	"sort"
 	"sync"
 
 	"github.com/flanksource/commons/logger/httpretty/internal/color"
@@ -286,7 +289,7 @@ func (r roundTripper) RoundTrip(req *http.Request) (resp *http.Response, err err
 	if l.Time {
 		defer p.printTimeRequest()()
 	}
-	if !l.SkipRequestInfo {
+	if !l.SkipRequestInfo && !l.RequestHeader {
 		p.printRequestInfo(req)
 	}
 	// Try to get some information from transport
@@ -349,7 +352,7 @@ func (h httpHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		h.next.ServeHTTP(w, req)
 		return
 	}
-	if !p.logger.SkipRequestInfo {
+	if !p.logger.SkipRequestInfo && !p.logger.RequestHeader {
 		p.printRequestInfo(req)
 	}
 	if p.logger.TLS {
@@ -393,6 +396,30 @@ func (l *Logger) PrintResponse(resp *http.Response) {
 // github.com/tidwall/pretty could be used to add colors to it.
 // However, it would add an external dependency. If you want, you can define
 // your own formatter using it or anything else. See Formatter.
+type FormURLEncodedFormatter struct{}
+
+func (f *FormURLEncodedFormatter) Match(mediatype string) bool {
+	return mediatype == "application/x-www-form-urlencoded"
+}
+
+func (f *FormURLEncodedFormatter) Format(w io.Writer, src []byte) error {
+	values, err := url.ParseQuery(string(src))
+	if err != nil {
+		return err
+	}
+	keys := make([]string, 0, len(values))
+	for k := range values {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		for _, v := range values[k] {
+			fmt.Fprintf(w, "  %s=%s\n", k, v)
+		}
+	}
+	return nil
+}
+
 type JSONFormatter struct{}
 
 // jsonTypeRE can be used to identify JSON media types, such as
@@ -409,16 +436,12 @@ func (j *JSONFormatter) Match(mediatype string) bool {
 // Format JSON content.
 func (j *JSONFormatter) Format(w io.Writer, src []byte) error {
 	if !json.Valid(src) {
-		// We want to get the error of json.checkValid, not unmarshal it.
-		// The happy path has been optimized, maybe prematurely.
 		if err := json.Unmarshal(src, &json.RawMessage{}); err != nil {
 			return err
 		}
 	}
-	// avoiding allocation as we use *bytes.Buffer to store the formatted body before printing
 	dst, ok := w.(*bytes.Buffer)
 	if !ok {
-		// mitigating panic to avoid upsetting anyone who uses this directly
 		return errors.New("underlying writer for JSONFormatter must be *bytes.Buffer")
 	}
 	return json.Indent(dst, src, "", "    ")

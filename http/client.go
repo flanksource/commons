@@ -517,7 +517,15 @@ func (c *Client) AWSEndpoint(endpoint string) *Client {
 //	})
 func (c *Client) OAuth(config middlewares.OauthConfig) *Client {
 	if c.harCollector != nil {
-		config.TokenTransport = c.harCollector.Middleware()
+		existing := config.TokenTransport
+		harMiddleware := c.harCollector.Middleware()
+		if existing != nil {
+			config.TokenTransport = func(rt http.RoundTripper) http.RoundTripper {
+				return existing(harMiddleware(rt))
+			}
+		} else {
+			config.TokenTransport = harMiddleware
+		}
 	}
 	c.Use(middlewares.NewOauthTransport(config).RoundTripper)
 	return c
