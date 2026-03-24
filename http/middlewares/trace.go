@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"io"
 	netHttp "net/http"
+	"strings"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/commons/properties"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -58,6 +60,85 @@ type TraceConfig struct {
 
 	// Auth controls whether auth middleware (AWS SigV4, OAuth) logs trace messages
 	Auth bool
+
+	// AccessLog enables single-line access log output: METHOD URL STATUS DURATION
+	AccessLog bool
+}
+
+var traceAll = TraceConfig{
+	MaxBodyLength:   4096,
+	Body:            true,
+	Response:        true,
+	QueryParam:      true,
+	Headers:         true,
+	ResponseHeaders: true,
+	TLS:             true,
+	Timing:          true,
+	Auth:            true,
+}
+
+var traceHeaders = TraceConfig{
+	QueryParam:      true,
+	Headers:         true,
+	ResponseHeaders: true,
+	Timing:          true,
+	Auth:            true,
+}
+
+func TraceConfigFromString(s string) TraceConfig {
+	switch s {
+	case "access":
+		return TraceConfig{AccessLog: true}
+	case "debug", "headers":
+		return traceHeaders
+	case "body":
+		config := traceHeaders
+		config.Body = true
+		return config
+	case "trace", "all", "response":
+		return traceAll
+	}
+
+	config := TraceConfig{}
+	if strings.Contains(s, "all") {
+		config = traceAll
+	}
+	if strings.Contains(s, "headers") {
+		config.Headers = true
+	}
+	if strings.Contains(s, "body") {
+		config.Body = true
+	}
+	if strings.Contains(s, "response") {
+		config.Response = true
+	}
+	if strings.Contains(s, "responseHeaders") {
+		config.ResponseHeaders = true
+	}
+	if strings.Contains(s, "queryParam") {
+		config.QueryParam = true
+	}
+	if strings.Contains(s, "tls") {
+		config.TLS = true
+	}
+	if strings.Contains(s, "timing") {
+		config.Timing = true
+	}
+	if strings.Contains(s, "auth") {
+		config.Auth = true
+	}
+	if strings.Contains(s, "access") {
+		config.AccessLog = true
+	}
+	if properties.On(false, "http.body.disabled") {
+		config.Body = false
+		config.Response = false
+	}
+	if properties.On(false, "http.headers.disabled") {
+		config.Headers = false
+		config.ResponseHeaders = false
+	}
+	return config
 }
 
 type traceTransport struct {

@@ -205,14 +205,7 @@ func IsTraceEnabled() bool {
 	return currentLogger.IsTraceEnabled()
 }
 
-// IsLevelEnabled returns true if the specified verbosity level is enabled.
-//
-// Example:
-//
-//	if logger.IsLevelEnabled(3) {
-//	    // Perform expensive operation only if logging at level 3
-//	}
-func IsLevelEnabled(level int) bool {
+func IsLevelEnabled(level any) bool {
 	return currentLogger.V(level).Enabled()
 }
 

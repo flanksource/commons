@@ -154,6 +154,29 @@ type Context struct {
 	tracer    trace.Tracer
 }
 
+type loggerKey struct{}
+
+func (c Context) GetLogger() logger.Logger {
+	if c.Logger != nil {
+		return c.Logger
+	}
+	return logger.GetLogger()
+}
+
+func (c Context) Value(key any) any {
+	if _, ok := key.(loggerKey); ok {
+		return c.Logger
+	}
+	return c.Context.Value(key)
+}
+
+func LoggerFromContext(ctx gocontext.Context) logger.Logger {
+	if l, ok := ctx.Value(loggerKey{}).(logger.Logger); ok && l != nil {
+		return l
+	}
+	return logger.GetLogger()
+}
+
 func (c Context) String() string {
 	s := []string{}
 	if c.IsTrace() {

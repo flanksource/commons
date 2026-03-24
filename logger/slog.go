@@ -117,7 +117,7 @@ func New(prefix string) *SlogLogger {
 				Level:      lvl,
 				NoColor:    !logColor,
 				AddSource:  reportCaller,
-				TimeFormat: properties.String("15:04:05.999", fmt.Sprintf("log.time.format.%s", prefix), "log.time.format"),
+				TimeFormat: properties.String("15:04:05.000", fmt.Sprintf("log.time.format.%s", prefix), "log.time.format"),
 			})),
 			Level: lvl,
 		}
@@ -164,7 +164,7 @@ func NewWithWriter(writer io.Writer) *SlogLogger {
 				Level:      lvl,
 				NoColor:    !logColor,
 				AddSource:  reportCaller,
-				TimeFormat: properties.String("15:04:05.999", "log.time.format"),
+				TimeFormat: properties.String("15:04:05.000", "log.time.format"),
 			})),
 			Level: lvl,
 		}
