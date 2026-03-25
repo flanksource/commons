@@ -66,24 +66,21 @@ func getLogger(req *http.Request) logger.Logger {
 
 func newContextLogger(config TraceConfig) Middleware {
 	return func(rt http.RoundTripper) http.RoundTripper {
-		l := &httpretty.Logger{
-			TLS:            config.TLS,
-			RequestHeader:  config.Headers,
-			RequestBody:    config.Body,
-			ResponseHeader: config.ResponseHeaders,
-			ResponseBody:   config.Response,
-			Auth:           config.Auth,
-			Colors:         true,
-			Formatters:     []httpretty.Formatter{&jsonFormatter{}, &formURLEncodedFormatter{}},
-		}
-		l.SkipHeader(logger.SensitiveHeaders)
-
-		var buf bytes.Buffer
-		l.SetOutput(&buf)
-		inner := l.RoundTripper(rt)
-
 		return RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
-			buf.Reset()
+			var buf bytes.Buffer
+			l := &httpretty.Logger{
+				TLS:            config.TLS,
+				RequestHeader:  config.Headers,
+				RequestBody:    config.Body,
+				ResponseHeader: config.ResponseHeaders,
+				ResponseBody:   config.Response,
+				Auth:           config.Auth,
+				Colors:         true,
+				Formatters:     []httpretty.Formatter{&jsonFormatter{}, &formURLEncodedFormatter{}},
+			}
+			l.SkipHeader(logger.SensitiveHeaders)
+			l.SetOutput(&buf)
+			inner := l.RoundTripper(rt)
 			start := time.Now()
 			resp, err := inner.RoundTrip(req)
 			elapsed := time.Since(start)
@@ -131,10 +128,10 @@ func newContextAccessLog() Middleware {
 			elapsed := time.Since(start)
 			log := getLogger(req)
 			if err != nil {
-				log.Infof("%s %s %s %s", console.Bluef(req.Method), console.Yellowf("%s", req.URL), console.Redf("error"), elapsed.Truncate(time.Millisecond))
+				log.Infof("%s %s %s %s", console.Bluef("%s", req.Method), console.Yellowf("%s", req.URL), console.Redf("error"), elapsed.Truncate(time.Millisecond))
 				return nil, err
 			}
-			log.Infof("%s %s %s %s", console.Bluef(req.Method), console.Yellowf("%s", req.URL), statusColor(resp.StatusCode)("%d", resp.StatusCode), elapsed.Truncate(time.Millisecond))
+			log.Infof("%s %s %s %s", console.Bluef("%s", req.Method), console.Yellowf("%s", req.URL), statusColor(resp.StatusCode)("%d", resp.StatusCode), elapsed.Truncate(time.Millisecond))
 			return resp, nil
 		})
 	}

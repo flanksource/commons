@@ -86,49 +86,48 @@ var traceHeaders = TraceConfig{
 }
 
 func TraceConfigFromString(s string) TraceConfig {
+	var config TraceConfig
 	switch s {
 	case "access":
-		return TraceConfig{AccessLog: true}
+		config = TraceConfig{AccessLog: true}
 	case "debug", "headers":
-		return traceHeaders
+		config = traceHeaders
 	case "body":
-		config := traceHeaders
+		config = traceHeaders
 		config.Body = true
-		return config
 	case "trace", "all", "response":
-		return traceAll
-	}
-
-	config := TraceConfig{}
-	if strings.Contains(s, "all") {
 		config = traceAll
-	}
-	if strings.Contains(s, "headers") {
-		config.Headers = true
-	}
-	if strings.Contains(s, "body") {
-		config.Body = true
-	}
-	if strings.Contains(s, "response") {
-		config.Response = true
-	}
-	if strings.Contains(s, "responseHeaders") {
-		config.ResponseHeaders = true
-	}
-	if strings.Contains(s, "queryParam") {
-		config.QueryParam = true
-	}
-	if strings.Contains(s, "tls") {
-		config.TLS = true
-	}
-	if strings.Contains(s, "timing") {
-		config.Timing = true
-	}
-	if strings.Contains(s, "auth") {
-		config.Auth = true
-	}
-	if strings.Contains(s, "access") {
-		config.AccessLog = true
+	default:
+		if strings.Contains(s, "all") {
+			config = traceAll
+		}
+		if strings.Contains(s, "headers") {
+			config.Headers = true
+		}
+		if strings.Contains(s, "body") {
+			config.Body = true
+		}
+		if strings.Contains(s, "response") {
+			config.Response = true
+		}
+		if strings.Contains(s, "responseHeaders") {
+			config.ResponseHeaders = true
+		}
+		if strings.Contains(s, "queryParam") {
+			config.QueryParam = true
+		}
+		if strings.Contains(s, "tls") {
+			config.TLS = true
+		}
+		if strings.Contains(s, "timing") {
+			config.Timing = true
+		}
+		if strings.Contains(s, "auth") {
+			config.Auth = true
+		}
+		if strings.Contains(s, "access") {
+			config.AccessLog = true
+		}
 	}
 	if properties.On(false, "http.body.disabled") {
 		config.Body = false
