@@ -624,7 +624,11 @@ func (p *printer) printRequestHeader(req *http.Request) {
 		}
 		scheme := req.URL.Scheme
 		if scheme == "" {
-			scheme = "https"
+			if req.TLS != nil {
+				scheme = "https"
+			} else {
+				scheme = "http"
+			}
 		}
 		uri = fmt.Sprintf("%s://%s%s", scheme, host, req.URL.RequestURI())
 	}
