@@ -10,7 +10,7 @@ require (
 	github.com/bsm/gomega v1.27.10
 	github.com/emirpasic/gods/v2 v2.0.0-alpha
 	github.com/fatih/color v1.18.0
-	github.com/flanksource/clicky v1.19.0
+	github.com/flanksource/clicky v1.21.1
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/goccy/go-yaml v1.19.2
 	github.com/google/go-cmp v0.7.0

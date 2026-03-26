@@ -13,7 +13,7 @@ import (
 )
 
 var currentLogger Logger
-var flags = &flagSet{}
+var flags = &flagSet{color: true}
 
 type flagSet struct {
 	color, reportCaller, jsonLogs bool
