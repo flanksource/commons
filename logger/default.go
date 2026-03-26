@@ -1,7 +1,6 @@
 package logger
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -35,33 +34,38 @@ func (f *flagSet) bindFlags(flags *pflag.FlagSet) {
 	flags.BoolVar(&logToStderrIgnored, "log-to-stderr", true, "Deprecated: logs always go to stderr")
 }
 
+// Parse scans os.Args for logger-related flags.
 func (f *flagSet) Parse() error {
-	logFlagset := pflag.NewFlagSet("logger", pflag.ContinueOnError)
-	logFlagset.SetOutput(io.Discard)
-	logFlagset.ParseErrorsAllowlist = pflag.ParseErrorsAllowlist{UnknownFlags: true}
+	return f.parseArgs(os.Args[1:])
+}
 
-	// standalone parsing of flags to ensure we always have the correct values
-	f.bindFlags(logFlagset)
-	if err := logFlagset.Parse(os.Args[1:]); err != nil {
-		if errors.Is(err, pflag.ErrHelp) {
-			return nil
-		}
-		return err
-	}
-
-	re, _ := regexp.Compile("-v{1,}")
-	for _, arg := range os.Args[1:] {
-		// FIXME there seems to be a race condition where pflag
-
-		// will return a count that does not match the actual number of -v flags
-		if strings.HasPrefix(arg, "-v") {
+// parseArgs scans the given args for logger-related flags.
+// This avoids pflag's UnknownFlags mode which can misparse
+// unknown short flags with values (e.g. -Pkey=val consuming subsequent args).
+func (f *flagSet) parseArgs(args []string) error {
+	re, _ := regexp.Compile("^-v+$")
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "--json-logs":
+			f.jsonLogs = true
+		case arg == "--color=false" || arg == "--color=0" || arg == "--no-color":
+			f.color = false
+		case arg == "--report-caller":
+			f.reportCaller = true
+		case arg == "-v" || re.MatchString(arg):
+			f.level = fmt.Sprintf("%d", len(arg)-1)
+		case strings.HasPrefix(arg, "-v") && !strings.Contains(arg, "-v-"):
 			if strings.Contains(arg, "=") {
 				f.level = arg[3:]
-			} else if ok := re.MatchString(arg); ok {
-				f.level = fmt.Sprintf("%d", len(arg)-1)
 			} else {
 				f.level = arg[2:]
 			}
+		case strings.HasPrefix(arg, "--log-level="):
+			f.level = strings.TrimPrefix(arg, "--log-level=")
+		case arg == "--log-level" && i+1 < len(args):
+			i++
+			f.level = args[i]
 		}
 	}
 	return nil

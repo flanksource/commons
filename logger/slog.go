@@ -338,6 +338,38 @@ type slogVerbose struct {
 	SlogLogger
 	level   slog.Level
 	filters []string
+	always  bool
+}
+
+func (v slogVerbose) WithValues(keysAndValues ...interface{}) Verbose {
+	v.SlogLogger = v.SlogLogger.WithValues(keysAndValues...).(SlogLogger)
+	return v
+}
+
+func (v slogVerbose) Always() Verbose {
+	v.always = true
+	v.SlogLogger = SlogLogger{
+		Logger: slog.New(&alwaysHandler{inner: v.SlogLogger.Logger.Handler()}),
+		Level:  v.SlogLogger.Level,
+		Prefix: v.SlogLogger.Prefix,
+	}
+	return v
+}
+
+// alwaysHandler wraps a slog.Handler to always accept records regardless of level.
+type alwaysHandler struct {
+	inner slog.Handler
+}
+
+func (h *alwaysHandler) Enabled(_ context.Context, _ slog.Level) bool { return true }
+func (h *alwaysHandler) Handle(ctx context.Context, r slog.Record) error {
+	return h.inner.Handle(ctx, r)
+}
+func (h *alwaysHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &alwaysHandler{inner: h.inner.WithAttrs(attrs)}
+}
+func (h *alwaysHandler) WithGroup(name string) slog.Handler {
+	return &alwaysHandler{inner: h.inner.WithGroup(name)}
 }
 
 func (v slogVerbose) WithFilter(filters ...string) Verbose {
@@ -358,7 +390,7 @@ func (v slogVerbose) isFiltered(line string) bool {
 }
 
 func (v slogVerbose) Write(p []byte) (n int, err error) {
-	if !v.Logger.Enabled(todo, v.level) {
+	if !v.always && !v.Logger.Enabled(todo, v.level) {
 		return
 	}
 
@@ -374,7 +406,7 @@ func (v slogVerbose) Write(p []byte) (n int, err error) {
 }
 
 func (v slogVerbose) Infof(format string, args ...interface{}) {
-	if !v.Logger.Enabled(todo, v.level) {
+	if !v.always && !v.Logger.Enabled(todo, v.level) {
 		return
 	}
 
@@ -382,14 +414,14 @@ func (v slogVerbose) Infof(format string, args ...interface{}) {
 }
 
 func (v slogVerbose) Info(msg string) {
-	if !v.Logger.Enabled(todo, v.level) {
+	if !v.always && !v.Logger.Enabled(todo, v.level) {
 		return
 	}
 
 	v.handleRaw(slog.NewRecord(time.Now(), v.level, "", CallerPC()), msg)
 }
 func (v slogVerbose) Enabled() bool {
-	return v.Logger.Enabled(context.Background(), v.level)
+	return v.always || v.Logger.Enabled(context.Background(), v.level)
 }
 
 func (s SlogLogger) V(level any) Verbose {
