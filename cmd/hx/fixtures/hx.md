@@ -1,6 +1,7 @@
 ---
-build: go build -o hx .
-exec: hx --har "{{ .name | strings.Slug  }}.har"
+build: echo $GIT_ROOT_DIR==$CWD && pwd &&  cd $GIT_ROOT_DIR && pwd && go build -o hx .
+cwd: cmd/hx
+exec: $GIT_ROOT_DIR/hx --har "{{ .name | strings.Slug  }}.har"
 ---
 
 # hx CLI Fixture Tests
