@@ -335,6 +335,20 @@ type bufferedVerbose struct {
 	logger  *BufferedLogger
 	enabled bool
 	filters []string
+	always  bool
+}
+
+func (v *bufferedVerbose) Always() Verbose {
+	return &bufferedVerbose{
+		logger:  v.logger,
+		enabled: v.enabled,
+		filters: v.filters,
+		always:  true,
+	}
+}
+
+func (v *bufferedVerbose) WithValues(_ ...interface{}) Verbose {
+	return v
 }
 
 // isFiltered checks if a log line should be filtered out based on filters
@@ -352,7 +366,7 @@ func (v *bufferedVerbose) isFiltered(line string) bool {
 
 // Write implements io.Writer interface
 func (v *bufferedVerbose) Write(p []byte) (n int, err error) {
-	if !v.enabled {
+	if !v.always && !v.enabled {
 		return len(p), nil
 	}
 
@@ -368,7 +382,7 @@ func (v *bufferedVerbose) Write(p []byte) (n int, err error) {
 
 // Infof logs an info message if enabled and not filtered
 func (v *bufferedVerbose) Infof(format string, args ...interface{}) {
-	if !v.enabled {
+	if !v.always && !v.enabled {
 		return
 	}
 
@@ -393,5 +407,5 @@ func (v *bufferedVerbose) WithFilter(filters ...string) Verbose {
 
 // Enabled returns whether this verbose logger is enabled
 func (v *bufferedVerbose) Enabled() bool {
-	return v.enabled
+	return v.always || v.enabled
 }

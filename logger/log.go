@@ -88,8 +88,10 @@ type Logger interface {
 type Verbose interface {
 	io.Writer
 	Infof(format string, args ...interface{})
+	WithValues(keysAndValues ...interface{}) Verbose
 	WithFilter(filters ...string) Verbose
 	Enabled() bool
+	Always() Verbose
 }
 
 // LogLevel represents the severity of a log message.

@@ -17,7 +17,7 @@ var CommonRedactedHeaders = []string{
 	"Password", "Passwd", "Pwd",
 }
 
-var SensitiveKeys = []string{"user", "pass", "key", "token", "username", "password", "authorization"}
+var SensitiveKeys = []string{"user", "pass", "secret", "key", "token", "username", "password", "authorization"}
 
 var NonSensitiveKeys = []string{"token_type", "grant_type"}
 
