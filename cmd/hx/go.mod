@@ -4,7 +4,7 @@ go 1.25.1
 
 require (
 	github.com/aws/aws-sdk-go-v2/config v1.32.9
-	github.com/flanksource/clicky v1.19.0
+	github.com/flanksource/clicky v1.21.1
 	github.com/flanksource/commons v1.47.2
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
