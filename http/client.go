@@ -553,9 +553,9 @@ func (c *Client) Trace(config TraceConfig) *Client {
 	return c
 }
 
-func (c *Client) TraceToStdout(config TraceConfig) *Client {
+func (c *Client) TraceToStdout(config TraceConfig, verbose ...logger.Verbose) *Client {
 	c.traceConfig = config
-	c.Use(middlewares.NewLogger(config))
+	c.Use(middlewares.NewLogger(config, verbose...))
 	return c
 }
 

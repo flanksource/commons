@@ -95,7 +95,14 @@ func TraceConfigFromString(s string) TraceConfig {
 	case "body":
 		config = traceHeaders
 		config.Body = true
-	case "trace", "all", "response":
+		config.Response = true
+	case "request":
+		config = traceHeaders
+		config.Body = true
+	case "response":
+		config = traceHeaders
+		config.Response = true
+	case "trace", "all":
 		config = traceAll
 	default:
 		if strings.Contains(s, "all") {
