@@ -2,9 +2,10 @@
 
 VERSION ?= dev
 LDFLAGS := -s -w -X main.version=$(VERSION)
+EXT := $(if $(filter windows,$(GOOS)),.exe,)
 
 build:
-	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o .bin/hx .
+	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o .bin/hx$(EXT) .
 
 install:
 	go install .
