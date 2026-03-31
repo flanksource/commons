@@ -209,24 +209,31 @@ func MatchItems(item string, patterns ...string) bool {
 }
 
 func matchPattern(item, pattern string) bool {
-	if pattern == "*" || item == pattern {
+	if pattern == "*" {
 		return true
 	}
 
-	if strings.HasPrefix(pattern, "*") && strings.HasSuffix(pattern, "*") {
-		if strings.Contains(item, strings.TrimPrefix(strings.TrimSuffix(pattern, "*"), "*")) {
+	itemLower := strings.ToLower(item)
+	patternLower := strings.ToLower(pattern)
+
+	if itemLower == patternLower {
+		return true
+	}
+
+	if strings.HasPrefix(patternLower, "*") && strings.HasSuffix(patternLower, "*") {
+		if strings.Contains(itemLower, strings.TrimPrefix(strings.TrimSuffix(patternLower, "*"), "*")) {
 			return true
 		}
 	}
 
-	if strings.HasPrefix(pattern, "*") {
-		if strings.HasSuffix(item, strings.TrimPrefix(pattern, "*")) {
+	if strings.HasPrefix(patternLower, "*") {
+		if strings.HasSuffix(itemLower, strings.TrimPrefix(patternLower, "*")) {
 			return true
 		}
 	}
 
-	if strings.HasSuffix(pattern, "*") {
-		if strings.HasPrefix(item, strings.TrimSuffix(pattern, "*")) {
+	if strings.HasSuffix(patternLower, "*") {
+		if strings.HasPrefix(itemLower, strings.TrimSuffix(patternLower, "*")) {
 			return true
 		}
 	}

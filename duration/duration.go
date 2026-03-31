@@ -83,10 +83,8 @@ func (d Duration) String() string {
 		d = d - d%Duration(time.Minute)
 	} else if d.Minutes() > 2 {
 		d = d - d%Duration(time.Second)
-	} else if d.Seconds() > 2 {
-		d = d - d%Duration(time.Millisecond)
 	} else if d.Nanoseconds() > 2*1000*1000 {
-		d = d - d%Duration(time.Microsecond)
+		d = d - d%Duration(time.Millisecond)
 	}
 	// Largest time is 2540400h10m10.000000000s
 	var buf [32]byte
@@ -213,7 +211,22 @@ func (d Duration) String() string {
 		buf[w] = '-'
 	}
 
-	return strings.ReplaceAll(strings.ReplaceAll(string(buf[w:]), "0s", ""), "0m", "")
+	result := string(buf[w:])
+	// Strip standalone zero-valued units "0m" (minutes) and "0s" (seconds).
+	// Must not match inside sub-second units like "320ms", "500µs", "100ns".
+
+	// Strip "0m" only if NOT followed by "s" (which would make it "0ms" = milliseconds)
+	if i := strings.Index(result, "0m"); i >= 0 {
+		if i+2 >= len(result) || result[i+2] != 's' {
+			result = result[:i] + result[i+2:]
+		}
+	}
+	// Strip "0s" only at the very end, and only if the result contains
+	// larger units (meaning "0s" is a trailing zero seconds, not "0s" standalone)
+	if strings.HasSuffix(result, "0s") && len(result) > 2 {
+		result = result[:len(result)-2]
+	}
+	return result
 }
 
 // fmtFrac formats the fraction of v/10**prec (e.g., ".12345") into the

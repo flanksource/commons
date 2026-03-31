@@ -35,6 +35,12 @@ var _ = Describe("MatchItems", func() {
 		Entry("URL encoded pattern matches", "hello ", []string{"hello%20"}, true),
 		Entry("URL encoded pattern does not match", "hello", []string{"hello%20"}, false),
 		Entry("malformed URL encoding", "apple", []string{"%zzapple"}, false),
+		Entry("case insensitive exact match", "Apple", []string{"apple"}, true),
+		Entry("case insensitive exact match reverse", "apple", []string{"Apple"}, true),
+		Entry("case insensitive prefix wildcard", "Apple", []string{"appl*"}, true),
+		Entry("case insensitive suffix wildcard", "Apple", []string{"*PLE"}, true),
+		Entry("case insensitive glob", "Apple", []string{"*PPL*"}, true),
+		Entry("case insensitive exclusion", "Apple", []string{"!apple"}, false),
 	)
 })
 
