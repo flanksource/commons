@@ -64,17 +64,22 @@ import (
 //	hash, err := JSONMD5Hash(config)
 //	// hash will be consistent for the same config values
 func JSONMD5Hash(obj any) (string, error) {
+	raw, err := jsonMD5Raw(obj)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(raw[:]), nil
+}
+
+// jsonMD5Raw marshals the object into JSON and returns the raw 16-byte MD5
+// digest. Internal helper shared by JSONMD5Hash (which hex-encodes it) and
+// DeterministicUUID (which uses the raw bytes as UUID bytes).
+func jsonMD5Raw(obj any) ([16]byte, error) {
 	data, err := json.Marshal(obj)
 	if err != nil {
-		return "", err
+		return [16]byte{}, err
 	}
-
-	hash := md5.Sum(data)
-	if err != nil {
-		return "", err
-	}
-
-	return hex.EncodeToString(hash[:]), nil
+	return md5.Sum(data), nil
 }
 
 // Sha256Hex computes the SHA256 hash of the input string and returns it
@@ -113,15 +118,56 @@ func Sha256Hex(in string) string {
 //	// Generate UUID from string
 //	id2, err := DeterministicUUID("unique-resource-name")
 func DeterministicUUID(seed any) (uuid.UUID, error) {
-	byteHash, err := JSONMD5Hash(seed)
+	// If the seed is already a UUID (value, pointer, 16 bytes, or parseable
+	// string — uuid.Nil included), return it verbatim. Re-hashing a UUID would
+	// produce a different UUID, defeating the caller's intent.
+	if id, ok := asUUID(seed); ok {
+		return id, nil
+	}
+
+	raw, err := jsonMD5Raw(seed)
 	if err != nil {
 		return uuid.Nil, err
 	}
 
-	id, err := uuid.FromBytes([]byte(byteHash[0:16]))
+	// md5.Sum returns exactly 16 bytes, which is the size of a UUID. Use the
+	// raw digest directly — NOT the hex-encoded representation.
+	id, err := uuid.FromBytes(raw[:])
 	if err != nil {
 		return uuid.Nil, err
 	}
 
 	return id, nil
+}
+
+// asUUID reports whether seed is already a UUID in one of its common forms:
+// uuid.UUID, *uuid.UUID, [16]byte, []byte of length 16, or a string that
+// parses as a UUID. uuid.Nil counts as a valid UUID.
+//
+// Composite seeds ([]string, pq.StringArray, structs, etc.) are not unwrapped
+// — a single-element slice containing a UUID is still a composite and should
+// be hashed.
+func asUUID(seed any) (uuid.UUID, bool) {
+	switch v := seed.(type) {
+	case uuid.UUID:
+		return v, true
+	case *uuid.UUID:
+		if v == nil {
+			return uuid.Nil, false
+		}
+		return *v, true
+	case [16]byte:
+		return uuid.UUID(v), true
+	case []byte:
+		if len(v) == 16 {
+			var id uuid.UUID
+			copy(id[:], v)
+			return id, true
+		}
+	case string:
+		if id, err := uuid.Parse(v); err == nil {
+			return id, true
+		}
+	}
+	return uuid.Nil, false
 }

@@ -59,7 +59,7 @@ func headersToDescriptionList(headers []Header) api.DescriptionList {
 func (e Entry) Columns() []api.ColumnDef {
 	return []api.ColumnDef{
 		api.Column("method").Label("Method").Style("font-bold text-green-500 uppercase").Build(),
-		api.Column("url").Label("URL").MaxWidth(80).Build(),
+		api.Column("url").Label("URL").MaxWidth(100).Build(),
 		api.Column("status").Label("Status").Build(),
 		api.Column("duration").Label("Duration").Build(),
 		api.Column("size").Label("Size").Build(),
