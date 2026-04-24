@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -28,6 +29,58 @@ const rootName = "root"
 
 var namedLoggers cmap.Map[string, *SlogLogger]
 var todo = context.TODO()
+
+// outputBox wraps the current io.Writer so all atomic stores carry the same
+// concrete type (*outputBox) — a hard requirement of sync/atomic.Value.
+// Without this, swapping from *os.File to *bytes.Buffer panics at runtime.
+type outputBox struct{ w io.Writer }
+
+// currentOutput holds a *outputBox pointing at the io.Writer every slog
+// handler writes to. Handlers constructed via New / NewWithWriter receive a
+// thin indirection writer (sharedOutput) that reads this atomic on every
+// Write, so SetOutput swaps take effect immediately for every logger — named
+// or not, existing or newly created — without rebuilding handlers.
+var currentOutput atomic.Value // *outputBox
+
+// sharedOutput is the single writer every non-explicit handler captures.
+// Its Write delegates to whatever currentOutput holds, making SetOutput a
+// per-call dispatch decision rather than a capture-at-handler-build one.
+type sharedOutput struct{}
+
+func (sharedOutput) Write(p []byte) (int, error) {
+	box, _ := currentOutput.Load().(*outputBox)
+	if box == nil || box.w == nil {
+		return os.Stderr.Write(p)
+	}
+	return box.w.Write(p)
+}
+
+var sharedWriter io.Writer = sharedOutput{}
+
+func init() {
+	currentOutput.Store(&outputBox{w: os.Stderr})
+}
+
+// SetOutput redirects log output for all loggers — root and every named
+// logger, existing or future — to w. Pair with a prior GetOutput() + deferred
+// SetOutput(old) when you want to restore the previous writer. Safe for
+// concurrent callers; the swap is a single atomic store.
+func SetOutput(w io.Writer) {
+	if w == nil {
+		w = os.Stderr
+	}
+	currentOutput.Store(&outputBox{w: w})
+}
+
+// GetOutput returns the writer SetOutput most recently installed (or os.Stderr
+// if none has been set). Returns the writer itself, not the internal
+// indirection, so callers can wrap it or save it for restore.
+func GetOutput() io.Writer {
+	if box, ok := currentOutput.Load().(*outputBox); ok && box != nil && box.w != nil {
+		return box.w
+	}
+	return os.Stderr
+}
 
 func GetNamedLoggingLevels() (levels map[string]string) {
 	levels = make(map[string]string)
@@ -99,7 +152,10 @@ func New(prefix string) *SlogLogger {
 	}
 	namedLevel := properties.String(rootLevel, "log.level."+prefix)
 
-	destination := os.Stderr
+	// Handlers write through sharedWriter (a thin indirection over
+	// currentOutput) so a later SetOutput retargets every existing logger,
+	// not just those constructed after the swap.
+	destination := sharedWriter
 	if logJson {
 		flags.color = false
 		flags.jsonLogs = true
