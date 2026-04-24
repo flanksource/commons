@@ -1,0 +1,24 @@
+commit:
+  compatibility: {}
+  linkedDeps: {}
+  precommit: {}
+fixtures: {}
+lint:
+  ignore:
+  - file: certs/fixtures/k8s-ca-key.pem
+    rule: private-key
+    source: betterleaks
+  - file: cmd/hx/test.out
+    rule: generic-api-key
+    source: betterleaks
+  - file: certs/fixtures/literal.yml
+    rule: private-key
+    source: betterleaks
+secrets: {}
+ssh: {}
+verify:
+  checks:
+    disabled: null
+    disabledCategories: null
+  model: ""
+  prompt: ""
