@@ -24,16 +24,6 @@ func (f flagSet) String() string {
 	return fmt.Sprintf("level=%v json=%v color=%v caller=%v", f.level, f.jsonLogs, f.color, f.reportCaller)
 }
 
-func (f *flagSet) bindFlags(flags *pflag.FlagSet) {
-	_ = flags.CountP("log-level", "v", "Increase logging level")
-	flags.BoolVar(&f.jsonLogs, "json-logs", false, "Print logs in json format to stderr")
-	flags.BoolVar(&f.color, "color", true, "Print logs using color")
-	flags.BoolVar(&f.reportCaller, "report-caller", false, "Report log caller info")
-	// --log-to-stderr is accepted for backwards compatibility but is a no-op; logs always go to stderr
-	var logToStderrIgnored bool
-	flags.BoolVar(&logToStderrIgnored, "log-to-stderr", true, "Deprecated: logs always go to stderr")
-}
-
 // Parse scans os.Args for logger-related flags.
 func (f *flagSet) Parse() error {
 	return f.parseArgs(os.Args[1:])
