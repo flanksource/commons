@@ -21,3 +21,5 @@ cliff.toml
 .todos/
 cmd/hx/fixtures/hx
 .ginkgo/
+.gavel/
+.tmp/
