@@ -43,9 +43,11 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -145,6 +147,10 @@ type Client struct {
 	// retryConfig specifies the configuration for retries.
 	retryConfig RetryConfig
 
+	// retryStrategy, when non-nil, fully owns the retry decision for every
+	// request, superseding retryConfig. See RetryStrategy.
+	retryStrategy RetryStrategy
+
 	// connectTo specifies the host to connect to.
 	// Might be different from the host specified in the URL.
 	connectTo string
@@ -177,20 +183,35 @@ type Client struct {
 
 	// maxRedirects controls how many redirects to follow. -1 means no following.
 	maxRedirects int
+
+	// logger, when non-nil, overrides logger.GetLogger() for client-internal
+	// logging (currently only WithHttpLogging consumes it). Set via WithLogger.
+	logger logger.Logger
+
+	// harPath is the path WithContext attached a HAR collector for. Empty
+	// when no HAR is wired. Read-only after WithContext returns; exposed
+	// indirectly so a higher-level context can flush the collector.
+	harPath string
+
+	// traceMW points at the single installed trace middleware so subsequent
+	// TraceToStdout calls merge into one config instead of stacking another
+	// middleware. See TraceToStdout for the dedupe path.
+	traceMW *traceMiddlewareHandle
 }
 
 // RoundTrip implements http.RoundTripper.
 func (c *Client) RoundTrip(r *http.Request) (*http.Response, error) {
 	// Convert http.Request to our custom Request type
 	req := &Request{
-		ctx:         r.Context(),
-		client:      c,
-		method:      r.Method,
-		url:         r.URL,
-		body:        r.Body,
-		headers:     r.Header,
-		queryParams: r.URL.Query(),
-		retryConfig: c.retryConfig,
+		ctx:           r.Context(),
+		client:        c,
+		method:        r.Method,
+		url:           r.URL,
+		body:          r.Body,
+		headers:       r.Header,
+		queryParams:   r.URL.Query(),
+		retryConfig:   c.retryConfig,
+		retryStrategy: c.retryStrategy,
 	}
 
 	resp, err := c.roundTrip(req)
@@ -235,11 +256,12 @@ func NewClient() *Client {
 //		GET("/users")
 func (c *Client) R(ctx context.Context) *Request {
 	return &Request{
-		ctx:         ctx,
-		client:      c,
-		headers:     make(http.Header),
-		queryParams: make(url.Values),
-		retryConfig: c.retryConfig,
+		ctx:           ctx,
+		client:        c,
+		headers:       make(http.Header),
+		queryParams:   make(url.Values),
+		retryConfig:   c.retryConfig,
+		retryStrategy: c.retryStrategy,
 	}
 }
 
@@ -265,6 +287,22 @@ func (c *Client) Retry(maxRetries uint, baseDuration time.Duration, exponent flo
 	c.retryConfig.MaxRetries = maxRetries
 	c.retryConfig.RetryWait = baseDuration
 	c.retryConfig.Factor = exponent
+	return c
+}
+
+// RetryStrategy installs a callback that decides whether each HTTP attempt
+// should be retried. When set, it fully supersedes the legacy Retry()
+// exponential-backoff loop and owns the retry policy (including the
+// attempt cap). See the RetryStrategy type and the RetryOnStatus helper.
+//
+// Example — retry on 429 and 5xx, honoring Retry-After:
+//
+//	client := http.NewClient().RetryStrategy(
+//	    http.RetryOnStatus(5, time.Second,
+//	        429, 502, 503, 504),
+//	)
+func (c *Client) RetryStrategy(fn RetryStrategy) *Client {
+	c.retryStrategy = fn
 	return c
 }
 
@@ -553,10 +591,300 @@ func (c *Client) Trace(config TraceConfig) *Client {
 	return c
 }
 
+// TraceToStdout installs the stdout trace middleware. Calling it a second
+// time on the same Client merges the new config into the existing one
+// instead of stacking a second middleware — this lets WithLogger (the
+// -v ladder) and WithContext (-P http.log=) both contribute without
+// doubling every traced request.
 func (c *Client) TraceToStdout(config TraceConfig, verbose ...logger.Verbose) *Client {
-	c.traceConfig = config
-	c.Use(middlewares.NewLogger(config, verbose...))
+	if c.traceMW != nil {
+		mergeTraceConfig(c.traceMW.cfg, config)
+		c.traceConfig = *c.traceMW.cfg
+		return c
+	}
+	cfg := config
+	handle := &traceMiddlewareHandle{cfg: &cfg}
+	var v logger.Verbose
+	if len(verbose) > 0 {
+		v = verbose[0]
+	}
+	c.traceMW = handle
+	c.traceConfig = cfg
+	c.Use(func(rt http.RoundTripper) http.RoundTripper {
+		// Build the inner logger middleware lazily on each request so
+		// merges performed after this Use() call are observed.
+		return middlewares.NewLogger(*handle.cfg, v)(rt)
+	})
 	return c
+}
+
+// traceMiddlewareHandle holds a pointer to the live TraceConfig that the
+// installed trace middleware reads on every request. Subsequent
+// TraceToStdout calls mutate *cfg in place via mergeTraceConfig.
+type traceMiddlewareHandle struct {
+	cfg *TraceConfig
+}
+
+// mergeTraceConfig OR-folds src into dst. Bool fields become true if
+// either side is true; MaxBodyLength takes the larger non-zero value;
+// RedactedHeaders are unioned with case-insensitive dedup; SpanName is
+// kept from dst unless dst's is empty.
+func mergeTraceConfig(dst *TraceConfig, src TraceConfig) {
+	dst.Body = dst.Body || src.Body
+	dst.Response = dst.Response || src.Response
+	dst.Headers = dst.Headers || src.Headers
+	dst.ResponseHeaders = dst.ResponseHeaders || src.ResponseHeaders
+	dst.QueryParam = dst.QueryParam || src.QueryParam
+	dst.TLS = dst.TLS || src.TLS
+	dst.Timing = dst.Timing || src.Timing
+	dst.Auth = dst.Auth || src.Auth
+	dst.AccessLog = dst.AccessLog || src.AccessLog
+	if src.MaxBodyLength > dst.MaxBodyLength {
+		dst.MaxBodyLength = src.MaxBodyLength
+	}
+	dst.RedactedHeaders = appendUnique(dst.RedactedHeaders, src.RedactedHeaders...)
+	if dst.SpanName == "" {
+		dst.SpanName = src.SpanName
+	}
+}
+
+// appendUnique returns dst with values added that aren't already present
+// (case-insensitive). Used for RedactedHeaders merging.
+func appendUnique(dst []string, values ...string) []string {
+	seen := make(map[string]struct{}, len(dst))
+	for _, v := range dst {
+		seen[strings.ToLower(v)] = struct{}{}
+	}
+	for _, v := range values {
+		key := strings.ToLower(v)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		dst = append(dst, v)
+	}
+	return dst
+}
+
+// traceConfigForLevel maps a logger level to a TraceConfig for the
+// stdout trace middleware. Returns ok=false below Trace1 — no middleware
+// should be installed in that case. Authorization is always redacted so
+// the bearer/key cannot leak.
+//
+//	level < Trace1   : none
+//	level >= Trace1  : QueryParam + Headers + ResponseHeaders (the "-vvv" line)
+//	level >= Trace2  : the above + Body + Response + TLS, MaxBodyLength=4096
+func traceConfigForLevel(level logger.LogLevel) (TraceConfig, bool) {
+	switch {
+	case level >= logger.Trace2:
+		return TraceConfig{
+			MaxBodyLength:   4096,
+			Body:            true,
+			Response:        true,
+			QueryParam:      true,
+			Headers:         true,
+			ResponseHeaders: true,
+			TLS:             true,
+			RedactedHeaders: []string{"Authorization"},
+		}, true
+	case level >= logger.Trace1:
+		return TraceConfig{
+			QueryParam:      true,
+			Headers:         true,
+			ResponseHeaders: true,
+			RedactedHeaders: []string{"Authorization"},
+		}, true
+	default:
+		return TraceConfig{}, false
+	}
+}
+
+// WithLogger stores l as the client's logger AND, as a side effect,
+// installs a stdout trace middleware whose config is derived from
+// l.GetLevel() via traceConfigForLevel. This makes -vvv / -vvvv "just
+// work" by passing the application's standard logger:
+//
+//	NewClient().WithLogger(logger.StandardLogger())
+//
+// The trace middleware is shared with WithContext (-P http.log=) via
+// TraceToStdout's dedupe — calling both is safe and merges configs.
+func (c *Client) WithLogger(l logger.Logger) *Client {
+	c.logger = l
+	if cfg, ok := traceConfigForLevel(l.GetLevel()); ok {
+		c = c.TraceToStdout(cfg)
+	}
+	return c
+}
+
+func (c *Client) getLogger() logger.Logger {
+	if c.logger != nil {
+		return c.logger
+	}
+	return logger.GetLogger()
+}
+
+// HARLevel selects what a HAR collector captures when attached via
+// WithContext. Borrowed from duty/connection/common.go's Debug/Trace
+// split — at Metadata, only request/response headers + timing are
+// captured (no bodies, no body re-read cost). At Full, the standard
+// collector middleware captures bodies too.
+type HARLevel int
+
+const (
+	HARDisabled HARLevel = iota
+	HARMetadata
+	HARFull
+)
+
+// CommonsHTTPContext is the narrow interface a context object implements
+// to drive HTTP-client configuration. xerocli.Context (and could be
+// duty/context.Context) satisfies it; commons/http does not require any
+// other concrete dependency from the application.
+//
+// HARFor returns the collector, the resolved file path, and the level.
+// A nil collector signals "no HAR for this feature" (the client wires no
+// HAR middleware in that case). Implementations are expected to handle
+// per-path collector deduplication themselves so multiple clients
+// sharing the same output file share one collector.
+type CommonsHTTPContext interface {
+	GetLogger() logger.Logger
+	HTTPTraceConfig(feature string) (TraceConfig, bool)
+	HARFor(feature string) (collector *har.Collector, path string, level HARLevel)
+}
+
+// WithContext configures the client from a context-object's data
+// accessors. The feature name lets implementations distinguish callers
+// (e.g. "takealot" vs "xero") for per-feature property overrides.
+//
+// Order of operations:
+//  1. WithLogger(ctx.GetLogger()) — installs the -v ladder trace.
+//  2. ctx.HTTPTraceConfig(feature) — if set, merges into the trace via
+//     TraceToStdout's dedupe path. Authorization is added to
+//     RedactedHeaders.
+//  3. ctx.HARFor(feature) — if a collector is returned, attaches it
+//     either as a full-body capture (HARFull) or as a metadata-only
+//     middleware (HARMetadata).
+//
+// WithContext does NOT register any lifecycle hook — the context owns
+// flushing (e.g. via context.AfterFunc on cancellation).
+func (c *Client) WithContext(ctx CommonsHTTPContext, feature string) *Client {
+	c = c.WithLogger(ctx.GetLogger())
+	if cfg, ok := ctx.HTTPTraceConfig(feature); ok {
+		cfg.RedactedHeaders = appendUnique(cfg.RedactedHeaders, "Authorization")
+		c = c.TraceToStdout(cfg)
+	}
+	if collector, path, level := ctx.HARFor(feature); collector != nil {
+		c.harPath = path
+		switch level {
+		case HARFull:
+			c = c.HARCollector(collector)
+		case HARMetadata:
+			c.Use(metadataHARMiddleware(collector))
+		}
+	}
+	return c
+}
+
+// metadataHARMiddleware captures method, URL, sanitized headers, query
+// string, status, and timings — no request or response bodies. Ported
+// from duty/connection/common.go's metadataHARMiddleware. Body sizes
+// use -1 per HAR spec ("size unknown"). Useful when the caller wants a
+// HAR file for traffic analysis without paying the body-buffering cost.
+func metadataHARMiddleware(collector *har.Collector) middlewares.Middleware {
+	return func(next http.RoundTripper) http.RoundTripper {
+		return middlewares.RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			started := time.Now()
+			entry := &har.Entry{
+				StartedDateTime: started.UTC().Format(time.RFC3339),
+				Request: har.Request{
+					Method:      req.Method,
+					URL:         req.URL.String(),
+					HTTPVersion: harHTTPVersion(req.Proto),
+					Cookies:     []har.Cookie{},
+					Headers:     toHARHeaders(logger.SanitizeHeaders(req.Header)),
+					QueryString: toHARQueryString(req.URL.Query()),
+					HeadersSize: -1,
+					BodySize:    -1,
+				},
+			}
+
+			waitStart := time.Now()
+			resp, err := next.RoundTrip(req)
+			waitMs := float64(time.Since(waitStart).Microseconds()) / 1000.0
+
+			entry.Timings = har.Timings{Wait: waitMs}
+			entry.Time = waitMs
+			if resp != nil {
+				entry.Response = har.Response{
+					Status:      resp.StatusCode,
+					StatusText:  resp.Status,
+					HTTPVersion: harHTTPVersion(resp.Proto),
+					Cookies:     []har.Cookie{},
+					Headers:     toHARHeaders(logger.SanitizeHeaders(resp.Header)),
+					Content:     har.Content{Size: -1},
+					HeadersSize: -1,
+					BodySize:    -1,
+				}
+			} else {
+				entry.Response = har.Response{
+					Cookies:     []har.Cookie{},
+					Headers:     []har.Header{},
+					Content:     har.Content{Size: -1},
+					HeadersSize: -1,
+					BodySize:    -1,
+				}
+			}
+
+			collector.Add(entry)
+			return resp, err
+		})
+	}
+}
+
+func toHARHeaders(h http.Header) []har.Header {
+	headers := make([]har.Header, 0, len(h))
+	for name, vals := range h {
+		for _, v := range vals {
+			headers = append(headers, har.Header{Name: name, Value: v})
+		}
+	}
+	return headers
+}
+
+func toHARQueryString(q url.Values) []har.QueryString {
+	qs := make([]har.QueryString, 0, len(q))
+	for k, vs := range q {
+		for _, v := range vs {
+			qs = append(qs, har.QueryString{Name: k, Value: v})
+		}
+	}
+	return qs
+}
+
+func harHTTPVersion(proto string) string {
+	if strings.TrimSpace(proto) == "" {
+		return "HTTP/1.1"
+	}
+	return proto
+}
+
+// WriteHARFile serializes collector.Entries() into a HAR 1.2 file at
+// path. Designed for use from a context.AfterFunc hook owned by the
+// caller — commons/http does not register any lifecycle itself.
+func WriteHARFile(collector *har.Collector, path string) error {
+	file := har.File{
+		Log: har.Log{
+			Version: "1.2",
+			Creator: har.Creator{Name: "flanksource-commons", Version: "0"},
+			Pages:   []har.Page{},
+			Entries: collector.Entries(),
+		},
+	}
+	data, err := json.MarshalIndent(file, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal HAR: %w", err)
+	}
+	return os.WriteFile(path, append(data, '\n'), 0o644)
 }
 
 // HAR enables HAR capture with default config.
@@ -604,7 +932,7 @@ func (c *Client) RedirectPolicy(maxRedirects int) *Client {
 // in PersistentPreRun to properly parse -v N syntax.
 func (c *Client) WithHttpLogging(headerLevel, bodyLevel logger.LogLevel) *Client {
 	c.Use(func(rt http.RoundTripper) http.RoundTripper {
-		return logger.NewHttpLoggerWithLevels(logger.GetLogger(), rt, headerLevel, bodyLevel)
+		return logger.NewHttpLoggerWithLevels(c.getLogger(), rt, headerLevel, bodyLevel)
 	})
 	return c
 }

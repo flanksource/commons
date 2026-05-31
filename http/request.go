@@ -19,15 +19,16 @@ import (
 // It provides a fluent API for setting headers, query parameters, body, and other options.
 // Request instances should be created using Client.R(ctx).
 type Request struct {
-	ctx         context.Context
-	client      *Client
-	retryConfig RetryConfig
-	method      string
-	rawURL      string
-	url         *url.URL
-	body        io.Reader
-	headers     http.Header
-	queryParams url.Values
+	ctx           context.Context
+	client        *Client
+	retryConfig   RetryConfig
+	retryStrategy RetryStrategy
+	method        string
+	rawURL        string
+	url           *url.URL
+	body          io.Reader
+	headers       http.Header
+	queryParams   url.Values
 }
 
 func (r *Request) GetHeaders() map[string]string {
@@ -153,6 +154,15 @@ func (r *Request) Retry(maxRetries uint, baseDuration time.Duration, exponent fl
 	return r
 }
 
+// RetryStrategy installs a per-request retry callback, overriding any
+// strategy configured on the client. See Client.RetryStrategy for the full
+// contract; pass nil to clear an inherited strategy and fall back to the
+// legacy Retry()/RetryConfig path for this request.
+func (r *Request) RetryStrategy(fn RetryStrategy) *Request {
+	r.retryStrategy = fn
+	return r
+}
+
 // Body sets the request body. Accepts multiple types:
 //   - io.Reader: Used directly as the body
 //   - []byte: Wrapped in a bytes.Reader
@@ -216,6 +226,10 @@ func (r *Request) Do(method, reqURL string) (resp *Response, err error) {
 }
 
 func (r *Request) do() (resp *Response, err error) {
+	if r.retryStrategy != nil {
+		return r.doWithStrategy()
+	}
+
 	var retriesRemaining = r.retryConfig.MaxRetries
 	for {
 		response, err := r.client.roundTrip(r)
@@ -236,6 +250,37 @@ func (r *Request) do() (resp *Response, err error) {
 		}
 
 		return response, nil
+	}
+}
+
+// doWithStrategy runs the request loop under a caller-supplied RetryStrategy.
+// The strategy is asked after every attempt — including the final one — and
+// owns the attempt cap. The legacy RetryConfig path is bypassed entirely.
+func (r *Request) doWithStrategy() (*Response, error) {
+	for attempt := 0; ; attempt++ {
+		response, err := r.client.roundTrip(r)
+		if response == nil {
+			response = &Response{}
+		}
+		if response.Request == nil {
+			response.Request = r
+		}
+
+		retry, delay := r.retryStrategy(response, err, attempt)
+		if !retry {
+			if err != nil {
+				return nil, err
+			}
+			return response, nil
+		}
+
+		if delay > 0 {
+			select {
+			case <-r.ctx.Done():
+				return nil, r.ctx.Err()
+			case <-time.After(delay):
+			}
+		}
 	}
 }
 

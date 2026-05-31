@@ -23,3 +23,4 @@ cmd/hx/fixtures/hx
 .ginkgo/
 .gavel/
 .tmp/
+hack/
