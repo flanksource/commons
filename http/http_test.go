@@ -60,7 +60,7 @@ func TestHTTP(t *testing.T) {
 		req := http.NewClient().InsecureSkipVerify(true).R(ctx)
 		response, err := req.Get("https://expired.badssl.com/")
 		if err != nil {
-			t.Errorf("error: %v", err)
+			t.Fatalf("error: %v", err)
 		}
 
 		if !response.IsOK() {
@@ -73,7 +73,7 @@ func TestHTTP(t *testing.T) {
 		for i := 0; i < 5; i++ {
 			response, err := req.Get("https://github.com/")
 			if err != nil {
-				t.Errorf("error: %v", err)
+				t.Fatalf("error: %v", err)
 			}
 
 			if !response.IsOK() {
@@ -105,7 +105,7 @@ func TestHTTP(t *testing.T) {
 			postReq := client.R(ctx).Header("Scope", "request")
 			response, err := postReq.Post("products/add", map[string]string{"title": "test"})
 			if err != nil {
-				t.Errorf("error: %v", err)
+				t.Fatalf("error: %v", err)
 			}
 
 			var bodyResponse = map[string]any{}
@@ -122,7 +122,7 @@ func TestHTTP(t *testing.T) {
 			req := client.R(ctx)
 			response, err := req.Get("products/1")
 			if err != nil {
-				t.Errorf("error: %v", err)
+				t.Fatalf("error: %v", err)
 			}
 
 			if !response.IsOK() {

@@ -13,7 +13,16 @@ import (
 
 	"github.com/flanksource/commons/console"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/commons/properties"
+	"github.com/flanksource/commons/text"
 )
+
+const defaultMaxBufferSize = 4 * 1024 * 1024 // 4 MB
+
+// MaxBufferSizeProperty caps how many bytes of an io.Reader request body are
+// buffered for retry replay. Bodies larger than this stream through once and
+// cannot be retried. Set -P http.request.maxBufferSize=0 to disable the cap.
+const MaxBufferSizeProperty = "http.request.maxBufferSize"
 
 // Request represents an HTTP request that can be customized and executed.
 // It provides a fluent API for setting headers, query parameters, body, and other options.
@@ -27,6 +36,8 @@ type Request struct {
 	rawURL        string
 	url           *url.URL
 	body          io.Reader
+	bodyBytes     []byte
+	bodyBuffered  bool
 	headers       http.Header
 	queryParams   url.Values
 }
@@ -182,13 +193,36 @@ func (r *Request) RetryStrategy(fn RetryStrategy) *Request {
 func (r *Request) Body(v any) error {
 	switch t := v.(type) {
 	case io.Reader:
-		r.body = t
+		// A raw reader is single-use; buffer it once (up to maxBufferSize) so a
+		// retried attempt can replay the same bytes instead of sending an empty
+		// body. Bodies over the cap stream through un-buffered and cannot retry.
+		limit := properties.Int(defaultMaxBufferSize, MaxBufferSizeProperty)
+		if limit <= 0 {
+			b, err := io.ReadAll(t)
+			if err != nil {
+				return err
+			}
+			r.setBodyBytes(b)
+			return nil
+		}
+		// Read one byte past the cap to detect an over-limit reader without
+		// pulling the whole thing into memory.
+		prefix, err := io.ReadAll(io.LimitReader(t, int64(limit)+1))
+		if err != nil {
+			return err
+		}
+		if len(prefix) <= limit {
+			r.setBodyBytes(prefix)
+			return nil
+		}
+		logger.Debugf("request body exceeds %s buffer cap (%s); streaming un-buffered, retries disabled for this request",
+			text.HumanizeBytes(limit), MaxBufferSizeProperty)
+		r.body = io.MultiReader(bytes.NewReader(prefix), t)
+		r.bodyBuffered = false
 	case []byte:
-		buf := bytes.Buffer{}
-		buf.Write(t)
-		r.body = &buf
+		r.setBodyBytes(t)
 	case string:
-		r.body = strings.NewReader(t)
+		r.setBodyBytes([]byte(t))
 	default:
 		b, err := json.Marshal(v)
 		if err != nil {
@@ -197,6 +231,35 @@ func (r *Request) Body(v any) error {
 		return r.Body(b)
 	}
 
+	return nil
+}
+
+// setBodyBytes records the request body as a replayable byte slice and points
+// r.body at a fresh reader over it. Retries call resetBody to rewind.
+func (r *Request) setBodyBytes(b []byte) {
+	r.bodyBytes = b
+	r.bodyBuffered = true
+	r.body = bytes.NewReader(b)
+}
+
+// resetBody rewinds the request body before a retried attempt. roundTrip drains
+// r.body, so without this every retry of a body-carrying request would send an
+// empty body (a downstream JSON validation failure). A no-op when the body
+// was never buffered (e.g. a bodiless GET).
+func (r *Request) resetBody() {
+	if r.bodyBuffered {
+		r.body = bytes.NewReader(r.bodyBytes)
+	}
+}
+
+// prepareRetry rewinds a buffered body for replay, or refuses the retry when
+// the body was streamed un-buffered (over the maxBufferSize cap) — resending a
+// drained stream would silently transmit an empty body.
+func (r *Request) prepareRetry() error {
+	if !r.bodyBuffered && r.body != nil {
+		return fmt.Errorf("cannot retry request: body exceeded %s and was streamed un-buffered (raise the cap to enable retries)", MaxBufferSizeProperty)
+	}
+	r.resetBody()
 	return nil
 }
 
@@ -246,6 +309,9 @@ func (r *Request) do() (resp *Response, err error) {
 
 			retriesRemaining--
 			exponentialBackoff(r.retryConfig, retriesRemaining)
+			if err := r.prepareRetry(); err != nil {
+				return nil, err
+			}
 			continue
 		}
 
@@ -281,6 +347,9 @@ func (r *Request) doWithStrategy() (*Response, error) {
 			case <-time.After(delay):
 			}
 		}
+		if err := r.prepareRetry(); err != nil {
+			return nil, err
+		}
 	}
 }
 
@@ -311,7 +380,6 @@ func (r *Request) Debug() string {
 	if !r.client.authConfig.IsEmpty() {
 		sb.WriteString("  " + console.Grayf("%s", "Authorization: ") + r.client.authConfig.Username + ":" + logger.PrintableSecret(r.client.authConfig.Password) + "\n")
 	}
-	body, _ := io.ReadAll(r.body)
-	sb.WriteString(logger.StripSecrets(string(body)))
+	sb.WriteString(logger.StripSecrets(string(r.bodyBytes)))
 	return sb.String()
 }
