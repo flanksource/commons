@@ -58,6 +58,7 @@ import (
 	"github.com/flanksource/commons/har"
 	"github.com/flanksource/commons/http/middlewares"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/commons/properties"
 	httpntlm "github.com/vadimi/go-http-ntlm"
 	httpntlmv2 "github.com/vadimi/go-http-ntlm/v2"
 )
@@ -75,6 +76,7 @@ var TraceAll = TraceConfig{
 	Body:            true,
 	Response:        true,
 	QueryParam:      true,
+	FormParams:      true,
 	Headers:         true,
 	ResponseHeaders: true,
 	TLS:             true,
@@ -85,6 +87,7 @@ var TraceHeaders = TraceConfig{
 	Body:            false,
 	Response:        false,
 	QueryParam:      true,
+	FormParams:      true,
 	Headers:         true,
 	ResponseHeaders: true,
 	TLS:             false,
@@ -635,10 +638,17 @@ func mergeTraceConfig(dst *TraceConfig, src TraceConfig) {
 	dst.Headers = dst.Headers || src.Headers
 	dst.ResponseHeaders = dst.ResponseHeaders || src.ResponseHeaders
 	dst.QueryParam = dst.QueryParam || src.QueryParam
+	dst.FormParams = dst.FormParams || src.FormParams
 	dst.TLS = dst.TLS || src.TLS
 	dst.Timing = dst.Timing || src.Timing
 	dst.Auth = dst.Auth || src.Auth
+	// A "full" access log (AccessLog && !errorsOnly) from either side wins over
+	// errors-only: if any contributor wants every request logged, the merge does
+	// too. Errors-only survives only when no contributor requested full logging.
+	dstFull := dst.AccessLog && !dst.AccessLogErrorsOnly
+	srcFull := src.AccessLog && !src.AccessLogErrorsOnly
 	dst.AccessLog = dst.AccessLog || src.AccessLog
+	dst.AccessLogErrorsOnly = dst.AccessLog && !dstFull && !srcFull
 	if src.MaxBodyLength > dst.MaxBodyLength {
 		dst.MaxBodyLength = src.MaxBodyLength
 	}
@@ -666,42 +676,87 @@ func appendUnique(dst []string, values ...string) []string {
 	return dst
 }
 
-// traceConfigForLevel maps a logger level to a TraceConfig for the
-// stdout trace middleware. Returns ok=false below Trace1 — no middleware
-// should be installed in that case. Authorization is always redacted so
-// the bearer/key cannot leak.
+type traceLevelOptions struct {
+	baseLevel logger.LogLevel
+}
+
+// TraceLevelOption configures how TraceConfigForLogLevel maps a commons logger
+// level onto the HTTP trace ladder.
+type TraceLevelOption func(*traceLevelOptions)
+
+// WithTraceBaseLevel shifts the whole HTTP trace ladder to start at level.
+// With the default base of Debug, -v logs a single access line; with an Info
+// base, a normal info-level logger logs that access line and -v logs headers.
+func WithTraceBaseLevel(level logger.LogLevel) TraceLevelOption {
+	return func(opts *traceLevelOptions) {
+		opts.baseLevel = level
+	}
+}
+
+// TraceConfigForLogLevel maps a logger level to a TraceConfig for the stdout
+// trace middleware. The ladder is relative to a configurable base level:
 //
-//	level < Trace1   : none
-//	level >= Trace1  : QueryParam + Headers + ResponseHeaders (the "-vvv" line)
-//	level >= Trace2  : the above + Body + Response + TLS, MaxBodyLength=4096
-func traceConfigForLevel(level logger.LogLevel) (TraceConfig, bool) {
-	switch {
-	case level >= logger.Trace2:
-		return TraceConfig{
-			MaxBodyLength:   4096,
-			Body:            true,
-			Response:        true,
-			QueryParam:      true,
-			Headers:         true,
-			ResponseHeaders: true,
-			TLS:             true,
-			RedactedHeaders: []string{"Authorization"},
-		}, true
-	case level >= logger.Trace1:
-		return TraceConfig{
-			QueryParam:      true,
-			Headers:         true,
-			ResponseHeaders: true,
-			RedactedHeaders: []string{"Authorization"},
-		}, true
-	default:
+//	base + 0: access line only
+//	base + 1: query/form params + request/response headers
+//	base + 2: request bodies + concise TLS
+//	base + 3: response bodies
+//
+// The default base is Debug and can be overridden with http.log.base-level,
+// HTTP_LOG_BASE_LEVEL, or WithTraceBaseLevel.
+func TraceConfigForLogLevel(level logger.LogLevel, options ...TraceLevelOption) (TraceConfig, bool) {
+	opts := traceLevelOptions{baseLevel: configuredTraceBaseLevel()}
+	for _, option := range options {
+		if option != nil {
+			option(&opts)
+		}
+	}
+
+	// One level below base (INFO when base is the default Debug) installs the
+	// access-log middleware in error-only mode: logPrettyAccess emits at INFO
+	// for transport errors and responses >= 400 (with body), and stays silent
+	// for successes. This surfaces failing requests at -v=0 without the
+	// per-request access spam that full access logging (base level) produces.
+	if level < opts.baseLevel-1 {
 		return TraceConfig{}, false
 	}
+
+	config := TraceConfig{
+		AccessLog:           true,
+		AccessLogErrorsOnly: level < opts.baseLevel,
+		RedactedHeaders:     []string{"Authorization"},
+	}
+	if level >= opts.baseLevel+1 {
+		config.QueryParam = true
+		config.FormParams = true
+		config.Headers = true
+		config.ResponseHeaders = true
+	}
+	if level >= opts.baseLevel+2 {
+		config.MaxBodyLength = 4096
+		config.Body = true
+		config.TLS = true
+	}
+	if level >= opts.baseLevel+3 {
+		config.MaxBodyLength = 4096
+		config.Response = true
+	}
+	return config, true
+}
+
+func configuredTraceBaseLevel() logger.LogLevel {
+	level := strings.TrimSpace(os.Getenv("HTTP_LOG_BASE_LEVEL"))
+	if level == "" {
+		level = strings.TrimSpace(properties.String("", "http.log.base-level"))
+	}
+	if level == "" {
+		return logger.Debug
+	}
+	return logger.ParseLevel(logger.GetLogger(), level)
 }
 
 // WithLogger stores l as the client's logger AND, as a side effect,
 // installs a stdout trace middleware whose config is derived from
-// l.GetLevel() via traceConfigForLevel. This makes -vvv / -vvvv "just
+// l.GetLevel() via TraceConfigForLogLevel. This makes -v / -vv "just
 // work" by passing the application's standard logger:
 //
 //	NewClient().WithLogger(logger.StandardLogger())
@@ -710,7 +765,7 @@ func traceConfigForLevel(level logger.LogLevel) (TraceConfig, bool) {
 // TraceToStdout's dedupe — calling both is safe and merges configs.
 func (c *Client) WithLogger(l logger.Logger) *Client {
 	c.logger = l
-	if cfg, ok := traceConfigForLevel(l.GetLevel()); ok {
+	if cfg, ok := TraceConfigForLogLevel(l.GetLevel()); ok {
 		c = c.TraceToStdout(cfg)
 	}
 	return c
