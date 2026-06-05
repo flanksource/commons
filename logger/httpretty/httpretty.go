@@ -117,6 +117,10 @@ type Logger struct {
 	// SkipSanitize bypasses sanitizing headers containing credentials (such as Authorization).
 	SkipSanitize bool
 
+	// RedactedHeaders contains additional header names or wildcard patterns
+	// whose values should be printed redacted.
+	RedactedHeaders []string
+
 	// Auth set to print OAuth / AWSSigned requests with redacted Authorization header and additional information about the signature.
 	Auth bool
 

@@ -576,6 +576,7 @@ func (p *printer) format(s ...interface{}) string {
 func (p *printer) printHeaders(prefix rune, h http.Header) {
 	if !p.logger.SkipSanitize {
 		h = header.Sanitize(header.DefaultSanitizers, h)
+		h = sanitizeRedactedHeaders(h, p.logger.RedactedHeaders)
 	}
 
 	longest, sorted := sortHeaderKeys(h, p.logger.cloneSkipHeader())
@@ -592,6 +593,63 @@ func (p *printer) printHeaders(prefix rune, h http.Header) {
 				p.format(color.FgYellow, v))
 		}
 	}
+}
+
+func sanitizeRedactedHeaders(h http.Header, patterns []string) http.Header {
+	if len(patterns) == 0 {
+		return h
+	}
+
+	out := h.Clone()
+	for key, values := range out {
+		if !matchHeaderPattern(key, patterns...) {
+			continue
+		}
+		redacted := make([]string, 0, len(values))
+		for _, value := range values {
+			redacted = append(redacted, redactHeaderValue(value))
+		}
+		out[key] = redacted
+	}
+	return out
+}
+
+func matchHeaderPattern(item string, patterns ...string) bool {
+	itemLower := strings.ToLower(http.CanonicalHeaderKey(item))
+	for _, pattern := range patterns {
+		patternLower := strings.ToLower(http.CanonicalHeaderKey(strings.TrimSpace(pattern)))
+		switch {
+		case patternLower == "" || patternLower == "!":
+			continue
+		case patternLower == "*":
+			return true
+		case strings.HasPrefix(patternLower, "*") && strings.HasSuffix(patternLower, "*"):
+			if strings.Contains(itemLower, strings.Trim(patternLower, "*")) {
+				return true
+			}
+		case strings.HasPrefix(patternLower, "*"):
+			if strings.HasSuffix(itemLower, strings.TrimPrefix(patternLower, "*")) {
+				return true
+			}
+		case strings.HasSuffix(patternLower, "*"):
+			if strings.HasPrefix(itemLower, strings.TrimSuffix(patternLower, "*")) {
+				return true
+			}
+		case itemLower == patternLower:
+			return true
+		}
+	}
+	return false
+}
+
+func redactHeaderValue(value string) string {
+	if value == "" {
+		return ""
+	}
+	if scheme, credential, ok := strings.Cut(value, " "); ok && credential != "" {
+		return scheme + " " + strings.Repeat("█", 8)
+	}
+	return strings.Repeat("█", 8)
 }
 
 func sortHeaderKeys(h http.Header, skipped map[string]struct{}) (int, []string) {
