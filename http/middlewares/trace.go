@@ -50,6 +50,10 @@ type TraceConfig struct {
 	// QueryParam controls whether the query parameters are traced
 	QueryParam bool
 
+	// FormParams controls whether application/x-www-form-urlencoded request
+	// parameters are traced without enabling the raw request body.
+	FormParams bool
+
 	// Headers controls whether the Headers are traced
 	Headers bool
 
@@ -63,6 +67,13 @@ type TraceConfig struct {
 
 	// AccessLog enables single-line access log output: METHOD URL STATUS DURATION
 	AccessLog bool
+
+	// AccessLogErrorsOnly restricts the access log to failing requests: only
+	// transport errors and responses with status >= 400 are logged (with their
+	// body). Successful requests are silent. Set when the access log is enabled
+	// one level below the trace base, so failures surface at -v=0 without the
+	// per-request access spam full access logging produces.
+	AccessLogErrorsOnly bool
 }
 
 var traceAll = TraceConfig{
@@ -70,6 +81,7 @@ var traceAll = TraceConfig{
 	Body:            true,
 	Response:        true,
 	QueryParam:      true,
+	FormParams:      true,
 	Headers:         true,
 	ResponseHeaders: true,
 	TLS:             true,
@@ -79,6 +91,7 @@ var traceAll = TraceConfig{
 
 var traceHeaders = TraceConfig{
 	QueryParam:      true,
+	FormParams:      true,
 	Headers:         true,
 	ResponseHeaders: true,
 	Timing:          true,
@@ -123,6 +136,9 @@ func TraceConfigFromString(s string) TraceConfig {
 		if strings.Contains(s, "queryParam") {
 			config.QueryParam = true
 		}
+		if strings.Contains(s, "formParam") || strings.Contains(s, "formParams") {
+			config.FormParams = true
+		}
 		if strings.Contains(s, "tls") {
 			config.TLS = true
 		}
@@ -158,6 +174,7 @@ func (t *traceTransport) TraceAll(val bool) *traceTransport {
 	t.Config.Response = true
 	t.Config.ResponseHeaders = true
 	t.Config.QueryParam = true
+	t.Config.FormParams = true
 	t.Config.Headers = true
 	t.Config.TLS = true
 	t.Config.Timing = true
@@ -181,6 +198,11 @@ func (t *traceTransport) TraceResponseHeaders(val bool) *traceTransport {
 
 func (t *traceTransport) TraceQueryParam(val bool) *traceTransport {
 	t.Config.QueryParam = val
+	return t
+}
+
+func (t *traceTransport) TraceFormParams(val bool) *traceTransport {
+	t.Config.FormParams = val
 	return t
 }
 

@@ -2,7 +2,15 @@
 // capturing outbound request/response pairs for troubleshooting.
 package har
 
+import "github.com/flanksource/commons/properties"
+
 const defaultMaxBodySize = 64 * 1024 // 64 KB
+
+// MaxBodySizeProperty is the -P/properties key that overrides the default
+// per-body capture cap (in bytes). Set e.g. -P http.har.maxBodySize=1048576
+// to capture request/response bodies larger than the 64 KB default, or
+// -P http.har.maxBodySize=0 to capture full bodies with no cap.
+const MaxBodySizeProperty = "http.har.maxBodySize"
 
 // HARConfig controls what the HAR middleware captures and how it redacts.
 type HARConfig struct {
@@ -20,10 +28,13 @@ type HARConfig struct {
 	RedactedHeaders []string
 }
 
-// DefaultConfig returns a HARConfig with sensible defaults.
+// DefaultConfig returns a HARConfig with sensible defaults. The per-body
+// capture cap honours the MaxBodySizeProperty (-P http.har.maxBodySize=…)
+// override; an unset or unparseable value keeps the 64 KB default, and a
+// value <= 0 disables truncation (full bodies captured).
 func DefaultConfig() HARConfig {
 	return HARConfig{
-		MaxBodySize:         defaultMaxBodySize,
+		MaxBodySize:         int64(properties.Int(defaultMaxBodySize, MaxBodySizeProperty)),
 		CaptureContentTypes: []string{"application/json", "application/x-www-form-urlencoded"},
 	}
 }

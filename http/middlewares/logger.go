@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"strings"
@@ -16,6 +17,7 @@ import (
 	commonsCtx "github.com/flanksource/commons/context"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/logger/httpretty"
+	"github.com/flanksource/commons/properties"
 )
 
 type jsonFormatter struct{}
@@ -68,24 +70,11 @@ func getLogger(req *http.Request) logger.Logger {
 	return commonsCtx.LoggerFromContext(req.Context())
 }
 
-func isSensitiveHeader(key string) bool {
-	for _, h := range logger.SensitiveHeaders {
-		if strings.EqualFold(h, key) {
-			return true
-		}
-	}
-	return false
-}
-
-func headerMap(h http.Header) map[string]string {
+func headerMap(h http.Header, redactedHeaders ...string) map[string]string {
+	h = logger.SanitizeHeaders(h, redactedHeaders...)
 	m := make(map[string]string, len(h))
 	for k, v := range h {
-		joined := strings.Join(v, ", ")
-		if isSensitiveHeader(k) {
-			m[k] = logger.PrintableSecret(joined)
-		} else {
-			m[k] = joined
-		}
+		m[k] = strings.Join(v, ", ")
 	}
 	return m
 }
@@ -121,6 +110,63 @@ func sanitizeBody(body string) any {
 	return body
 }
 
+func formParams(req *http.Request) (url.Values, bool) {
+	if req == nil || req.Body == nil {
+		return nil, false
+	}
+	mediaType, _, err := mime.ParseMediaType(req.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/x-www-form-urlencoded" {
+		return nil, false
+	}
+	body, restored := readBody(req.Body)
+	req.Body = restored
+	values, err := url.ParseQuery(body)
+	if err != nil || len(values) == 0 {
+		return nil, false
+	}
+	return values, true
+}
+
+func valueMap(values url.Values) map[string]string {
+	m := make(map[string]string, len(values))
+	for key, vals := range values {
+		joined := strings.Join(vals, ",")
+		if logger.IsSensitiveKey(key) {
+			joined = logger.PrintableSecret(joined)
+		}
+		m[key] = joined
+	}
+	return m
+}
+
+func formatValueBlock(title string, values url.Values) string {
+	if len(values) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%s:\n%s", title, clicky.Map(valueMap(values)).ANSI())
+}
+
+func accessURL(req *http.Request) string {
+	if req == nil || req.URL == nil {
+		return ""
+	}
+	u := *req.URL
+	u.RawQuery = ""
+	u.Fragment = ""
+	return u.String()
+}
+
+func hasDetailedTrace(config TraceConfig) bool {
+	return config.TLS ||
+		config.Headers ||
+		config.Body ||
+		config.ResponseHeaders ||
+		config.Response ||
+		config.QueryParam ||
+		config.FormParams ||
+		config.Auth
+}
+
 func newContextLogger(config TraceConfig, verbose logger.Verbose) Middleware {
 	return func(rt http.RoundTripper) http.RoundTripper {
 		return RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
@@ -149,10 +195,13 @@ func jsonLogAt(verbose logger.Verbose, req *http.Request, level int, kv []interf
 }
 
 func verbosityLevel(config TraceConfig) int {
-	if config.Body || config.Response {
+	if config.Response {
+		return 4
+	}
+	if config.Body || config.TLS {
 		return 3
 	}
-	if config.Headers || config.ResponseHeaders {
+	if config.Headers || config.ResponseHeaders || config.QueryParam || config.FormParams {
 		return 2
 	}
 	return 1
@@ -163,6 +212,10 @@ func jsonLogger(config TraceConfig, verbose logger.Verbose, rt http.RoundTripper
 	if config.Body && req.Body != nil {
 		reqBody, req.Body = readBody(req.Body)
 	}
+	var form url.Values
+	if config.FormParams && !config.Body {
+		form, _ = formParams(req)
+	}
 
 	start := time.Now()
 	resp, err := rt.RoundTrip(req)
@@ -171,30 +224,37 @@ func jsonLogger(config TraceConfig, verbose logger.Verbose, rt http.RoundTripper
 
 	kv := []interface{}{
 		"method", req.Method,
-		"url", req.URL.String(),
+		"url", accessURL(req),
 	}
 
-	if config.Timing {
+	if config.AccessLog || config.Timing {
 		kv = append(kv, "duration", elapsed.Truncate(time.Millisecond).String())
 	}
 
 	if config.Headers {
-		kv = append(kv, "headers", headerMap(req.Header))
+		kv = append(kv, "headers", headerMap(req.Header, config.RedactedHeaders...))
+	}
+	if config.QueryParam && len(req.URL.Query()) > 0 {
+		kv = append(kv, "query", valueMap(req.URL.Query()))
+	}
+	if len(form) > 0 {
+		kv = append(kv, "form", valueMap(form))
 	}
 	if config.Body && reqBody != "" {
 		kv = append(kv, "body", sanitizeBody(reqBody))
 	}
 
 	if err != nil {
+		// Transport errors surface at INFO so a failed request is visible at -v=0.
 		kv = append(kv, "error", err.Error())
-		jsonLogAt(verbose, req, level, kv, "%s %s error %s", req.Method, req.URL, elapsed.Truncate(time.Millisecond))
+		jsonLogAt(verbose, req, 0, kv, "%s %s error %s", req.Method, req.URL, elapsed.Truncate(time.Millisecond))
 		return nil, err
 	}
 
 	kv = append(kv, "status", resp.StatusCode)
 
 	if config.ResponseHeaders {
-		kv = append(kv, "responseHeaders", headerMap(resp.Header))
+		kv = append(kv, "responseHeaders", headerMap(resp.Header, config.RedactedHeaders...))
 	}
 	if config.Response && resp.Body != nil {
 		var respBody string
@@ -204,29 +264,74 @@ func jsonLogger(config TraceConfig, verbose logger.Verbose, rt http.RoundTripper
 		}
 	}
 
+	if resp.StatusCode >= 400 {
+		// Error responses surface at INFO with their body, even when the
+		// configured trace level wouldn't otherwise capture the response body.
+		if !config.Response {
+			if body := readErrorBody(resp, config.MaxBodyLength); body != "" {
+				kv = append(kv, "responseBody", sanitizeBody(body))
+			}
+		}
+		jsonLogAt(verbose, req, 0, kv, "%s %s %d %s", req.Method, req.URL, resp.StatusCode, elapsed.Truncate(time.Millisecond))
+		return resp, nil
+	}
+
+	// Error-only mode suppresses the success line (see logPrettyAccess).
+	if config.AccessLogErrorsOnly {
+		return resp, nil
+	}
 	jsonLogAt(verbose, req, level, kv, "%s %s %d %s", req.Method, req.URL, resp.StatusCode, elapsed.Truncate(time.Millisecond))
 	return resp, nil
 }
 
 func prettyLogger(config TraceConfig, verbose logger.Verbose, rt http.RoundTripper, req *http.Request) (*http.Response, error) {
+	var form url.Values
+	if config.FormParams && !config.Body {
+		form, _ = formParams(req)
+	}
+
+	detailed := hasDetailedTrace(config)
+	start := time.Now()
+	if !detailed {
+		resp, err := rt.RoundTrip(req)
+		elapsed := time.Since(start)
+		logPrettyAccess(config, verbose, req, resp, err, elapsed)
+		return resp, err
+	}
+
 	var buf bytes.Buffer
 	l := &httpretty.Logger{
-		TLS:            config.TLS,
-		RequestHeader:  config.Headers,
-		RequestBody:    config.Body,
-		ResponseHeader: config.ResponseHeaders,
-		ResponseBody:   config.Response,
-		Auth:           config.Auth,
-		Colors:         true,
-		Formatters:     []httpretty.Formatter{&jsonFormatter{}, &formURLEncodedFormatter{}},
+		TLS:             config.TLS,
+		RequestHeader:   config.Headers,
+		RequestBody:     config.Body,
+		ResponseHeader:  config.ResponseHeaders,
+		ResponseBody:    config.Response,
+		Auth:            config.Auth,
+		Colors:          true,
+		Formatters:      []httpretty.Formatter{&jsonFormatter{}, &formURLEncodedFormatter{}},
+		MaxRequestBody:  config.MaxBodyLength,
+		MaxResponseBody: config.MaxBodyLength,
+		RedactedHeaders: append(config.RedactedHeaders, logger.CommonRedactedHeaders...),
 	}
 	l.SetOutput(&buf)
 	inner := l.RoundTripper(rt)
-	start := time.Now()
 	resp, err := inner.RoundTrip(req)
 	elapsed := time.Since(start)
+	logPrettyAccess(config, verbose, req, resp, err, elapsed)
 	if buf.Len() > 0 {
 		msg := buf.String()
+		var blocks []string
+		if config.QueryParam {
+			if block := formatValueBlock("Query Params", req.URL.Query()); block != "" {
+				blocks = append(blocks, block)
+			}
+		}
+		if block := formatValueBlock("Form Params", form); block != "" {
+			blocks = append(blocks, block)
+		}
+		if len(blocks) > 0 {
+			msg = strings.TrimSpace(msg) + "\n" + strings.Join(blocks, "\n")
+		}
 		if config.Timing {
 			suffix := ""
 			if resp != nil {
@@ -250,6 +355,61 @@ func prettyLogger(config TraceConfig, verbose logger.Verbose, rt http.RoundTripp
 	return resp, err
 }
 
+func logPrettyAccess(config TraceConfig, verbose logger.Verbose, req *http.Request, resp *http.Response, err error, elapsed time.Duration) {
+	if !config.AccessLog {
+		return
+	}
+	method := console.Bluef("%s", req.Method)
+	url := console.Yellowf("%s", accessURL(req))
+	dur := elapsed.Truncate(time.Millisecond)
+
+	// Transport errors and responses >= 400 always log (with the response body),
+	// so a failing request surfaces even when the access log is installed in
+	// error-only mode at -v=0; the body captures the cause (e.g. an HTML 404/500
+	// page) without raising verbosity.
+	if err != nil {
+		logAt(verbose, req, 0, "%s %s %s %s", method, url, console.Redf("error: %s", err.Error()), dur)
+		return
+	}
+	statusCode := 0
+	if resp != nil {
+		statusCode = resp.StatusCode
+	}
+	if statusCode >= 400 {
+		logAt(verbose, req, 0, "%s %s %s %s", method, url, statusColor(statusCode)("%d", statusCode), dur)
+		if body := readErrorBody(resp, config.MaxBodyLength); body != "" {
+			logAt(verbose, req, 0, "%s", body)
+		}
+		return
+	}
+	// Error-only mode (installed one level below base) suppresses the success
+	// line; full access logging (base level and up) logs every request.
+	if config.AccessLogErrorsOnly {
+		return
+	}
+	logAt(verbose, req, 1, "%s %s %s %s", method, url, statusColor(statusCode)("%d", statusCode), dur)
+}
+
+// readErrorBody reads and restores resp.Body (so downstream consumers still see
+// it), returning the body truncated to maxLen runes. maxLen <= 0 falls back to
+// the http.log.response.body.length property (4KB default).
+func readErrorBody(resp *http.Response, maxLen int64) string {
+	if resp == nil || resp.Body == nil {
+		return ""
+	}
+	limit := maxLen
+	if limit <= 0 {
+		limit = int64(properties.Int(4*1024, "http.log.response.body.length"))
+	}
+	body, restored := readBody(resp.Body)
+	resp.Body = restored
+	body = strings.TrimSpace(body)
+	if int64(len(body)) > limit {
+		return body[:limit] + "… (truncated)"
+	}
+	return body
+}
+
 func statusColor(code int) func(string, ...interface{}) string {
 	if code >= 200 && code < 300 {
 		return console.Greenf
@@ -259,42 +419,10 @@ func statusColor(code int) func(string, ...interface{}) string {
 	return console.Yellowf
 }
 
-func newContextAccessLog(verbose logger.Verbose) Middleware {
-	return func(rt http.RoundTripper) http.RoundTripper {
-		return RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
-			start := time.Now()
-			resp, err := rt.RoundTrip(req)
-			elapsed := time.Since(start)
-
-			if logger.IsJsonLogs() {
-				kv := []interface{}{"method", req.Method, "url", req.URL.String(), "duration", elapsed.Truncate(time.Millisecond).String()}
-				if err != nil {
-					kv = append(kv, "error", err.Error())
-					jsonLogAt(verbose, req, 1, kv, "%s %s error %s", req.Method, req.URL, elapsed.Truncate(time.Millisecond))
-					return nil, err
-				}
-				kv = append(kv, "status", resp.StatusCode)
-				jsonLogAt(verbose, req, 1, kv, "%s %s %d %s", req.Method, req.URL, resp.StatusCode, elapsed.Truncate(time.Millisecond))
-				return resp, nil
-			}
-
-			if err != nil {
-				logAt(verbose, req, 1, "%s %s %s %s", console.Bluef("%s", req.Method), console.Yellowf("%s", req.URL), console.Redf("error"), elapsed.Truncate(time.Millisecond))
-				return nil, err
-			}
-			logAt(verbose, req, 1, "%s %s %s %s", console.Bluef("%s", req.Method), console.Yellowf("%s", req.URL), statusColor(resp.StatusCode)("%d", resp.StatusCode), elapsed.Truncate(time.Millisecond))
-			return resp, nil
-		})
-	}
-}
-
 func NewLogger(config TraceConfig, verbose ...logger.Verbose) Middleware {
 	var v logger.Verbose
 	if len(verbose) > 0 {
 		v = verbose[0]
-	}
-	if config.AccessLog {
-		return newContextAccessLog(v)
 	}
 	return newContextLogger(config, v)
 }
