@@ -213,17 +213,23 @@ func (d Duration) String() string {
 
 	result := string(buf[w:])
 	// Strip standalone zero-valued units "0m" (minutes) and "0s" (seconds).
-	// Must not match inside sub-second units like "320ms", "500µs", "100ns".
+	// Must not match inside sub-second units like "320ms", "500µs", "100ns",
+	// nor inside multi-digit values like "30s" or "30m" where the "0" is the
+	// last digit of the number, not a standalone zero component. A zero unit is
+	// standalone only when the "0" starts the string or is preceded by a unit
+	// letter (a non-digit), not another digit.
+	isDigit := func(c byte) bool { return c >= '0' && c <= '9' }
 
-	// Strip "0m" only if NOT followed by "s" (which would make it "0ms" = milliseconds)
+	// Strip "0m" only if NOT followed by "s" (which would make it "0ms" =
+	// milliseconds) and NOT preceded by a digit (e.g. the "0" in "30m").
 	if i := strings.Index(result, "0m"); i >= 0 {
-		if i+2 >= len(result) || result[i+2] != 's' {
+		if (i+2 >= len(result) || result[i+2] != 's') && (i == 0 || !isDigit(result[i-1])) {
 			result = result[:i] + result[i+2:]
 		}
 	}
-	// Strip "0s" only at the very end, and only if the result contains
-	// larger units (meaning "0s" is a trailing zero seconds, not "0s" standalone)
-	if strings.HasSuffix(result, "0s") && len(result) > 2 {
+	// Strip a trailing "0s" only when it is a standalone zero-seconds component
+	// (preceded by a larger unit), not the tail of a value like "30s".
+	if strings.HasSuffix(result, "0s") && len(result) > 2 && !isDigit(result[len(result)-3]) {
 		result = result[:len(result)-2]
 	}
 	return result
