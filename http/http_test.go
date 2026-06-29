@@ -57,8 +57,22 @@ func TestHTTP(t *testing.T) {
 	})
 
 	t.Run("Skip SSL Verification", func(t *testing.T) {
-		req := http.NewClient().InsecureSkipVerify(true).R(ctx)
-		response, err := req.Get("https://expired.badssl.com/")
+		port := "18091"
+		defer startTLSServer(t, port, expiredServerTLS(t))()
+		target := fmt.Sprintf("https://localhost:%s/", port)
+
+		// A verifying client (explicit TLSConfig opts out of the default
+		// insecure-skip behaviour) must reject the expired certificate.
+		verifying, err := http.NewClient().TLSConfig(http.TLSConfig{})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if _, err := verifying.R(ctx).Get(target); err == nil {
+			t.Fatal("expected TLS verification error for expired certificate")
+		}
+
+		// InsecureSkipVerify bypasses the expiry check and the request succeeds.
+		response, err := http.NewClient().InsecureSkipVerify(true).R(ctx).Get(target)
 		if err != nil {
 			t.Fatalf("error: %v", err)
 		}
