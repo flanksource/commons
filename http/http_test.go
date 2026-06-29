@@ -150,13 +150,14 @@ func TestHTTP(t *testing.T) {
 		server := headerEchoServer(t)
 		defer server.Close()
 
+		const hostOverride = "httpbin.example.com"
 		resp, err := http.NewClient().
 			TraceToStdout(http.TraceAll).
 			R(context.Background()).
 			Header("Host", "example.test").
 			Get(server.URL)
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 
 		headers := responseHeaders(t, resp)
@@ -171,14 +172,14 @@ func TestHTTP(t *testing.T) {
 
 		resp, err := http.NewClient().R(context.Background()).Header("Hello", "World").Get(server.URL)
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 		headers := responseHeaders(t, resp)
 		if headers["Hello"] != "World" {
-			t.Errorf("Expected response headers %s", headers)
+			t.Errorf("expected Hello header %q, got %v", "World", headers["Hello"])
 		}
 		if v, ok := headers["Authorization"]; ok {
-			t.Errorf("Expecting blank authentication got %s", v)
+			t.Errorf("expected no Authorization header, got %v", v)
 		}
 	})
 
@@ -307,6 +308,26 @@ func TestQueryParamsPreserveRawKeys(t *testing.T) {
 			}
 		})
 	}
+}
+
+// startHeadersServer mimics httpbin.org's /headers endpoint, echoing the
+// request headers (and the resolved Host) back as JSON. This keeps the
+// header-handling tests off the unreliable external httpbin.org service.
+func startHeadersServer(t *testing.T) *httptest.Server {
+	t.Helper()
+
+	server := httptest.NewServer(netHTTP.HandlerFunc(func(w netHTTP.ResponseWriter, r *netHTTP.Request) {
+		headers := map[string]string{"Host": r.Host}
+		for key, values := range r.Header {
+			headers[key] = strings.Join(values, ",")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"headers": headers})
+	}))
+	t.Cleanup(server.Close)
+
+	return server
 }
 
 // nolint:unused
