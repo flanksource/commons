@@ -26,6 +26,13 @@ type HARConfig struct {
 	// RedactedHeaders lists additional header name glob patterns to redact,
 	// on top of logger.CommonRedactedHeaders.
 	RedactedHeaders []string
+
+	// RedactedBodyKeys lists additional key names (case-insensitive substring
+	// match) to redact from request/response bodies (JSON and form) and from
+	// URL query strings, on top of logger.SensitiveKeys. Use for app-specific
+	// identifiers (e.g. session ids, national-id fields) that the default
+	// heuristics don't recognise.
+	RedactedBodyKeys []string
 }
 
 // DefaultConfig returns a HARConfig with sensible defaults. The per-body

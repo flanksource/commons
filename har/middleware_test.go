@@ -192,6 +192,65 @@ func TestHAR_FormBodyFieldRedaction(t *testing.T) {
 	}
 }
 
+func TestHAR_QueryStringCredentialsRedacted(t *testing.T) {
+	const password = "s3cr3tpassword"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	entry := captureOne(t, har.DefaultConfig(), srv,
+		http.MethodGet, "/?username=alice&password="+password, nil, nil)
+
+	for _, q := range entry.Request.QueryString {
+		if strings.EqualFold(q.Name, "password") && q.Value == password {
+			t.Errorf("password query param was not redacted, got %q", q.Value)
+		}
+	}
+	if strings.Contains(entry.Request.URL, password) {
+		t.Errorf("password leaked in captured URL: %s", entry.Request.URL)
+	}
+}
+
+func TestHAR_RedactedBodyKeysScrubExtraIdentifiers(t *testing.T) {
+	const personalID = "9001011234567"
+	const session = "ABCDEF0123456789"
+	// PersonalId appears both at the top level and nested inside an array of
+	// objects — neither must survive redaction.
+	jsonBody := `{"PersonalId":"` + personalID + `","name":"alice","members":[{"PersonalId":"` + personalID + `"}]}`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	cfg := har.DefaultConfig()
+	cfg.RedactedBodyKeys = []string{"PersonalId", "jsessionid"}
+
+	entry := captureOne(t, cfg, srv,
+		http.MethodPost, "/login?jsessionid="+session,
+		strings.NewReader(jsonBody),
+		map[string]string{"Content-Type": "application/json"})
+
+	if entry.Request.PostData == nil {
+		t.Fatal("expected PostData to be set")
+	}
+	if strings.Contains(entry.Request.PostData.Text, personalID) {
+		t.Errorf("PersonalId was not redacted in body: %s", entry.Request.PostData.Text)
+	}
+	if !strings.Contains(entry.Request.PostData.Text, "alice") {
+		t.Errorf("non-sensitive field dropped from body: %s", entry.Request.PostData.Text)
+	}
+	for _, q := range entry.Request.QueryString {
+		if strings.EqualFold(q.Name, "jsessionid") && q.Value == session {
+			t.Errorf("jsessionid query param was not redacted, got %q", q.Value)
+		}
+	}
+	if strings.Contains(entry.Request.URL, session) {
+		t.Errorf("jsessionid leaked in captured URL: %s", entry.Request.URL)
+	}
+}
+
 func TestHAR_NilHandlerIsNoOp(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(200)
