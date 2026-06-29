@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"net"
 	"net/http"
 	"testing"
 	"time"
@@ -112,26 +113,7 @@ func TestTLSConfig(t *testing.T) {
 	for _, td := range testData {
 		t.Run(td.name, func(t *testing.T) {
 			port := "18080"
-			server, err := tlsServer(port, td.serverTLS)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			serverReady := make(chan struct{})
-			go func() {
-				close(serverReady)
-				err := server.ListenAndServeTLS("", "")
-				logger.Infof("server error: %v", err)
-			}()
-
-			serverTerminate := make(chan struct{})
-			go func() {
-				<-serverTerminate
-				_ = server.Shutdown(context.Background())
-			}()
-
-			<-serverReady
-			defer func() { serverTerminate <- struct{}{} }()
+			defer startTLSServer(t, port, td.serverTLS)()
 
 			client, err := chttp.NewClient().TLSConfig(td.clientTLS)
 			if err != nil {
@@ -161,15 +143,31 @@ func TestTLSConfig(t *testing.T) {
 	}
 }
 
-func tlsServer(port string, tlsConfig *tls.Config) (*http.Server, error) {
+// startTLSServer binds the listener synchronously before serving so the port is
+// guaranteed to accept connections by the time it returns. It returns a cleanup
+// function that shuts the server down.
+func startTLSServer(t *testing.T, port string, tlsConfig *tls.Config) func() {
+	t.Helper()
+
+	listener, err := net.Listen("tcp", net.JoinHostPort("", port))
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	server := &http.Server{
-		Addr: fmt.Sprintf(":%s", port),
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte("Hello, World!"))
 		}),
 		TLSConfig: tlsConfig,
 	}
-	return server, nil
+
+	go func() {
+		if err := server.ServeTLS(listener, "", ""); err != nil && err != http.ErrServerClosed {
+			logger.Infof("server error: %v", err)
+		}
+	}()
+
+	return func() { _ = server.Shutdown(context.Background()) }
 }
 
 func createCert(parent *x509.Certificate, signerKey any, cn string) (*x509.Certificate, *tls.Certificate, []byte, []byte, error) {
@@ -240,6 +238,48 @@ func createCert(parent *x509.Certificate, signerKey any, cn string) (*x509.Certi
 	return template, &certificate, pemBytes, privateKeyBytes, nil
 }
 
+// expiredServerTLS returns a *tls.Config holding a self-signed certificate that
+// already expired, for exercising InsecureSkipVerify against an invalid cert
+// without depending on an external host.
+func expiredServerTLS(t *testing.T) *tls.Config {
+	t.Helper()
+
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "localhost"},
+		DNSNames:     []string{"localhost"},
+		NotBefore:    time.Now().Add(-48 * time.Hour),
+		NotAfter:     time.Now().Add(-24 * time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	keyDER, err := x509.MarshalECPrivateKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cert, err := tls.X509KeyPair(
+		pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}),
+		pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return &tls.Config{Certificates: []tls.Certificate{cert}}
+}
+
 func TestTLSLogging(t *testing.T) {
 	// Enable trace logging to see TLS output
 	logger.StandardLogger().SetLogLevel(5)
@@ -261,28 +301,9 @@ func TestTLSLogging(t *testing.T) {
 
 	t.Run("TLS logging with valid certificate", func(t *testing.T) {
 		port := "18090"
-		server, err := tlsServer(port, &tls.Config{
+		defer startTLSServer(t, port, &tls.Config{
 			Certificates: []tls.Certificate{*serverCrt},
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		serverReady := make(chan struct{})
-		go func() {
-			close(serverReady)
-			err := server.ListenAndServeTLS("", "")
-			logger.Infof("server error: %v", err)
-		}()
-
-		serverTerminate := make(chan struct{})
-		go func() {
-			<-serverTerminate
-			_ = server.Shutdown(context.Background())
-		}()
-
-		<-serverReady
-		defer func() { serverTerminate <- struct{}{} }()
+		})()
 
 		client, err := chttp.NewClient().TLSConfig(chttp.TLSConfig{CA: string(caPEM)})
 		if err != nil {
