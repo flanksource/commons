@@ -3,6 +3,7 @@ package har
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -63,11 +64,11 @@ func CaptureRedirect(req *http.Request, resp *http.Response, cfg HARConfig) *Ent
 func buildRequest(req *http.Request, cfg HARConfig) Request {
 	har := Request{
 		Method:      req.Method,
-		URL:         req.URL.String(),
+		URL:         redactURL(req.URL, cfg.RedactedBodyKeys),
 		HTTPVersion: httpVersion(req.Proto),
 		Cookies:     []Cookie{},
 		Headers:     toHARHeaders(logger.SanitizeHeaders(req.Header, cfg.RedactedHeaders...)),
-		QueryString: toQueryString(req.URL.Query()),
+		QueryString: toQueryString(req.URL.Query(), cfg.RedactedBodyKeys),
 		HeadersSize: -1,
 		BodySize:    -1,
 	}
@@ -79,7 +80,7 @@ func buildRequest(req *http.Request, cfg HARConfig) Request {
 		har.BodySize = int64(len(body.raw))
 		har.PostData = &PostData{
 			MimeType: ct,
-			Text:     redactBody(body.text, ct),
+			Text:     redactBody(body.text, ct, cfg.RedactedBodyKeys),
 		}
 	}
 
@@ -106,7 +107,7 @@ func buildResponse(resp *http.Response, cfg HARConfig) Response {
 		har.Content = Content{
 			Size:      body.totalSize,
 			MimeType:  ct,
-			Text:      redactBody(body.text, ct),
+			Text:      redactBody(body.text, ct, cfg.RedactedBodyKeys),
 			Truncated: body.truncated,
 		}
 	}
@@ -153,26 +154,26 @@ func shouldCapture(contentType string, allowed []string) bool {
 	return false
 }
 
-func redactBody(text, contentType string) string {
+func redactBody(text, contentType string, extraKeys []string) string {
 	ct := strings.ToLower(strings.Split(contentType, ";")[0])
 	ct = strings.TrimSpace(ct)
 
 	switch ct {
 	case "application/json":
-		return redactJSON(text)
+		return redactJSON(text, extraKeys)
 	case "application/x-www-form-urlencoded":
-		return redactForm(text)
+		return redactForm(text, extraKeys)
 	default:
 		return text
 	}
 }
 
-func redactJSON(text string) string {
+func redactJSON(text string, extraKeys []string) string {
 	var m map[string]any
 	if err := json.Unmarshal([]byte(text), &m); err != nil {
 		return text
 	}
-	redacted := logger.StripSecretsFromMap(m)
+	redacted := stripSecretMap(m, extraKeys)
 	out, err := json.Marshal(redacted)
 	if err != nil {
 		return text
@@ -180,13 +181,44 @@ func redactJSON(text string) string {
 	return string(out)
 }
 
-func redactForm(text string) string {
+// stripSecretMap recursively redacts values whose key is sensitive (per
+// logger.IsSensitiveKey or extraKeys), descending into nested objects and
+// arrays so a sensitive field can't escape redaction by being nested, while
+// preserving the rest of the structure.
+func stripSecretMap(m map[string]any, extraKeys []string) map[string]any {
+	clone := make(map[string]any, len(m))
+	for k, v := range m {
+		if isRedactedKey(k, extraKeys) {
+			clone[k] = logger.PrintableSecret(fmt.Sprintf("%v", v))
+			continue
+		}
+		clone[k] = stripSecretValue(v, extraKeys)
+	}
+	return clone
+}
+
+func stripSecretValue(v any, extraKeys []string) any {
+	switch val := v.(type) {
+	case map[string]any:
+		return stripSecretMap(val, extraKeys)
+	case []any:
+		out := make([]any, len(val))
+		for i, e := range val {
+			out[i] = stripSecretValue(e, extraKeys)
+		}
+		return out
+	default:
+		return v
+	}
+}
+
+func redactForm(text string, extraKeys []string) string {
 	vals, err := url.ParseQuery(text)
 	if err != nil {
 		return text
 	}
 	for k, vs := range vals {
-		if logger.IsSensitiveKey(k) {
+		if isRedactedKey(k, extraKeys) {
 			redacted := make([]string, len(vs))
 			for i, v := range vs {
 				redacted[i] = logger.PrintableSecret(v)
@@ -195,6 +227,49 @@ func redactForm(text string) string {
 		}
 	}
 	return vals.Encode()
+}
+
+// isRedactedKey reports whether key is sensitive, either by the default
+// logger.IsSensitiveKey heuristics or by a case-insensitive substring match
+// against any of extraKeys.
+func isRedactedKey(key string, extraKeys []string) bool {
+	if logger.IsSensitiveKey(key) {
+		return true
+	}
+	k := strings.ToLower(strings.TrimSpace(key))
+	for _, e := range extraKeys {
+		e = strings.ToLower(strings.TrimSpace(e))
+		if e != "" && strings.Contains(k, e) {
+			return true
+		}
+	}
+	return false
+}
+
+// redactURL renders u as a string with sensitive query-parameter values
+// redacted. u itself is never mutated (it is still used for the live request).
+func redactURL(u *url.URL, extraKeys []string) string {
+	if u == nil {
+		return ""
+	}
+	q := u.Query()
+	changed := false
+	for k, vs := range q {
+		if !isRedactedKey(k, extraKeys) {
+			continue
+		}
+		for i := range vs {
+			vs[i] = logger.PrintableSecret(vs[i])
+		}
+		q[k] = vs
+		changed = true
+	}
+	if !changed {
+		return u.String()
+	}
+	clone := *u
+	clone.RawQuery = q.Encode()
+	return clone.String()
 }
 
 func toHARHeaders(h http.Header) []Header {
@@ -207,10 +282,14 @@ func toHARHeaders(h http.Header) []Header {
 	return headers
 }
 
-func toQueryString(q url.Values) []QueryString {
+func toQueryString(q url.Values, extraKeys []string) []QueryString {
 	qs := make([]QueryString, 0, len(q))
 	for k, vs := range q {
+		redact := isRedactedKey(k, extraKeys)
 		for _, v := range vs {
+			if redact {
+				v = logger.PrintableSecret(v)
+			}
 			qs = append(qs, QueryString{Name: k, Value: v})
 		}
 	}

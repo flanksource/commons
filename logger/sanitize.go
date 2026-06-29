@@ -13,11 +13,14 @@ import (
 )
 
 var CommonRedactedHeaders = []string{
-	"Authorization*", "Bearer*", "Session*", "*Cookie", "*Token", "*-Secret", "*-Key",
+	"Authorization*", "Bearer*", "Session*", "*SessionId*", "*Sessid*", "*Cookie", "*Token", "*-Secret", "*-Key",
 	"Password", "Passwd", "Pwd",
 }
 
-var SensitiveKeys = []string{"user", "pass", "secret", "key", "token", "username", "password", "authorization"}
+// SensitiveKeys are substrings that mark a body/query key as a secret. "sessionid"
+// and "sessid" cover the common session identifiers (JSESSIONID, PHPSESSID,
+// ASP.NET_SessionId, x-sessionid) without redacting unrelated "session*" fields.
+var SensitiveKeys = []string{"user", "pass", "secret", "key", "token", "username", "password", "authorization", "sessionid", "sessid"}
 
 var NonSensitiveKeys = []string{"token_type", "grant_type"}
 

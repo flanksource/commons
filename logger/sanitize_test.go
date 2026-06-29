@@ -50,6 +50,17 @@ func TestSanitize(t *testing.T) {
 			expected: http.Header{},
 		},
 		{
+			name: "Redact session-id headers",
+			headers: http.Header{
+				"Jsessionid": []string{"ABCDEF0123456789"},
+				"X-Sessionid": []string{"ABCDEF0123456789"},
+			},
+			expected: http.Header{
+				"Jsessionid":  []string{PrintableSecret("ABCDEF0123456789")},
+				"X-Sessionid": []string{PrintableSecret("ABCDEF0123456789")},
+			},
+		},
+		{
 			name:   "custom sensitive headers",
 			custom: []string{"X-Flanksource-*"},
 			headers: http.Header{
@@ -105,6 +116,12 @@ func TestIsSensitiveKey(t *testing.T) {
 		{"AUTHORIZATION", true},
 		{"password", true},
 		{"token", true},
+		{"JSESSIONID", true},
+		{"jsessionid", true},
+		{"PHPSESSID", true},
+		{"ASP.NET_SessionId", true},
+		{"x-sessionid", true},
+		{"sessionStartTime", false},
 		{"token_type", false},
 		{"grant_type", false},
 		{"Content-Type", false},
