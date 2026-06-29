@@ -24,11 +24,23 @@ jobs:
         with:
           egress-policy: audit
 
+      # Mint a GitHub App installation token for the Flanksource App so
+      # semantic-release can push the release tag and create the GitHub Release.
+      # The default GITHUB_TOKEN is blocked from these writes by org policy.
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.FLANKSOURCE_APP_ID }}
+          private-key: ${{ secrets.FLANKSOURCE_APP_SECRET }}
+
       - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
+        with:
+          token: ${{ steps.app-token.outputs.token }}
       - uses: codfish/semantic-release-action@b621d34fabe0940f031e89b6ebfea28322892a10 # v3.5.0
         id: semantic
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
   bump-clients:
     runs-on: ubuntu-latest
