@@ -4,9 +4,17 @@ on:
     branches:
       - master
       - main
+
+permissions:
+  contents: read
+
 jobs:
   semantic-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
     outputs:
       release-version: ${{ steps.semantic.outputs.release-version }}
       new-release-published: ${{ steps.semantic.outputs.new-release-published }}

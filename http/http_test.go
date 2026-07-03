@@ -2,10 +2,11 @@ package http_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	netHTTP "net/http"
-	"net/url"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -146,48 +147,33 @@ func TestHTTP(t *testing.T) {
 	})
 
 	t.Run("Host Header", func(t *testing.T) {
-		uri, _ := url.Parse("https://httpbin.org/headers")
-		ips, err := net.LookupIP(uri.Host)
-		if err != nil {
-			t.Error(err.Error())
-		}
-
-		uriIP := *uri
-		uriIP.Host = ips[0].To4().String()
+		server := headerEchoServer(t)
+		defer server.Close()
 
 		resp, err := http.NewClient().
 			TraceToStdout(http.TraceAll).
-			InsecureSkipVerify(true).
 			R(context.Background()).
-			Header("Host", uri.Host).
-			Get(uriIP.String())
+			Header("Host", "example.test").
+			Get(server.URL)
 		if err != nil {
 			t.Error(err)
 		}
 
-		var headers map[string]any
-		if body, err := resp.AsJSON(); err != nil {
-			t.Error(err)
-		} else {
-			headers = body["headers"].(map[string]any)
-		}
-
-		if headers["Host"] != uri.Host {
+		headers := responseHeaders(t, resp)
+		if headers["Host"] != "example.test" {
 			t.Errorf("Expected response headers %s", headers)
 		}
 	})
 
 	t.Run("No Auth", func(t *testing.T) {
-		resp, err := http.NewClient().R(context.Background()).Header("Hello", "World").Get("https://httpbin.org/headers")
+		server := headerEchoServer(t)
+		defer server.Close()
+
+		resp, err := http.NewClient().R(context.Background()).Header("Hello", "World").Get(server.URL)
 		if err != nil {
 			t.Error(err)
 		}
-		var headers map[string]any
-		if body, err := resp.AsJSON(); err != nil {
-			t.Error(err)
-		} else {
-			headers = body["headers"].(map[string]any)
-		}
+		headers := responseHeaders(t, resp)
 		if headers["Hello"] != "World" {
 			t.Errorf("Expected response headers %s", headers)
 		}
@@ -239,6 +225,36 @@ func TestHTTP(t *testing.T) {
 
 		// logger.Infof("Status OK: %v", response.IsOK())
 	}
+}
+
+func headerEchoServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(netHTTP.HandlerFunc(func(w netHTTP.ResponseWriter, r *netHTTP.Request) {
+		headers := map[string]string{"Host": r.Host}
+		for key := range r.Header {
+			headers[key] = r.Header.Get(key)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]any{"headers": headers}); err != nil {
+			t.Errorf("failed to encode response: %v", err)
+		}
+	}))
+}
+
+func responseHeaders(t *testing.T, resp *http.Response) map[string]any {
+	t.Helper()
+	if resp == nil {
+		t.Fatal("nil response")
+	}
+	body, err := resp.AsJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	headers, ok := body["headers"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected headers object, got %v", body["headers"])
+	}
+	return headers
 }
 
 func TestQueryParamsPreserveRawKeys(t *testing.T) {
