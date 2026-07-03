@@ -1121,7 +1121,7 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 				CredentialsProvider: c.authConfig.AWSCredentialsProvider,
 			}
 			if c.traceConfig.Auth {
-				awsCfg.Tracer = func(msg string) { logger.Tracef(msg) }
+				awsCfg.Tracer = func(msg string) { logger.Tracef("%s", msg) }
 			}
 			r.client.httpClient.Transport = middlewares.NewAWSSigv4Transport(awsCfg, r.client.httpClient.Transport)
 		} else {

@@ -5,6 +5,10 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 name: Test
+
+permissions:
+  contents: read
+
 jobs:
   test:
     strategy:

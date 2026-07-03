@@ -107,7 +107,7 @@ func sanitizeBody(body string) any {
 		}
 		return sanitized
 	}
-	return body
+	return logger.StripSecrets(body)
 }
 
 func formParams(req *http.Request) (url.Values, bool) {
@@ -179,18 +179,20 @@ func newContextLogger(config TraceConfig, verbose logger.Verbose) Middleware {
 }
 
 func logAt(verbose logger.Verbose, req *http.Request, level int, format string, args ...interface{}) {
+	msg := logger.StripSecrets(fmt.Sprintf(format, args...))
 	if verbose != nil {
-		getLogger(req).V(level).Always().Infof(format, args...)
+		getLogger(req).V(level).Always().Infof("%s", msg)
 	} else {
-		getLogger(req).Infof(format, args...)
+		getLogger(req).Infof("%s", msg)
 	}
 }
 
 func jsonLogAt(verbose logger.Verbose, req *http.Request, level int, kv []interface{}, format string, args ...interface{}) {
+	msg := logger.StripSecrets(fmt.Sprintf(format, args...))
 	if verbose != nil {
-		getLogger(req).V(level).Always().WithValues(kv...).Infof(format, args...)
+		getLogger(req).V(level).Always().WithValues(kv...).Infof("%s", msg)
 	} else {
-		getLogger(req).WithValues(kv...).Infof(format, args...)
+		getLogger(req).WithValues(kv...).Infof("%s", msg)
 	}
 }
 
@@ -247,7 +249,7 @@ func jsonLogger(config TraceConfig, verbose logger.Verbose, rt http.RoundTripper
 	if err != nil {
 		// Transport errors surface at INFO so a failed request is visible at -v=0.
 		kv = append(kv, "error", err.Error())
-		jsonLogAt(verbose, req, 0, kv, "%s %s error %s", req.Method, req.URL, elapsed.Truncate(time.Millisecond))
+		jsonLogAt(verbose, req, 0, kv, "%s %s error %s", req.Method, accessURL(req), elapsed.Truncate(time.Millisecond))
 		return nil, err
 	}
 
@@ -272,7 +274,7 @@ func jsonLogger(config TraceConfig, verbose logger.Verbose, rt http.RoundTripper
 				kv = append(kv, "responseBody", sanitizeBody(body))
 			}
 		}
-		jsonLogAt(verbose, req, 0, kv, "%s %s %d %s", req.Method, req.URL, resp.StatusCode, elapsed.Truncate(time.Millisecond))
+		jsonLogAt(verbose, req, 0, kv, "%s %s %d %s", req.Method, accessURL(req), resp.StatusCode, elapsed.Truncate(time.Millisecond))
 		return resp, nil
 	}
 
@@ -280,7 +282,7 @@ func jsonLogger(config TraceConfig, verbose logger.Verbose, rt http.RoundTripper
 	if config.AccessLogErrorsOnly {
 		return resp, nil
 	}
-	jsonLogAt(verbose, req, level, kv, "%s %s %d %s", req.Method, req.URL, resp.StatusCode, elapsed.Truncate(time.Millisecond))
+	jsonLogAt(verbose, req, level, kv, "%s %s %d %s", req.Method, accessURL(req), resp.StatusCode, elapsed.Truncate(time.Millisecond))
 	return resp, nil
 }
 
@@ -350,7 +352,7 @@ func prettyLogger(config TraceConfig, verbose logger.Verbose, rt http.RoundTripp
 			}
 			msg = strings.Join(lines, "\n")
 		}
-		logAt(verbose, req, verbosityLevel(config), strings.TrimSpace(msg))
+		logAt(verbose, req, verbosityLevel(config), "%s", strings.TrimSpace(msg))
 	}
 	return resp, err
 }

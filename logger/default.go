@@ -175,7 +175,7 @@ func Debugf(format string, args ...interface{}) {
 // Tracef logs a trace message with formatting support.
 // These are very detailed messages for troubleshooting, only shown at trace level.
 func Tracef(format string, args ...interface{}) {
-	currentLogger.Tracef(format, args...)
+	currentLogger.Tracef("%s", StripSecrets(fmt.Sprintf(format, args...)))
 }
 
 // Fatalf logs a fatal error message and terminates the program.

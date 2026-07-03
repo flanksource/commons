@@ -4,9 +4,17 @@ on:
     branches:
       - master
       - main
+
+permissions:
+  contents: read
+
 jobs:
   semantic-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
     outputs:
       release-version: ${{ steps.semantic.outputs.release-version }}
       new-release-published: ${{ steps.semantic.outputs.new-release-published }}
@@ -24,6 +32,8 @@ jobs:
 
   bump-clients:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: [semantic-release]
     if: needs.semantic-release.outputs.new-release-published == 'true'
     strategy:
@@ -83,6 +93,8 @@ jobs:
 
   hx-binaries:
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
     needs: [semantic-release]
     if: needs.semantic-release.outputs.new-release-published == 'true'
     strategy:

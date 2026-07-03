@@ -11,6 +11,10 @@ on:
     paths:
       - "cmd/hx/**"
       - "http/**"
+
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

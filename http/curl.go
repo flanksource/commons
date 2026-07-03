@@ -50,6 +50,6 @@ type curlLogTransport struct {
 }
 
 func (t *curlLogTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	logger.Tracef(ToCurl(req))
+	logger.Tracef("%s", ToCurl(req))
 	return t.base.RoundTrip(req)
 }
