@@ -2,10 +2,11 @@ package http_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	netHTTP "net/http"
-	"net/url"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -13,6 +14,29 @@ import (
 	"github.com/flanksource/commons/http/middlewares"
 	"github.com/flanksource/commons/logger"
 )
+
+func newHeaderEchoServer(t *testing.T) *httptest.Server {
+	t.Helper()
+
+	server := httptest.NewTLSServer(netHTTP.HandlerFunc(func(w netHTTP.ResponseWriter, r *netHTTP.Request) {
+		headers := map[string]any{}
+		for k, v := range r.Header {
+			if len(v) == 1 {
+				headers[k] = v[0]
+			} else {
+				headers[k] = v
+			}
+		}
+		headers["Host"] = r.Host
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]any{"headers": headers}); err != nil {
+			t.Errorf("failed to encode headers response: %v", err)
+		}
+	}))
+
+	return server
+}
 
 // Test with few example use cases.
 // Disabled because Github action doesn't allow making external calls?
@@ -146,21 +170,16 @@ func TestHTTP(t *testing.T) {
 	})
 
 	t.Run("Host Header", func(t *testing.T) {
-		uri, _ := url.Parse("https://httpbin.org/headers")
-		ips, err := net.LookupIP(uri.Host)
-		if err != nil {
-			t.Error(err.Error())
-		}
+		server := newHeaderEchoServer(t)
+		defer server.Close()
 
-		uriIP := *uri
-		uriIP.Host = ips[0].To4().String()
-
+		const host = "httpbin.local"
 		resp, err := http.NewClient().
 			TraceToStdout(http.TraceAll).
 			InsecureSkipVerify(true).
 			R(context.Background()).
-			Header("Host", uri.Host).
-			Get(uriIP.String())
+			Header("Host", host).
+			Get(server.URL)
 		if err != nil {
 			t.Error(err)
 		}
@@ -172,13 +191,16 @@ func TestHTTP(t *testing.T) {
 			headers = body["headers"].(map[string]any)
 		}
 
-		if headers["Host"] != uri.Host {
+		if headers["Host"] != host {
 			t.Errorf("Expected response headers %s", headers)
 		}
 	})
 
 	t.Run("No Auth", func(t *testing.T) {
-		resp, err := http.NewClient().R(context.Background()).Header("Hello", "World").Get("https://httpbin.org/headers")
+		server := newHeaderEchoServer(t)
+		defer server.Close()
+
+		resp, err := http.NewClient().InsecureSkipVerify(true).R(context.Background()).Header("Hello", "World").Get(server.URL)
 		if err != nil {
 			t.Error(err)
 		}

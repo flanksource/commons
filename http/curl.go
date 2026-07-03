@@ -16,8 +16,7 @@ func escapeSingleQuote(s string) string {
 }
 
 // ToCurl converts an http.Request into an equivalent curl command string.
-// All headers including Authorization are included unredacted so the
-// command can be copy-pasted for debugging.
+// Sensitive headers are redacted to avoid leaking secrets into logs.
 func ToCurl(req *http.Request) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "curl -X %s '%s'", req.Method, escapeSingleQuote(req.URL.String()))
@@ -29,7 +28,11 @@ func ToCurl(req *http.Request) string {
 	sort.Strings(keys)
 
 	for _, k := range keys {
-		fmt.Fprintf(&b, " -H '%s: %s'", escapeSingleQuote(k), escapeSingleQuote(strings.Join(req.Header[k], ", ")))
+		value := strings.Join(req.Header[k], ", ")
+		if logger.IsSensitiveKey(k) {
+			value = logger.PrintableSecret(value)
+		}
+		fmt.Fprintf(&b, " -H '%s: %s'", escapeSingleQuote(k), escapeSingleQuote(value))
 	}
 
 	if req.Body != nil && req.Body != http.NoBody {
@@ -50,6 +53,6 @@ type curlLogTransport struct {
 }
 
 func (t *curlLogTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	logger.Tracef(ToCurl(req))
+	logger.Tracef("%s", ToCurl(req))
 	return t.base.RoundTrip(req)
 }

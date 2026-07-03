@@ -228,12 +228,14 @@ func (a *digestAuth) hashStr(s string) string {
 	alg := strings.ToUpper(a.algorithm)
 	switch alg {
 	case "", algMD5, algMD5Sess:
+		// lgtm[go/weak-sensitive-data-hashing] HTTP Digest authentication requires MD5 for RFC compatibility.
 		h = md5.New()
 	case algSHA256, algSHA256Sess:
 		h = sha256.New()
 	default:
 		return ""
 	}
+	// lgtm[go/weak-sensitive-data-hashing] The selected hash is mandated by the server's HTTP Digest challenge.
 	_, _ = io.WriteString(h, s)
 	return hex.EncodeToString(h.Sum(nil))
 }

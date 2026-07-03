@@ -1,8 +1,6 @@
 package logger
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -52,7 +50,11 @@ func SanitizeHeaders(headers http.Header, redactedHeaders ...string) http.Header
 			continue
 		}
 
-		redacted[key] = values
+		sanitized := make([]string, len(values))
+		for i, value := range values {
+			sanitized[i] = PrintableSecret(value)
+		}
+		redacted[key] = sanitized
 	}
 
 	return redacted
@@ -90,9 +92,7 @@ func printableValue(s string) string {
 	case len(s) == 0:
 		return ""
 	case len(s) > 64:
-		sum := md5.Sum([]byte(s))
-		hash := hex.EncodeToString(sum[:])
-		return fmt.Sprintf("md5(%s),length=%d", hash[0:8], len(s))
+		return fmt.Sprintf("%s****%s,length=%d", s[0:3], s[len(s)-1:], len(s))
 	case len(s) > 32:
 		return fmt.Sprintf("%s****%s", s[0:3], s[len(s)-1:])
 	case len(s) >= 16:
@@ -129,7 +129,17 @@ func StripSecretsFromMap[V comparable](m map[string]V) map[string]any {
 // as denoted by keys containing "pass" or "secret" or exact matches for "key"
 // the last character of the secret is kept to aid in troubleshooting
 func StripSecrets(text string) string {
-	if uri, err := url.Parse(text); err == nil {
+	if uri, err := url.Parse(text); err == nil && uri.Scheme != "" && uri.Host != "" && !strings.ContainsAny(text, " \t\r\n") {
+		query := uri.Query()
+		for key, values := range query {
+			if IsSensitiveKey(key) {
+				for i, value := range values {
+					values[i] = PrintableSecret(value)
+				}
+				query[key] = values
+			}
+		}
+		uri.RawQuery = query.Encode()
 		return uri.Redacted()
 	}
 
@@ -138,14 +148,14 @@ func StripSecrets(text string) string {
 
 		var k, v, sep string
 		if strings.Contains(line, ":") {
-			parts := strings.Split(line, ":")
+			parts := strings.SplitN(line, ":", 2)
 			k = parts[0]
 			if len(parts) > 1 {
 				v = parts[1]
 			}
 			sep = ":"
 		} else if strings.Contains(line, "=") {
-			parts := strings.Split(line, "=")
+			parts := strings.SplitN(line, "=", 2)
 			k = parts[0]
 			if len(parts) > 1 {
 				v = parts[1]
