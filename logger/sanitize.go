@@ -1,8 +1,6 @@
 package logger
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -52,7 +50,11 @@ func SanitizeHeaders(headers http.Header, redactedHeaders ...string) http.Header
 			continue
 		}
 
-		redacted[key] = values
+		sanitized := make([]string, len(values))
+		for i, value := range values {
+			sanitized[i] = PrintableSecret(value)
+		}
+		redacted[key] = sanitized
 	}
 
 	return redacted
@@ -90,9 +92,7 @@ func printableValue(s string) string {
 	case len(s) == 0:
 		return ""
 	case len(s) > 64:
-		sum := sha256.Sum256([]byte(s))
-		hash := hex.EncodeToString(sum[:])
-		return fmt.Sprintf("sha256(%s),length=%d", hash[0:8], len(s))
+		return fmt.Sprintf("%s****%s,length=%d", s[0:3], s[len(s)-1:], len(s))
 	case len(s) > 32:
 		return fmt.Sprintf("%s****%s", s[0:3], s[len(s)-1:])
 	case len(s) >= 16:
