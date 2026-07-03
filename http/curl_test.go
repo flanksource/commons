@@ -48,15 +48,17 @@ func TestToCurl(t *testing.T) {
 		g.Expect(string(restored)).To(gomega.Equal("hello"))
 	})
 
-	t.Run("auth headers are included unredacted", func(t *testing.T) {
+	t.Run("auth headers are redacted", func(t *testing.T) {
 		g := gomega.NewWithT(t)
 		req, _ := http.NewRequest("GET", "https://example.com", nil)
 		req.Header.Set("Authorization", "Bearer secret-token")
 		req.Header.Set("Cookie", "session=abc123")
 
 		got := ToCurl(req)
-		g.Expect(got).To(gomega.ContainSubstring("-H 'Authorization: Bearer secret-token'"))
-		g.Expect(got).To(gomega.ContainSubstring("-H 'Cookie: session=abc123'"))
+		g.Expect(got).To(gomega.ContainSubstring("-H 'Authorization: Bearer ****n'"))
+		g.Expect(got).To(gomega.ContainSubstring("-H 'Cookie: ****3'"))
+		g.Expect(got).ToNot(gomega.ContainSubstring("secret-token"))
+		g.Expect(got).ToNot(gomega.ContainSubstring("session=abc123"))
 	})
 
 	t.Run("URL with single quotes is escaped", func(t *testing.T) {

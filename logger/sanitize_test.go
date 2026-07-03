@@ -1,7 +1,9 @@
 package logger
 
 import (
+	"bytes"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -52,7 +54,7 @@ func TestSanitize(t *testing.T) {
 		{
 			name: "Redact session-id headers",
 			headers: http.Header{
-				"Jsessionid": []string{"ABCDEF0123456789"},
+				"Jsessionid":  []string{"ABCDEF0123456789"},
 				"X-Sessionid": []string{"ABCDEF0123456789"},
 			},
 			expected: http.Header{
@@ -93,6 +95,7 @@ func TestPrintableSecret(t *testing.T) {
 		{"Basic d2VzdG9wOnMzY3IzdA==", "Basic d****=="},
 		{"alice:s3cr3tpassword", "a****:****d"},
 		{"user:pw", "u****:p****"},
+		{strings.Repeat("a", 65), "****,length=65"},
 		{"short", "s****"},
 		{"abc", "a****"},
 	}
@@ -103,6 +106,80 @@ func TestPrintableSecret(t *testing.T) {
 				t.Errorf("PrintableSecret(%q) = %q, want %q", tc.input, got, tc.expected)
 			}
 		})
+	}
+}
+
+func TestStripSecrets(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "authorization header",
+			input:    "Authorization: Bearer secret-token",
+			expected: "Authorization: Bearer ****n",
+		},
+		{
+			name:     "inline password assignment",
+			input:    "connecting password=supersecret",
+			expected: "connecting password=****t",
+		},
+		{
+			name:     "json secret field",
+			input:    `curl --data '{"password":"secret","scope":"read"}'`,
+			expected: `curl --data '{"password":"s****","scope":"read"}'`,
+		},
+		{
+			name:     "multi field secret line",
+			input:    "token: abc123, refresh: true",
+			expected: "token: a****, refresh: true",
+		},
+		{
+			name:     "avoid substring false positives",
+			input:    "passenger=2 keyword=foo bypass=true user_count=5",
+			expected: "passenger=2 keyword=foo bypass=true user_count=5",
+		},
+		{
+			name:     "url password and query token",
+			input:    "https://user:pass@example.com/path?token=abcdef&user_count=5",
+			expected: "https://user:xxxxx@example.com/path?token=a%2A%2A%2A%2A&user_count=5",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := StripSecrets(tc.input); got != tc.expected {
+				t.Errorf("StripSecrets(%q) = %q, want %q", tc.input, got, tc.expected)
+			}
+		})
+	}
+}
+
+func TestTracefRedactsSecrets(t *testing.T) {
+	originalOutput := GetOutput()
+	originalLevel := currentLogger.GetLevel()
+	t.Cleanup(func() {
+		SetOutput(originalOutput)
+		currentLogger.SetLogLevel(originalLevel)
+	})
+
+	var buf bytes.Buffer
+	SetOutput(&buf)
+	currentLogger.SetLogLevel(Trace)
+
+	Tracef("Authorization: %s", "Bearer secret-token")
+	Tracef("%s", "download https://example.com/file%2Fname")
+
+	got := buf.String()
+	if strings.Contains(got, "secret-token") {
+		t.Fatalf("Tracef leaked secret: %q", got)
+	}
+	if !strings.Contains(got, "Authorization: Bearer ****n") {
+		t.Fatalf("Tracef did not log redacted authorization header: %q", got)
+	}
+	if !strings.Contains(got, "https://example.com/file%2Fname") {
+		t.Fatalf("Tracef corrupted percent-encoded message: %q", got)
 	}
 }
 

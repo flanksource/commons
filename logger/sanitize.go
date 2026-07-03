@@ -1,11 +1,10 @@
 package logger
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/flanksource/commons/collections"
@@ -24,6 +23,9 @@ var SensitiveKeys = []string{"user", "pass", "secret", "key", "token", "username
 
 var NonSensitiveKeys = []string{"token_type", "grant_type"}
 
+var inlineSecretPattern = regexp.MustCompile(`(?i)(["']?)([a-z0-9_.-]*(?:user|pass|secret|key|token|sessionid|sessid|authorization)[a-z0-9_.-]*)(["']?\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;&}]+)`)
+var inlineAuthorizationPattern = regexp.MustCompile(`(?i)\b(authorization)(\s*[:=]\s*)([A-Za-z]+)\s+([^\s,;]+)`)
+
 func IsSensitiveKey(v string) bool {
 	v = strings.Trim(strings.TrimSpace(strings.ToLower(v)), "_")
 	for _, k := range NonSensitiveKeys {
@@ -33,6 +35,26 @@ func IsSensitiveKey(v string) bool {
 	}
 	for _, k := range SensitiveKeys {
 		if v == k || strings.Contains(v, k) {
+			return true
+		}
+	}
+	return false
+}
+
+func IsSensitiveLogKey(v string) bool {
+	v = strings.Trim(strings.TrimSpace(strings.ToLower(v)), " _-.'\"{}[]")
+	for _, k := range NonSensitiveKeys {
+		if v == k {
+			return false
+		}
+	}
+	switch v {
+	case "authorization", "apikey", "api_key", "key", "pass", "passwd", "password", "pwd", "secret", "sessid", "sessionid", "token", "username":
+		return true
+	}
+	for _, part := range strings.FieldsFunc(v, func(r rune) bool { return r == '_' || r == '-' || r == '.' }) {
+		switch part {
+		case "authorization", "key", "pass", "passwd", "password", "pwd", "secret", "sessid", "sessionid", "token":
 			return true
 		}
 	}
@@ -90,9 +112,7 @@ func printableValue(s string) string {
 	case len(s) == 0:
 		return ""
 	case len(s) > 64:
-		sum := md5.Sum([]byte(s))
-		hash := hex.EncodeToString(sum[:])
-		return fmt.Sprintf("md5(%s),length=%d", hash[0:8], len(s))
+		return fmt.Sprintf("****,length=%d", len(s))
 	case len(s) > 32:
 		return fmt.Sprintf("%s****%s", s[0:3], s[len(s)-1:])
 	case len(s) >= 16:
@@ -125,46 +145,112 @@ func StripSecretsFromMap[V comparable](m map[string]V) map[string]any {
 	return clone
 }
 
-// StripSecrets takes a URL, YAML or INI formatted text and removes any potentially secret data
-// as denoted by keys containing "pass" or "secret" or exact matches for "key"
-// the last character of the secret is kept to aid in troubleshooting
+// RedactLogMessage removes common inline secret patterns from log messages.
+func RedactLogMessage(text string) string {
+	return StripSecrets(text)
+}
+
+// StripSecrets takes a URL, YAML, INI, or log-formatted text and removes any potentially secret data.
+// Short redacted values keep a tiny prefix/suffix to aid troubleshooting; long values only keep length.
 func StripSecrets(text string) string {
-	if uri, err := url.Parse(text); err == nil {
+	if text == "" {
+		return ""
+	}
+	if uri, ok := parseAbsoluteURL(text); ok {
+		redactURLQuery(uri)
 		return uri.Redacted()
 	}
 
-	out := ""
-	for _, line := range strings.Split(text, "\n") {
-
-		var k, v, sep string
-		if strings.Contains(line, ":") {
-			parts := strings.Split(line, ":")
-			k = parts[0]
-			if len(parts) > 1 {
-				v = parts[1]
-			}
-			sep = ":"
-		} else if strings.Contains(line, "=") {
-			parts := strings.Split(line, "=")
-			k = parts[0]
-			if len(parts) > 1 {
-				v = parts[1]
-			}
-			sep = "="
-		} else {
-			v = line
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		if redacted, ok := redactSensitiveLine(line); ok {
+			lines[i] = redacted
+			continue
 		}
+		lines[i] = redactInlineSecrets(line)
+	}
+	return strings.Join(lines, "\n")
+}
 
-		if IsSensitiveKey(k) {
-			if len(v) == 0 {
-				out += k + sep + "\n"
-			} else {
-				out += k + sep + "****" + v[len(v)-1:] + "\n"
-			}
-		} else {
-			out += k + sep + v + "\n"
+func parseAbsoluteURL(text string) (*url.URL, bool) {
+	uri, err := url.Parse(text)
+	return uri, err == nil && uri.Scheme != "" && uri.Host != ""
+}
+
+func redactURLQuery(uri *url.URL) {
+	values := uri.Query()
+	changed := false
+	for key, vals := range values {
+		if !IsSensitiveLogKey(key) {
+			continue
+		}
+		for i, v := range vals {
+			vals[i] = PrintableSecret(v)
+		}
+		values[key] = vals
+		changed = true
+	}
+	if changed {
+		uri.RawQuery = values.Encode()
+	}
+}
+
+func redactSensitiveLine(line string) (string, bool) {
+	idx := strings.IndexAny(line, ":=")
+	if idx <= 0 {
+		return "", false
+	}
+	key := strings.Trim(line[:idx], " \t\"'{[")
+	if !IsSensitiveLogKey(key) {
+		return "", false
+	}
+
+	rest := line[idx+1:]
+	trimmed := strings.TrimLeft(rest, " \t")
+	spaces := rest[:len(rest)-len(trimmed)]
+	if trimmed == "" {
+		return line, true
+	}
+	value, suffix := splitSecretValue(trimmed)
+	return line[:idx+1] + spaces + redactSecretLiteral(value) + suffix, true
+}
+
+func splitSecretValue(s string) (value, suffix string) {
+	if len(s) == 0 {
+		return "", ""
+	}
+	if s[0] == '\'' || s[0] == '"' {
+		if end := strings.IndexByte(s[1:], s[0]); end >= 0 {
+			idx := end + 2
+			return s[:idx], s[idx:]
 		}
 	}
-	return out
+	if idx := strings.IndexAny(s, ",;&"); idx >= 0 {
+		return strings.TrimRight(s[:idx], " \t"), s[idx:]
+	}
+	return s, ""
+}
 
+func redactSecretLiteral(s string) string {
+	if len(s) >= 2 && ((s[0] == '"' && s[len(s)-1] == '"') || (s[0] == '\'' && s[len(s)-1] == '\'')) {
+		return string(s[0]) + PrintableSecret(s[1:len(s)-1]) + string(s[len(s)-1])
+	}
+	return PrintableSecret(s)
+}
+
+func redactInlineSecrets(line string) string {
+	line = inlineAuthorizationPattern.ReplaceAllStringFunc(line, func(match string) string {
+		parts := inlineAuthorizationPattern.FindStringSubmatch(match)
+		if len(parts) != 5 {
+			return match
+		}
+		return parts[1] + parts[2] + parts[3] + " " + printableValue(parts[4])
+	})
+	return inlineSecretPattern.ReplaceAllStringFunc(line, func(match string) string {
+		parts := inlineSecretPattern.FindStringSubmatch(match)
+		if len(parts) != 5 || !IsSensitiveLogKey(parts[2]) {
+			return match
+		}
+		return parts[1] + parts[2] + parts[3] + redactSecretLiteral(parts[4])
+	})
 }

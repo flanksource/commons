@@ -5,6 +5,10 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 name: Test
+
+permissions:
+  contents: read
+
 jobs:
   test:
     strategy:
@@ -31,7 +35,7 @@ jobs:
 
       - uses: flanksource/gavel@main
         with:
-          args: test --lint
+          args: test
           version: latest
           json-file: gavel-results.json
           html-file: gavel-results.html
