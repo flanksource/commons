@@ -130,6 +130,16 @@ func StripSecretsFromMap[V comparable](m map[string]V) map[string]any {
 // the last character of the secret is kept to aid in troubleshooting
 func StripSecrets(text string) string {
 	if uri, err := url.Parse(text); err == nil && uri.Scheme != "" && uri.Host != "" && !strings.ContainsAny(text, " \t\r\n") {
+		query := uri.Query()
+		for key, values := range query {
+			if IsSensitiveKey(key) {
+				for i, value := range values {
+					values[i] = PrintableSecret(value)
+				}
+				query[key] = values
+			}
+		}
+		uri.RawQuery = query.Encode()
 		return uri.Redacted()
 	}
 

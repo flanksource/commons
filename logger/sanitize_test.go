@@ -2,6 +2,7 @@ package logger
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -52,7 +53,7 @@ func TestSanitize(t *testing.T) {
 		{
 			name: "Redact session-id headers",
 			headers: http.Header{
-				"Jsessionid": []string{"ABCDEF0123456789"},
+				"Jsessionid":  []string{"ABCDEF0123456789"},
 				"X-Sessionid": []string{"ABCDEF0123456789"},
 			},
 			expected: http.Header{
@@ -81,6 +82,21 @@ func TestSanitize(t *testing.T) {
 				t.Errorf("%v", diff)
 			}
 		})
+	}
+}
+
+func TestStripSecretsURLQuery(t *testing.T) {
+	input := "https://user:password@example.com/path?token=secret-token&grant_type=client_credentials&empty=&q=hello"
+	got := StripSecrets(input)
+
+	if strings.Contains(got, "secret-token") || strings.Contains(got, "user:password") {
+		t.Fatalf("StripSecrets leaked secret in URL: %s", got)
+	}
+	if !strings.Contains(got, "grant_type=client_credentials") || !strings.Contains(got, "q=hello") {
+		t.Fatalf("StripSecrets changed non-sensitive query values: %s", got)
+	}
+	if !strings.Contains(got, "token=") {
+		t.Fatalf("StripSecrets removed sensitive query key instead of redacting value: %s", got)
 	}
 }
 
