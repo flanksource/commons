@@ -393,7 +393,7 @@ func unzipWithResult(src, dest string, opts *UnarchiveOptions) (*Archive, error)
 			if dirMode == 0 || dirMode&0300 != 0300 {
 				dirMode = 0755
 			}
-			if err := root.MkdirAll(path, dirMode); err != nil {
+			if err := root.MkdirAll(filepath.Clean(path), dirMode); err != nil {
 				return archive, fmt.Errorf("failed to create directory %s: %w", path, err)
 			}
 			archive.Directories = append(archive.Directories, path)
@@ -601,7 +601,7 @@ func UntarWithFilterAndResult(tarball, target string, filter FileFilter, opts *U
 			if dirMode == 0 || dirMode&0300 != 0300 {
 				dirMode = 0755 // Default directory permissions
 			}
-			if err = root.MkdirAll(path, dirMode); err != nil {
+			if err = root.MkdirAll(filepath.Clean(path), dirMode); err != nil {
 				return archive, fmt.Errorf("failed to create directory %s: %w", path, err)
 			}
 			archive.Directories = append(archive.Directories, path)
@@ -676,7 +676,7 @@ func UntarWithFilterAndResult(tarball, target string, filter FileFilter, opts *U
 			if dirMode == 0 || dirMode&0300 != 0300 {
 				dirMode = 0755 // Default directory permissions
 			}
-			if err := root.MkdirAll(path, dirMode); err != nil {
+			if err := root.MkdirAll(filepath.Clean(path), dirMode); err != nil {
 				return archive, fmt.Errorf("failed to create directory %s: %w", path, err)
 			}
 			archive.Directories = append(archive.Directories, path)
