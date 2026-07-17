@@ -223,6 +223,15 @@ func (a *digestAuth) computeA2(req *http.Request) string {
 	return fmt.Sprintf("%s:%s", req.Method, a.uri)
 }
 
+// hashStr hashes s with the algorithm negotiated for this digest exchange.
+//
+// MD5 and MD5-sess are retained deliberately. RFC 7616 defines MD5 as the
+// default digest algorithm, the algorithm is selected by the server (not the
+// client), and many servers only offer MD5 — so dropping it would break
+// authentication against those servers. SHA-256 is already used whenever the
+// server advertises it. The md5.New() call below is required for protocol
+// interoperability, not a general-purpose hash of sensitive data; any weak-hash
+// scanner alert on it is a known false positive for HTTP Digest authentication.
 func (a *digestAuth) hashStr(s string) string {
 	var h hash.Hash
 	alg := strings.ToUpper(a.algorithm)
