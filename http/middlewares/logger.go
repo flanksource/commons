@@ -153,7 +153,9 @@ func accessURL(req *http.Request) string {
 	u := *req.URL
 	u.RawQuery = ""
 	u.Fragment = ""
-	return u.String()
+	// Redacted() masks any password embedded in the URL userinfo so credentials
+	// are never written to logs in clear text.
+	return u.Redacted()
 }
 
 func hasDetailedTrace(config TraceConfig) bool {
@@ -246,8 +248,10 @@ func jsonLogger(config TraceConfig, verbose logger.Verbose, rt http.RoundTripper
 
 	if err != nil {
 		// Transport errors surface at INFO so a failed request is visible at -v=0.
-		kv = append(kv, "error", err.Error())
-		jsonLogAt(verbose, req, 0, kv, "%s %s error %s", req.Method, req.URL, elapsed.Truncate(time.Millisecond))
+		// StripSecrets/Redacted keep any credentials embedded in the URL (e.g. a
+		// url.Error wrapping "https://user:pass@host") out of the logs.
+		kv = append(kv, "error", logger.StripSecrets(err.Error()))
+		jsonLogAt(verbose, req, 0, kv, "%s %s error %s", req.Method, req.URL.Redacted(), elapsed.Truncate(time.Millisecond))
 		return nil, err
 	}
 
@@ -272,7 +276,7 @@ func jsonLogger(config TraceConfig, verbose logger.Verbose, rt http.RoundTripper
 				kv = append(kv, "responseBody", sanitizeBody(body))
 			}
 		}
-		jsonLogAt(verbose, req, 0, kv, "%s %s %d %s", req.Method, req.URL, resp.StatusCode, elapsed.Truncate(time.Millisecond))
+		jsonLogAt(verbose, req, 0, kv, "%s %s %d %s", req.Method, req.URL.Redacted(), resp.StatusCode, elapsed.Truncate(time.Millisecond))
 		return resp, nil
 	}
 
@@ -280,7 +284,7 @@ func jsonLogger(config TraceConfig, verbose logger.Verbose, rt http.RoundTripper
 	if config.AccessLogErrorsOnly {
 		return resp, nil
 	}
-	jsonLogAt(verbose, req, level, kv, "%s %s %d %s", req.Method, req.URL, resp.StatusCode, elapsed.Truncate(time.Millisecond))
+	jsonLogAt(verbose, req, level, kv, "%s %s %d %s", req.Method, req.URL.Redacted(), resp.StatusCode, elapsed.Truncate(time.Millisecond))
 	return resp, nil
 }
 
@@ -368,7 +372,7 @@ func logPrettyAccess(config TraceConfig, verbose logger.Verbose, req *http.Reque
 	// error-only mode at -v=0; the body captures the cause (e.g. an HTML 404/500
 	// page) without raising verbosity.
 	if err != nil {
-		logAt(verbose, req, 0, "%s %s %s %s", method, url, console.Redf("error: %s", err.Error()), dur)
+		logAt(verbose, req, 0, "%s %s %s %s", method, url, console.Redf("error: %s", logger.StripSecrets(err.Error())), dur)
 		return
 	}
 	statusCode := 0
