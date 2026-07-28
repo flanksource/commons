@@ -17,16 +17,32 @@
 //   - structs, including those behind a pointer — merged field by field, so
 //     setting one sub-field does not erase its siblings.
 //
-// Policy names the exceptions, including the types whose merge is a domain rule
-// rather than a structural one and which therefore merge themselves.
+// A single field can name an exception the structure cannot express, with a tag:
+//
+//	Pre   []string `merge:"append"`        // the base's elements, then the override's
+//	Allow []string `merge:"append,unique"` // as append, with repeats dropped
+//
+// Tags are read on struct fields reached through structs and through pointers
+// that are non-nil on both sides. A tag that cannot mean what it says — append on
+// something that is not a list, unique over a non-comparable element type, a rule
+// this package does not define — panics rather than being ignored, because a
+// silently ignored tag reads exactly like an honoured one.
+//
+// Policy names the exceptions that belong to a whole type rather than to one
+// field, including the types whose merge is a domain rule rather than a
+// structural one and which therefore merge themselves.
 package merge
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
 
 	"dario.cat/mergo"
 )
+
+// tagName is the struct tag namespace for per-field merge rules.
+const tagName = "merge"
 
 // Policy declares the exceptions to structural merging for one family of types.
 // The zero Policy is valid and means "no exceptions".
@@ -81,14 +97,106 @@ func (p Policy) With(other Policy) Policy {
 // both operands are the same concrete type by construction.
 func Apply[T any](base, override T, policy Policy) T {
 	mergers := mergerSet(policy.Merger)
+	assign := typeSet(append(append([]any{}, policy.Replace...), policy.Shared...))
 	out := clone(base, policy, mergers)
 	src := clone(override, policy, mergers)
+
+	accumulate(reflect.ValueOf(&out).Elem(), reflect.ValueOf(&src).Elem(),
+		union(assign, mergers), fmt.Sprintf("%T", base))
+
 	opts := []func(*mergo.Config){mergo.WithOverride}
-	if t := policy.transformer(mergers); t != nil {
-		opts = append(opts, mergo.WithTransformers(t))
+	if len(assign) > 0 || len(mergers) > 0 {
+		opts = append(opts, mergo.WithTransformers(policyTransformer{assign: assign, mergers: mergers}))
 	}
 	if err := mergo.Merge(&out, src, opts...); err != nil {
 		panic(fmt.Sprintf("merge %T: %v", base, err))
+	}
+	return out
+}
+
+// accumulate rewrites each of the override's `append`-tagged slices to the
+// concatenation of the base's and its own, ahead of the merge. The default rule —
+// a non-empty override slice replaces the base's — then lands the accumulated
+// value, so the tag needs no machinery of its own and cannot interact with the
+// policy types, which own their rule and are not walked.
+func accumulate(base, override reflect.Value, owned map[reflect.Type]bool, path string) {
+	if owned[base.Type()] {
+		return
+	}
+	switch base.Kind() {
+	case reflect.Pointer:
+		if !base.IsNil() && !override.IsNil() {
+			accumulate(base.Elem(), override.Elem(), owned, path)
+		}
+	case reflect.Struct:
+		for i := range base.NumField() {
+			field := base.Type().Field(i)
+			if !field.IsExported() {
+				continue
+			}
+			fieldPath := path + "." + field.Name
+			tag, tagged := field.Tag.Lookup(tagName)
+			if !tagged {
+				accumulate(base.Field(i), override.Field(i), owned, fieldPath)
+				continue
+			}
+			if base.Field(i).Kind() != reflect.Slice {
+				panic(fmt.Sprintf("merge: %s is tagged %s:%q but is a %s, not a list",
+					fieldPath, tagName, tag, base.Field(i).Kind()))
+			}
+			if merged := concat(base.Field(i), override.Field(i), unique(tag, fieldPath), fieldPath); merged.IsValid() {
+				override.Field(i).Set(merged)
+			}
+		}
+	}
+}
+
+// unique reports whether the tag asks for repeats to be dropped, and rejects any
+// rule this package does not define.
+func unique(tag, path string) bool {
+	switch tag {
+	case "append":
+		return false
+	case "append,unique":
+		return true
+	default:
+		panic(fmt.Sprintf("merge: %s declares %s:%q, want %q or %q", path, tagName, tag, "append", "append,unique"))
+	}
+}
+
+// concat returns the base's elements followed by the override's, or the zero
+// Value when neither layer contributed one and the field should be left as it is.
+func concat(base, override reflect.Value, unique bool, path string) reflect.Value {
+	if base.Len() == 0 && override.Len() == 0 {
+		return reflect.Value{}
+	}
+	if unique && !base.Type().Elem().Comparable() {
+		panic(fmt.Sprintf("merge: %s asks for %s:%q but its element type %s is not comparable",
+			path, tagName, "append,unique", base.Type().Elem()))
+	}
+	out := reflect.MakeSlice(base.Type(), 0, base.Len()+override.Len())
+	seen := map[any]bool{}
+	for _, layer := range []reflect.Value{base, override} {
+		for i := range layer.Len() {
+			if unique {
+				key := layer.Index(i).Interface()
+				if seen[key] {
+					continue
+				}
+				seen[key] = true
+			}
+			out = reflect.Append(out, layer.Index(i))
+		}
+	}
+	return out
+}
+
+// union is the set of types that declare their own merge rule, and are therefore
+// neither walked for field tags nor merged structurally.
+func union(sets ...map[reflect.Type]bool) map[reflect.Type]bool {
+	out := map[reflect.Type]bool{}
+	for _, set := range sets {
+		maps.Copy(out, set)
 	}
 	return out
 }
@@ -167,16 +275,8 @@ func cloneValue(v reflect.Value, shared, materialize map[reflect.Type]bool) refl
 	}
 }
 
-// transformer returns the mergo hook that short-circuits every policy type, or
-// nil when the policy declares none.
-func (p Policy) transformer(mergers map[reflect.Type]bool) mergo.Transformers {
-	assign := typeSet(append(append([]any{}, p.Replace...), p.Shared...))
-	if len(assign) == 0 && len(mergers) == 0 {
-		return nil
-	}
-	return policyTransformer{assign: assign, mergers: mergers}
-}
-
+// policyTransformer is the mergo hook that short-circuits every policy type,
+// keyed on the destination's type.
 type policyTransformer struct {
 	assign  map[reflect.Type]bool
 	mergers map[reflect.Type]bool

@@ -240,6 +240,101 @@ func TestPolicy_MergerWithoutTheMethodPanics(t *testing.T) {
 	}
 }
 
+// A configuration layer's hooks add to the layers beneath it rather than
+// replacing them, and its allow-list does the same without repeating itself.
+// Both are statements about what those particular fields mean, so they are made
+// on the fields — the alternative is a named slice type and a hand-written Merge
+// method per list, which is the plumbing this package exists to delete.
+type policyLayer struct {
+	Pre    []string `merge:"append"`
+	Allow  []string `merge:"append,unique"`
+	Files  []string
+	Nested *policyLayer
+}
+
+func TestApply_AppendTagAccumulatesAcrossLayers(t *testing.T) {
+	base := policyLayer{Pre: []string{"lint"}, Allow: []string{"a", "b"}, Files: []string{"base.md"}}
+	override := policyLayer{Pre: []string{"build"}, Allow: []string{"b", "c"}, Files: []string{"over.md"}}
+
+	got := merge.Apply(base, override, merge.Policy{})
+
+	if !reflect.DeepEqual(got.Pre, []string{"lint", "build"}) {
+		t.Errorf("Pre = %v, want the base's steps and then the override's", got.Pre)
+	}
+	if !reflect.DeepEqual(got.Allow, []string{"a", "b", "c"}) {
+		t.Errorf("Allow = %v, want the layers accumulated with repeats dropped", got.Allow)
+	}
+	if !reflect.DeepEqual(got.Files, []string{"over.md"}) {
+		t.Errorf("Files = %v, want an untagged slice still replaced wholesale", got.Files)
+	}
+	if !reflect.DeepEqual(base.Pre, []string{"lint"}) {
+		t.Errorf("base mutated through the merge: %v", base.Pre)
+	}
+}
+
+func TestApply_AppendTagIsReadThroughAPointer(t *testing.T) {
+	base := policyLayer{Nested: &policyLayer{Pre: []string{"lint"}}}
+	override := policyLayer{Nested: &policyLayer{Pre: []string{"build"}}}
+
+	got := merge.Apply(base, override, merge.Policy{})
+
+	if !reflect.DeepEqual(got.Nested.Pre, []string{"lint", "build"}) {
+		t.Errorf("Nested.Pre = %v, want the tag honoured behind a pointer too", got.Nested.Pre)
+	}
+}
+
+// Accumulating with nothing to accumulate is still the identity in both
+// directions: an empty layer neither erases the one beneath it nor is erased by it.
+func TestApply_AppendTagWithOneSideEmpty(t *testing.T) {
+	if got := merge.Apply(policyLayer{Pre: []string{"lint"}}, policyLayer{}, merge.Policy{}); !reflect.DeepEqual(got.Pre, []string{"lint"}) {
+		t.Errorf("Pre = %v, want an empty override to leave the base alone", got.Pre)
+	}
+	if got := merge.Apply(policyLayer{}, policyLayer{Pre: []string{"build"}}, merge.Policy{}); !reflect.DeepEqual(got.Pre, []string{"build"}) {
+		t.Errorf("Pre = %v, want the override to reach a base that had none", got.Pre)
+	}
+}
+
+type nonComparableElements struct {
+	Groups [][]string `merge:"append,unique"`
+}
+
+type appendOnAScalar struct {
+	Name string `merge:"append"`
+}
+
+type unknownRule struct {
+	Pre []string `merge:"accumulate"`
+}
+
+// A tag that cannot mean what it says must fail at the merge rather than
+// degrading to plain append or to no rule at all — a silently ignored tag reads
+// exactly like an honoured one.
+func TestApply_UnsatisfiableTagPanics(t *testing.T) {
+	for name, apply := range map[string]func(){
+		"unique over a non-comparable element type": func() {
+			merge.Apply(
+				nonComparableElements{Groups: [][]string{{"a"}}},
+				nonComparableElements{Groups: [][]string{{"b"}}},
+				merge.Policy{})
+		},
+		"append on something that is not a list": func() {
+			merge.Apply(appendOnAScalar{Name: "base"}, appendOnAScalar{Name: "override"}, merge.Policy{})
+		},
+		"a rule the package does not define": func() {
+			merge.Apply(unknownRule{}, unknownRule{}, merge.Policy{})
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			defer func() {
+				if recover() == nil {
+					t.Error("no panic, want the tag rejected instead of silently ignored")
+				}
+			}()
+			apply()
+		})
+	}
+}
+
 func TestPolicy_With_IsTheUnion(t *testing.T) {
 	got := merge.Policy{Replace: []any{(*float64)(nil)}, Shared: []any{(*catalog)(nil)}}.
 		With(merge.Policy{Replace: []any{(*int)(nil)}, Merger: []any{tagList(nil)}})
