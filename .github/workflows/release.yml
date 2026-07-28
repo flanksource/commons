@@ -9,43 +9,20 @@ permissions:
   contents: read
 
 jobs:
-  semantic-release:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      issues: write
-      pull-requests: write
-    outputs:
-      release-version: ${{ steps.semantic.outputs.release-version }}
-      new-release-published: ${{ steps.semantic.outputs.new-release-published }}
-    steps:
-      - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.13.1
-        with:
-          egress-policy: audit
-
-      # Mint a GitHub App installation token for the Flanksource App so
-      # semantic-release can push the release tag and create the GitHub Release.
-      # The default GITHUB_TOKEN is blocked from these writes by org policy.
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.FLANKSOURCE_APP_ID }}
-          private-key: ${{ secrets.FLANKSOURCE_APP_SECRET }}
-
-      - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
-        with:
-          token: ${{ steps.app-token.outputs.token }}
-      - uses: codfish/semantic-release-action@b621d34fabe0940f031e89b6ebfea28322892a10 # v3.5.0
-        id: semantic
-        env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+  # Releases go through the shared Flanksource workflow rather than a
+  # repo-local semantic-release job. The previous codfish/semantic-release-action
+  # was blocked by GitHub for a ToS violation on 2026-06-25, which failed every
+  # release from then on while resolving actions ("Repository access blocked").
+  create-release:
+    permissions: {}
+    uses: flanksource/action-workflows/.github/workflows/create-release.yml@5d7f5f3616936fd703e58c5ee7e4527dc9f6adcc # main
+    secrets:
+      token: ${{ secrets.FLANKBOT }}
 
   bump-clients:
     runs-on: ubuntu-latest
-    needs: [semantic-release]
-    if: needs.semantic-release.outputs.new-release-published == 'true'
+    needs: [create-release]
+    if: needs.create-release.outputs.published == 'true'
     strategy:
       matrix:
         repos: ["duty"]
@@ -76,7 +53,7 @@ jobs:
         run: |
           # Sleep to let index refresh
           sleep 60
-          go get github.com/flanksource/commons@v${{ needs.semantic-release.outputs.release-version }}
+          go get github.com/flanksource/commons@v${{ needs.create-release.outputs.version }}
           go mod tidy
           if [ -d "hack/generate-schemas" ]; then
             cd hack/generate-schemas && go mod tidy
@@ -87,8 +64,8 @@ jobs:
         uses: peter-evans/create-pull-request@6d6857d36972b65feb161a90e484f2984215f83e # v6.0.5
         with:
           branch: "bump-duty-auto-pr"
-          commit-message: "chore: bump duty to v${{ needs.semantic-release.outputs.release-version }}"
-          title: "chore: bump duty to v${{ needs.semantic-release.outputs.release-version }}"
+          commit-message: "chore: bump duty to v${{ needs.create-release.outputs.version }}"
+          title: "chore: bump duty to v${{ needs.create-release.outputs.version }}"
           token: ${{ secrets.FLANKBOT }}
           labels: dependencies
 
@@ -103,8 +80,8 @@ jobs:
 
   hx-binaries:
     runs-on: ${{ matrix.os }}
-    needs: [semantic-release]
-    if: needs.semantic-release.outputs.new-release-published == 'true'
+    needs: [create-release]
+    if: needs.create-release.outputs.published == 'true'
     strategy:
       matrix:
         include:
@@ -136,8 +113,14 @@ jobs:
         with:
           go-version: v1.25.x
 
+      # GOOS/GOARCH have to be exported: cmd/hx/Makefile derives the binary's
+      # .exe suffix from $(GOOS), so without them the Windows build writes `hx`
+      # rather than the `hx.exe` the rename step below expects.
       - name: Build hx
-        run: make -C cmd/hx build VERSION=${{ needs.semantic-release.outputs.release-version }}
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: make -C cmd/hx build VERSION=${{ needs.create-release.outputs.version }}
 
       - name: Rename binary (unix)
         if: matrix.goos != 'windows'
@@ -155,7 +138,7 @@ jobs:
 
   hx-upload-release:
     runs-on: ubuntu-latest
-    needs: [semantic-release, hx-binaries]
+    needs: [create-release, hx-binaries]
     permissions:
       contents: write
     steps:
@@ -175,4 +158,4 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-        run: gh release upload "v${{ needs.semantic-release.outputs.release-version }}" dist/hx_* --clobber
+        run: gh release upload "${{ needs.create-release.outputs.tag }}" dist/hx_* --clobber
