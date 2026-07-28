@@ -128,17 +128,17 @@ func MatchItem(item string, patterns ...string) (matches, negated bool) {
 		return true, false
 	}
 
+	patterns = normalizeMatchPatterns(patterns)
+	if len(patterns) == 0 {
+		return false, false
+	}
+
 	slices.SortFunc(patterns, sortPatterns)
 
 	//process negations first
 	for _, p := range patterns {
-		pattern, err := url.QueryUnescape(strings.TrimSpace(p))
-		if err != nil {
-			continue
-		}
-
-		if strings.HasPrefix(pattern, "!") {
-			if matchPattern(item, strings.TrimPrefix(pattern, "!")) {
+		if strings.HasPrefix(p, "!") {
+			if matchPattern(item, strings.TrimPrefix(p, "!")) {
 				return false, true
 			}
 		}
@@ -146,12 +146,7 @@ func MatchItem(item string, patterns ...string) (matches, negated bool) {
 	}
 
 	// then normal filters
-	for _, p := range patterns {
-		pattern, err := url.QueryUnescape(strings.TrimSpace(p))
-		if err != nil {
-			continue
-		}
-
+	for _, pattern := range patterns {
 		if matchPattern(item, pattern) {
 			return true, false
 		}
@@ -177,14 +172,14 @@ func MatchItems(item string, patterns ...string) bool {
 		return true
 	}
 
+	patterns = normalizeMatchPatterns(patterns)
+	if len(patterns) == 0 {
+		return false
+	}
+
 	slices.SortFunc(patterns, sortPatterns)
 
-	for _, p := range patterns {
-		pattern, err := url.QueryUnescape(strings.TrimSpace(p))
-		if err != nil {
-			continue
-		}
-
+	for _, pattern := range patterns {
 		if strings.HasPrefix(pattern, "!") {
 			if matchPattern(item, strings.TrimPrefix(pattern, "!")) {
 				return false
@@ -241,6 +236,26 @@ func matchPattern(item, pattern string) bool {
 	return false
 }
 
+func normalizeMatchPatterns(patterns []string) []string {
+	var normalized []string
+	for _, pattern := range patterns {
+		parts := strings.Split(pattern, ",")
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if part == "" && len(parts) > 1 {
+				continue
+			}
+
+			decoded, err := url.QueryUnescape(part)
+			if err != nil {
+				continue
+			}
+			normalized = append(normalized, decoded)
+		}
+	}
+	return normalized
+}
+
 // sortPatterns defines the priority for sorting:
 // exclusions ("!") have higher priority than other patterns.
 func sortPatterns(a, b string) int {
@@ -260,6 +275,7 @@ func sortPatterns(a, b string) int {
 }
 
 func IsExclusionOnlyPatterns(patterns []string) bool {
+	patterns = normalizeMatchPatterns(patterns)
 	if len(patterns) == 0 {
 		return false
 	}

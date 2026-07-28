@@ -41,7 +41,34 @@ var _ = Describe("MatchItems", func() {
 		Entry("case insensitive suffix wildcard", "Apple", []string{"*PLE"}, true),
 		Entry("case insensitive glob", "Apple", []string{"*PPL*"}, true),
 		Entry("case insensitive exclusion", "Apple", []string{"!apple"}, false),
+		Entry("comma-separated include after exclusion matches", "Item2", []string{"!Item,Item2"}, true),
+		Entry("comma-separated exclusion wins", "Item", []string{"!Item,Item2"}, false),
+		Entry("comma-separated wildcard exclusion wins", "Item99", []string{"!Item*,Other"}, false),
+		Entry("comma-separated wildcard exclusion allows include", "Other", []string{"!Item*,Other"}, true),
+		Entry("comma-separated values trim raw token whitespace", "Item2", []string{" !Item , Item2 "}, true),
+		Entry("comma-separated malformed URL token is skipped", "Item2", []string{"!Item,%zz"}, true),
+		Entry("URL encoded comma remains a literal pattern character", "A,B", []string{"A%2CB,C"}, true),
 	)
+})
+
+var _ = Describe("MatchItem", func() {
+	It("expands comma-separated include and exclude patterns", func() {
+		matches, negated := MatchItem("Item2", "!Item,Item2")
+		Expect(matches).To(BeTrue())
+		Expect(negated).To(BeFalse())
+
+		matches, negated = MatchItem("Item", "!Item,Item2")
+		Expect(matches).To(BeFalse())
+		Expect(negated).To(BeTrue())
+	})
+})
+
+var _ = Describe("IsExclusionOnlyPatterns", func() {
+	It("expands comma-separated patterns before checking exclusions", func() {
+		Expect(IsExclusionOnlyPatterns([]string{"!Item,!Item2"})).To(BeTrue())
+		Expect(IsExclusionOnlyPatterns([]string{"!Item,Item2"})).To(BeFalse())
+		Expect(IsExclusionOnlyPatterns([]string{"!Item,"})).To(BeTrue())
+	})
 })
 
 var _ = Describe("Append", func() {
