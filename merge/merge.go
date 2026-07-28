@@ -35,11 +35,22 @@ package merge
 
 import (
 	"fmt"
-	"maps"
 	"reflect"
 
 	"dario.cat/mergo"
 )
+
+// reference identifies one pointer or map by the value it points at, so a walk
+// can recognise a node it has already reached and stop rather than recurse for
+// ever through a cycle.
+type reference struct {
+	typ reflect.Type
+	ptr uintptr
+}
+
+func referenceTo(v reflect.Value) reference {
+	return reference{typ: v.Type(), ptr: v.Pointer()}
+}
 
 // tagName is the struct tag namespace for per-field merge rules.
 const tagName = "merge"
@@ -101,8 +112,8 @@ func Apply[T any](base, override T, policy Policy) T {
 	out := clone(base, policy, mergers)
 	src := clone(override, policy, mergers)
 
-	accumulate(reflect.ValueOf(&out).Elem(), reflect.ValueOf(&src).Elem(),
-		union(assign, mergers), fmt.Sprintf("%T", base))
+	pre := accumulator{assign: assign, mergers: mergers, visited: map[[2]reference]bool{}}
+	pre.walk(reflect.ValueOf(&out).Elem(), reflect.ValueOf(&src).Elem(), fmt.Sprintf("%T", base))
 
 	opts := []func(*mergo.Config){mergo.WithOverride}
 	if len(assign) > 0 || len(mergers) > 0 {
@@ -114,20 +125,36 @@ func Apply[T any](base, override T, policy Policy) T {
 	return out
 }
 
-// accumulate rewrites each of the override's `append`-tagged slices to the
+// accumulator carries the pre-pass over both layers: the types that own their
+// merge rule, and the pairs of references already walked, so a cyclic value
+// terminates instead of recursing until the stack is gone.
+type accumulator struct {
+	assign  map[reflect.Type]bool
+	mergers map[reflect.Type]bool
+	visited map[[2]reference]bool
+}
+
+// walk rewrites each of the override's `append`-tagged slices to the
 // concatenation of the base's and its own, ahead of the merge. The default rule —
 // a non-empty override slice replaces the base's — then lands the accumulated
 // value, so the tag needs no machinery of its own and cannot interact with the
 // policy types, which own their rule and are not walked.
-func accumulate(base, override reflect.Value, owned map[reflect.Type]bool, path string) {
-	if owned[base.Type()] {
+//
+// It also settles the policy types held in a map, which the merge itself cannot:
+// mergo reaches a map value through an unaddressable copy, so the transformer
+// that implements Replace, Shared and Merger is handed a destination it cannot
+// set, and the rule would silently do nothing.
+func (a accumulator) walk(base, override reflect.Value, path string) {
+	if a.owns(base.Type()) {
 		return
 	}
 	switch base.Kind() {
 	case reflect.Pointer:
-		if !base.IsNil() && !override.IsNil() {
-			accumulate(base.Elem(), override.Elem(), owned, path)
+		if !base.IsNil() && !override.IsNil() && a.enter(base, override) {
+			a.walk(base.Elem(), override.Elem(), path)
 		}
+	case reflect.Map:
+		a.walkMap(base, override, path)
 	case reflect.Struct:
 		for i := range base.NumField() {
 			field := base.Type().Field(i)
@@ -137,7 +164,7 @@ func accumulate(base, override reflect.Value, owned map[reflect.Type]bool, path 
 			fieldPath := path + "." + field.Name
 			tag, tagged := field.Tag.Lookup(tagName)
 			if !tagged {
-				accumulate(base.Field(i), override.Field(i), owned, fieldPath)
+				a.walk(base.Field(i), override.Field(i), fieldPath)
 				continue
 			}
 			if base.Field(i).Kind() != reflect.Slice {
@@ -149,6 +176,74 @@ func accumulate(base, override reflect.Value, owned map[reflect.Type]bool, path 
 			}
 		}
 	}
+}
+
+// walkMap resolves each entry the override speaks about and writes the result to
+// both layers, because which of the two the merge finally reads depends on the
+// value's kind — a pointer entry keeps the destination's, a slice entry takes the
+// source's — and agreeing on the answer makes that choice stop mattering.
+func (a accumulator) walkMap(base, override reflect.Value, path string) {
+	if base.IsNil() || override.IsNil() || !a.enter(base, override) {
+		return
+	}
+	elem := base.Type().Elem()
+	// A map value is not addressable, so walking into one needs a copy that is.
+	settable := func(v reflect.Value) reflect.Value {
+		out := reflect.New(elem).Elem()
+		out.Set(v)
+		return out
+	}
+	for _, key := range override.MapKeys() {
+		entry := override.MapIndex(key)
+		if !entry.IsValid() {
+			continue
+		}
+		into := base.MapIndex(key)
+
+		var resolved reflect.Value
+		switch {
+		case a.mergers[elem]:
+			// The rule always runs, so a key the base lacks reaches Merge as the
+			// empty value rather than bypassing it.
+			if !into.IsValid() {
+				into = cloneValue(reflect.New(elem).Elem(), nil, a.mergers)
+			}
+			resolved = into.MethodByName("Merge").Call([]reflect.Value{entry})[0]
+		case a.assign[elem]:
+			if resolved = entry; !isSet(entry) {
+				if !into.IsValid() {
+					continue
+				}
+				resolved = into
+			}
+		default:
+			if !into.IsValid() {
+				continue
+			}
+			baseEntry, overrideEntry := settable(into), settable(entry)
+			a.walk(baseEntry, overrideEntry, fmt.Sprintf("%s[%v]", path, key))
+			base.SetMapIndex(key, baseEntry)
+			override.SetMapIndex(key, overrideEntry)
+			continue
+		}
+		base.SetMapIndex(key, resolved)
+		override.SetMapIndex(key, resolved)
+	}
+}
+
+// owns reports whether a type declares its own merge rule, and is therefore
+// neither walked for field tags nor merged structurally.
+func (a accumulator) owns(typ reflect.Type) bool { return a.assign[typ] || a.mergers[typ] }
+
+// enter records a pair of references and reports whether this is the first time
+// the walk has reached it.
+func (a accumulator) enter(base, override reflect.Value) bool {
+	key := [2]reference{referenceTo(base), referenceTo(override)}
+	if a.visited[key] {
+		return false
+	}
+	a.visited[key] = true
+	return true
 }
 
 // unique reports whether the tag asks for repeats to be dropped, and rejects any
@@ -191,16 +286,6 @@ func concat(base, override reflect.Value, unique bool, path string) reflect.Valu
 	return out
 }
 
-// union is the set of types that declare their own merge rule, and are therefore
-// neither walked for field tags nor merged structurally.
-func union(sets ...map[reflect.Type]bool) map[reflect.Type]bool {
-	out := map[reflect.Type]bool{}
-	for _, set := range sets {
-		maps.Copy(out, set)
-	}
-	return out
-}
-
 // Clone returns a deep copy of v. Interfaces, functions and channels are copied
 // by reference — they carry behaviour rather than configuration — as are the
 // types named in policy.Shared. Unexported fields are copied as they stand.
@@ -220,7 +305,21 @@ func clone[T any](v T, policy Policy, materialize map[reflect.Type]bool) T {
 }
 
 func cloneValue(v reflect.Value, shared, materialize map[reflect.Type]bool) reflect.Value {
-	if !v.IsValid() || shared[v.Type()] {
+	return cloner{shared: shared, materialize: materialize, copies: map[reference]reflect.Value{}}.value(v)
+}
+
+// cloner is one deep copy in progress. copies remembers the copy made for each
+// pointer and map already reached, so a value that refers back to itself is
+// copied once and pointed at again rather than followed for ever — and so two
+// fields that referred to one value still do.
+type cloner struct {
+	shared      map[reflect.Type]bool
+	materialize map[reflect.Type]bool
+	copies      map[reference]reflect.Value
+}
+
+func (c cloner) value(v reflect.Value) reflect.Value {
+	if !v.IsValid() || c.shared[v.Type()] {
 		return v
 	}
 	switch v.Kind() {
@@ -228,37 +327,47 @@ func cloneValue(v reflect.Value, shared, materialize map[reflect.Type]bool) refl
 		if v.IsNil() {
 			return v
 		}
+		if copied, ok := c.copies[referenceTo(v)]; ok {
+			return copied
+		}
 		out := reflect.New(v.Type().Elem())
-		out.Elem().Set(cloneValue(v.Elem(), shared, materialize))
+		// Recorded before the target is copied: that is what a cycle reaching
+		// this pointer again finds instead of recursing.
+		c.copies[referenceTo(v)] = out
+		out.Elem().Set(c.value(v.Elem()))
 		return out
 	case reflect.Slice:
 		if v.IsNil() {
-			if !materialize[v.Type()] {
+			if !c.materialize[v.Type()] {
 				return v
 			}
 			return reflect.MakeSlice(v.Type(), 0, 0)
 		}
 		out := reflect.MakeSlice(v.Type(), v.Len(), v.Len())
 		for i := range v.Len() {
-			out.Index(i).Set(cloneValue(v.Index(i), shared, materialize))
+			out.Index(i).Set(c.value(v.Index(i)))
 		}
 		return out
 	case reflect.Map:
 		if v.IsNil() {
-			if !materialize[v.Type()] {
+			if !c.materialize[v.Type()] {
 				return v
 			}
 			return reflect.MakeMapWithSize(v.Type(), 0)
 		}
+		if copied, ok := c.copies[referenceTo(v)]; ok {
+			return copied
+		}
 		out := reflect.MakeMapWithSize(v.Type(), v.Len())
+		c.copies[referenceTo(v)] = out
 		for iter := v.MapRange(); iter.Next(); {
-			out.SetMapIndex(cloneValue(iter.Key(), shared, materialize), cloneValue(iter.Value(), shared, materialize))
+			out.SetMapIndex(c.value(iter.Key()), c.value(iter.Value()))
 		}
 		return out
 	case reflect.Array:
 		out := reflect.New(v.Type()).Elem()
 		for i := range v.Len() {
-			out.Index(i).Set(cloneValue(v.Index(i), shared, materialize))
+			out.Index(i).Set(c.value(v.Index(i)))
 		}
 		return out
 	case reflect.Struct:
@@ -266,7 +375,7 @@ func cloneValue(v reflect.Value, shared, materialize map[reflect.Type]bool) refl
 		out.Set(v)
 		for i := range v.NumField() {
 			if v.Type().Field(i).IsExported() {
-				out.Field(i).Set(cloneValue(v.Field(i), shared, materialize))
+				out.Field(i).Set(c.value(v.Field(i)))
 			}
 		}
 		return out

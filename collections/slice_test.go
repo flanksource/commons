@@ -48,6 +48,8 @@ var _ = Describe("MatchItems", func() {
 		Entry("comma-separated values trim raw token whitespace", "Item2", []string{" !Item , Item2 "}, true),
 		Entry("comma-separated malformed URL token is skipped", "Item2", []string{"!Item,%zz"}, true),
 		Entry("URL encoded comma remains a literal pattern character", "A,B", []string{"A%2CB,C"}, true),
+		Entry("URL encoded comma in an exclusion is one non-matching pattern", "A", []string{"!A%2CB"}, true),
+		Entry("URL encoded comma in an exclusion still excludes what it names", "A,B", []string{"!A%2CB"}, false),
 	)
 })
 

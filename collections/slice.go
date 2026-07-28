@@ -154,7 +154,7 @@ func MatchItem(item string, patterns ...string) (matches, negated bool) {
 
 	//nolint:gosimple
 	//lint:ignore S1008 ...
-	if IsExclusionOnlyPatterns(patterns) {
+	if isExclusionOnly(patterns) {
 		// If all the filters were exlusions, and none of the exclusions excluded the item, then it's a match
 		return true, false
 	}
@@ -195,7 +195,7 @@ func MatchItems(item string, patterns ...string) bool {
 
 	//nolint:gosimple
 	//lint:ignore S1008 ...
-	if IsExclusionOnlyPatterns(patterns) {
+	if isExclusionOnly(patterns) {
 		// If all the filters were exlusions, and none of the exclusions excluded the item, then it's a match
 		return true
 	}
@@ -275,7 +275,14 @@ func sortPatterns(a, b string) int {
 }
 
 func IsExclusionOnlyPatterns(patterns []string) bool {
-	patterns = normalizeMatchPatterns(patterns)
+	return isExclusionOnly(normalizeMatchPatterns(patterns))
+}
+
+// isExclusionOnly reports whether every pattern excludes, over patterns that
+// normalizeMatchPatterns has already split and decoded. Normalizing again would
+// split a decoded %2C as though it were a separator, turning one exclusion into
+// an exclusion plus an inclusion.
+func isExclusionOnly(patterns []string) bool {
 	if len(patterns) == 0 {
 		return false
 	}

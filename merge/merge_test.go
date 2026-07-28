@@ -344,6 +344,134 @@ func TestPolicy_With_IsTheUnion(t *testing.T) {
 	}
 }
 
+// A map is merged key-wise, so its values are merged too — and a policy is a
+// statement about a type, not about where the type is reached from. The merge
+// engine hands a transformer an unaddressable copy of a map value, so a rule
+// applied only there would silently do nothing to an entry both layers hold.
+type registry struct {
+	Rates    map[string]*float64
+	Tags     map[string]tagList
+	Catalogs map[string]*catalog
+}
+
+func TestApply_ReplaceAppliesToAMapEntry(t *testing.T) {
+	policy := merge.Policy{Replace: []any{(*float64)(nil)}}
+	base := registry{Rates: map[string]*float64{"a": floatPtr(0.7), "b": floatPtr(0.1)}}
+
+	got := merge.Apply(base, registry{Rates: map[string]*float64{"a": floatPtr(0)}}, policy)
+
+	if got.Rates["a"] == nil || *got.Rates["a"] != 0 {
+		t.Errorf("Rates[a] = %v, want an explicit 0 to win inside a map too", got.Rates["a"])
+	}
+	if got.Rates["b"] == nil || *got.Rates["b"] != 0.1 {
+		t.Errorf("Rates[b] = %v, want a key the override is silent about kept", got.Rates["b"])
+	}
+}
+
+func TestApply_MergerAppliesToAMapEntry(t *testing.T) {
+	policy := merge.Policy{Merger: []any{tagList(nil)}}
+	base := registry{Tags: map[string]tagList{"a": {"x", "y"}}}
+
+	got := merge.Apply(base, registry{Tags: map[string]tagList{"a": {"y", "z"}, "b": {"q", "q"}}}, policy)
+
+	if !reflect.DeepEqual(got.Tags["a"], tagList{"x", "y", "z"}) {
+		t.Errorf("Tags[a] = %v, want the entry accumulated and deduped, not replaced", got.Tags["a"])
+	}
+	// The rule always runs: a key the base lacks reaches Merge as the empty value
+	// rather than being assigned wholesale, repeats and all.
+	if !reflect.DeepEqual(got.Tags["b"], tagList{"q"}) {
+		t.Errorf("Tags[b] = %v, want the type's dedupe applied to a new key", got.Tags["b"])
+	}
+	if !reflect.DeepEqual(base.Tags["a"], tagList{"x", "y"}) {
+		t.Errorf("base mutated through the merge: %v", base.Tags["a"])
+	}
+}
+
+func TestApply_SharedMapEntryIsReferencedNotCopied(t *testing.T) {
+	policy := merge.Policy{Shared: []any{(*catalog)(nil)}}
+	shared := &catalog{Entries: []string{"claude"}}
+	replacement := &catalog{Entries: []string{"gemini"}}
+
+	got := merge.Apply(
+		registry{Catalogs: map[string]*catalog{"a": shared, "b": shared}},
+		registry{Catalogs: map[string]*catalog{"b": replacement}},
+		policy)
+
+	if got.Catalogs["a"] != shared {
+		t.Error("Catalogs[a] was copied, want the shared instance referenced")
+	}
+	if got.Catalogs["b"] != replacement {
+		t.Error("Catalogs[b] = base's, want the override's instance")
+	}
+}
+
+// A value that refers back to itself must be copied once and pointed at again.
+// Following it instead ends the process in a stack overflow, which no caller can
+// recover from — and a config graph is not guaranteed to be a tree.
+func TestClone_CyclicValueTerminates(t *testing.T) {
+	original := &node{Name: "a"}
+	original.Next = original
+
+	got := merge.Clone(original, merge.Policy{})
+
+	if got == original {
+		t.Fatal("clone aliases the original")
+	}
+	if got.Next != got {
+		t.Errorf("Next = %p, want the self-reference preserved as one (%p)", got.Next, got)
+	}
+}
+
+func TestClone_CyclicMapTerminates(t *testing.T) {
+	original := selfMap{}
+	original["self"] = original
+
+	if got := merge.Clone(original, merge.Policy{}); got["self"] == nil {
+		t.Error("self-referencing key lost")
+	}
+}
+
+func TestApply_CyclicValueTerminates(t *testing.T) {
+	cycle := func(name string) graph {
+		n := &node{Name: name}
+		n.Next = n
+		return graph{Root: n}
+	}
+
+	got := merge.Apply(cycle("base"), cycle("override"), merge.Policy{})
+
+	if got.Root.Name != "override" {
+		t.Errorf("Root.Name = %q, want the override's", got.Root.Name)
+	}
+	if got.Root.Next != got.Root {
+		t.Error("cycle not preserved through the merge")
+	}
+}
+
+// Two fields that referred to one value still do: the clone owns its memory, but
+// it is the same shape as what it copied.
+func TestClone_PreservesAliasing(t *testing.T) {
+	shared := &limits{Cost: 5}
+
+	got := merge.Clone(struct{ A, B *limits }{A: shared, B: shared}, merge.Policy{})
+
+	if got.A == shared {
+		t.Fatal("clone aliases the original")
+	}
+	if got.A != got.B {
+		t.Error("two references to one value became two values")
+	}
+}
+
+type node struct {
+	Name string
+	Next *node
+}
+
+type graph struct{ Root *node }
+
+type selfMap map[string]selfMap
+
 // Naming a policy type by an untyped nil carries no type information, so it can
 // only silently do nothing — fail loud instead.
 func TestPolicy_UntypedNilPanics(t *testing.T) {

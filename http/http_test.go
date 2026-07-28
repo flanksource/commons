@@ -310,26 +310,6 @@ func TestQueryParamsPreserveRawKeys(t *testing.T) {
 	}
 }
 
-// startHeadersServer mimics httpbin.org's /headers endpoint, echoing the
-// request headers (and the resolved Host) back as JSON. This keeps the
-// header-handling tests off the unreliable external httpbin.org service.
-func startHeadersServer(t *testing.T) *httptest.Server {
-	t.Helper()
-
-	server := httptest.NewServer(netHTTP.HandlerFunc(func(w netHTTP.ResponseWriter, r *netHTTP.Request) {
-		headers := map[string]string{"Host": r.Host}
-		for key, values := range r.Header {
-			headers[key] = strings.Join(values, ",")
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"headers": headers})
-	}))
-	t.Cleanup(server.Close)
-
-	return server
-}
-
 // nolint:unused
 func loggerMiddlware(next netHTTP.RoundTripper) netHTTP.RoundTripper {
 	x := func(req *netHTTP.Request) (*netHTTP.Response, error) {
