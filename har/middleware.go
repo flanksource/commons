@@ -64,11 +64,11 @@ func CaptureRedirect(req *http.Request, resp *http.Response, cfg HARConfig) *Ent
 func buildRequest(req *http.Request, cfg HARConfig) Request {
 	har := Request{
 		Method:      req.Method,
-		URL:         redactURL(req.URL, cfg.RedactedBodyKeys),
+		URL:         harURL(req.URL, cfg),
 		HTTPVersion: httpVersion(req.Proto),
 		Cookies:     []Cookie{},
-		Headers:     toHARHeaders(logger.SanitizeHeaders(req.Header, cfg.RedactedHeaders...)),
-		QueryString: toQueryString(req.URL.Query(), cfg.RedactedBodyKeys),
+		Headers:     harHeaders(req.Header, cfg),
+		QueryString: harQueryString(req.URL.Query(), cfg),
 		HeadersSize: -1,
 		BodySize:    -1,
 	}
@@ -80,7 +80,7 @@ func buildRequest(req *http.Request, cfg HARConfig) Request {
 		har.BodySize = int64(len(body.raw))
 		har.PostData = &PostData{
 			MimeType: ct,
-			Text:     redactBody(body.text, ct, cfg.RedactedBodyKeys),
+			Text:     harBody(body.text, ct, cfg),
 		}
 	}
 
@@ -93,7 +93,7 @@ func buildResponse(resp *http.Response, cfg HARConfig) Response {
 		StatusText:  resp.Status,
 		HTTPVersion: httpVersion(resp.Proto),
 		Cookies:     []Cookie{},
-		Headers:     toHARHeaders(logger.SanitizeHeaders(resp.Header, cfg.RedactedHeaders...)),
+		Headers:     harHeaders(resp.Header, cfg),
 		RedirectURL: "",
 		HeadersSize: -1,
 		BodySize:    -1,
@@ -107,7 +107,7 @@ func buildResponse(resp *http.Response, cfg HARConfig) Response {
 		har.Content = Content{
 			Size:      body.totalSize,
 			MimeType:  ct,
-			Text:      redactBody(body.text, ct, cfg.RedactedBodyKeys),
+			Text:      harBody(body.text, ct, cfg),
 			Truncated: body.truncated,
 		}
 	}
@@ -152,6 +152,48 @@ func shouldCapture(contentType string, allowed []string) bool {
 		}
 	}
 	return false
+}
+
+// harHeaders, harURL, harQueryString and harBody are the single gate through
+// which every captured value passes. cfg.CaptureSensitive (-Phttp.har.sensitive)
+// bypasses redaction so the archive can be replayed against the live API; by
+// default credentials are masked with logger.PrintableSecret.
+func harHeaders(headers http.Header, cfg HARConfig) []Header {
+	if cfg.CaptureSensitive {
+		return toHARHeaders(headers)
+	}
+	return toHARHeaders(logger.SanitizeHeaders(headers, cfg.RedactedHeaders...))
+}
+
+func harURL(u *url.URL, cfg HARConfig) string {
+	if u == nil {
+		return ""
+	}
+	if cfg.CaptureSensitive {
+		return u.String()
+	}
+	return redactURL(u, cfg.RedactedBodyKeys)
+}
+
+func harQueryString(query url.Values, cfg HARConfig) []QueryString {
+	qs := make([]QueryString, 0, len(query))
+	for k, vs := range query {
+		redact := !cfg.CaptureSensitive && isRedactedKey(k, cfg.RedactedBodyKeys)
+		for _, v := range vs {
+			if redact {
+				v = logger.PrintableSecret(v)
+			}
+			qs = append(qs, QueryString{Name: k, Value: v})
+		}
+	}
+	return qs
+}
+
+func harBody(text, contentType string, cfg HARConfig) string {
+	if cfg.CaptureSensitive {
+		return text
+	}
+	return redactBody(text, contentType, cfg.RedactedBodyKeys)
 }
 
 func redactBody(text, contentType string, extraKeys []string) string {
@@ -280,20 +322,6 @@ func toHARHeaders(h http.Header) []Header {
 		}
 	}
 	return headers
-}
-
-func toQueryString(q url.Values, extraKeys []string) []QueryString {
-	qs := make([]QueryString, 0, len(q))
-	for k, vs := range q {
-		redact := isRedactedKey(k, extraKeys)
-		for _, v := range vs {
-			if redact {
-				v = logger.PrintableSecret(v)
-			}
-			qs = append(qs, QueryString{Name: k, Value: v})
-		}
-	}
-	return qs
 }
 
 func httpVersion(proto string) string {
