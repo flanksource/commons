@@ -88,6 +88,55 @@ func TestHAR_AuthorizationHeaderRedacted(t *testing.T) {
 	}
 }
 
+// TestHAR_CaptureSensitiveKeepsCredentials pins the -Phttp.har.sensitive escape
+// hatch at the config layer: with it set, the archive is replayable because
+// every value is verbatim, including a query parameter the default heuristics
+// would otherwise mask.
+func TestHAR_CaptureSensitiveKeepsCredentials(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(204)
+	}))
+	defer srv.Close()
+
+	const (
+		secret   = "Bearer supersecret"
+		apiKey   = "sk-live-1234567890"
+		jsonBody = `{"api_key":"sk-live-1234567890"}`
+	)
+	cfg := har.DefaultConfig()
+	cfg.CaptureSensitive = true
+
+	entry := captureOne(t, cfg, srv, http.MethodPost, "/?token="+apiKey,
+		strings.NewReader(jsonBody), map[string]string{
+			"Authorization": secret,
+			"Content-Type":  "application/json",
+		})
+
+	if got := headerValue(entry.Request.Headers, "Authorization"); got != secret {
+		t.Errorf("Authorization = %q, want the verbatim value %q", got, secret)
+	}
+	if !strings.Contains(entry.Request.URL, apiKey) {
+		t.Errorf("URL %q dropped the query credential", entry.Request.URL)
+	}
+	if entry.Request.PostData == nil || entry.Request.PostData.Text != jsonBody {
+		t.Errorf("request body was redacted: %+v", entry.Request.PostData)
+	}
+	for _, q := range entry.Request.QueryString {
+		if q.Name == "token" && q.Value != apiKey {
+			t.Errorf("query string token = %q, want %q", q.Value, apiKey)
+		}
+	}
+}
+
+func headerValue(headers []har.Header, name string) string {
+	for _, h := range headers {
+		if strings.EqualFold(h.Name, name) {
+			return h.Value
+		}
+	}
+	return ""
+}
+
 func TestHAR_CookieHeaderRedacted(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Set-Cookie", "session=abc123; Path=/")

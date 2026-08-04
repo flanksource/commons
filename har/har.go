@@ -12,6 +12,13 @@ const defaultMaxBodySize = 64 * 1024 // 64 KB
 // -P http.har.maxBodySize=0 to capture full bodies with no cap.
 const MaxBodySizeProperty = "http.har.maxBodySize"
 
+// SensitiveProperty is the -P/properties key that disables redaction. By
+// default credentials in headers, bodies and query strings are masked, so a
+// HAR file is safe to share but cannot be replayed. Set -P http.har.sensitive=true
+// to capture them verbatim — the resulting file holds live secrets and is
+// written with 0600.
+const SensitiveProperty = "http.har.sensitive"
+
 // HARConfig controls what the HAR middleware captures and how it redacts.
 type HARConfig struct {
 	// MaxBodySize is the maximum number of bytes captured per body.
@@ -33,6 +40,11 @@ type HARConfig struct {
 	// identifiers (e.g. session ids, national-id fields) that the default
 	// heuristics don't recognise.
 	RedactedBodyKeys []string
+
+	// CaptureSensitive records credentials verbatim instead of masking them,
+	// so the archive can be replayed against the live API. Honours
+	// SensitiveProperty; off by default.
+	CaptureSensitive bool
 }
 
 // DefaultConfig returns a HARConfig with sensible defaults. The per-body
@@ -43,6 +55,7 @@ func DefaultConfig() HARConfig {
 	return HARConfig{
 		MaxBodySize:         int64(properties.Int(defaultMaxBodySize, MaxBodySizeProperty)),
 		CaptureContentTypes: []string{"application/json", "application/x-www-form-urlencoded"},
+		CaptureSensitive:    properties.On(false, SensitiveProperty),
 	}
 }
 

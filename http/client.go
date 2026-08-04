@@ -43,7 +43,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -783,12 +782,14 @@ func (c *Client) getLogger() logger.Logger {
 // split — at Metadata, only request/response headers + timing are
 // captured (no bodies, no body re-read cost). At Full, the standard
 // collector middleware captures bodies too.
-type HARLevel int
+// The levels live in commons/har so the middleware, the property registry and
+// this client all speak one enum; these names are kept for callers.
+type HARLevel = har.Level
 
 const (
-	HARDisabled HARLevel = iota
-	HARMetadata
-	HARFull
+	HARDisabled = har.Disabled
+	HARMetadata = har.Metadata
+	HARFull     = har.Full
 )
 
 // CommonsHTTPContext is the narrow interface a context object implements
@@ -834,112 +835,18 @@ func (c *Client) WithContext(ctx CommonsHTTPContext, feature string) *Client {
 		case HARFull:
 			c = c.HARCollector(collector)
 		case HARMetadata:
-			c.Use(metadataHARMiddleware(collector))
+			c.Use(har.NewMetadataMiddleware(collector.Config, collector.Add))
 		}
 	}
 	return c
 }
 
-// metadataHARMiddleware captures method, URL, sanitized headers, query
-// string, status, and timings — no request or response bodies. Ported
-// from duty/connection/common.go's metadataHARMiddleware. Body sizes
-// use -1 per HAR spec ("size unknown"). Useful when the caller wants a
-// HAR file for traffic analysis without paying the body-buffering cost.
-func metadataHARMiddleware(collector *har.Collector) middlewares.Middleware {
-	return func(next http.RoundTripper) http.RoundTripper {
-		return middlewares.RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
-			started := time.Now()
-			entry := &har.Entry{
-				StartedDateTime: started.UTC().Format(time.RFC3339),
-				Request: har.Request{
-					Method:      req.Method,
-					URL:         req.URL.String(),
-					HTTPVersion: harHTTPVersion(req.Proto),
-					Cookies:     []har.Cookie{},
-					Headers:     toHARHeaders(logger.SanitizeHeaders(req.Header)),
-					QueryString: toHARQueryString(req.URL.Query()),
-					HeadersSize: -1,
-					BodySize:    -1,
-				},
-			}
-
-			waitStart := time.Now()
-			resp, err := next.RoundTrip(req)
-			waitMs := float64(time.Since(waitStart).Microseconds()) / 1000.0
-
-			entry.Timings = har.Timings{Wait: waitMs}
-			entry.Time = waitMs
-			if resp != nil {
-				entry.Response = har.Response{
-					Status:      resp.StatusCode,
-					StatusText:  resp.Status,
-					HTTPVersion: harHTTPVersion(resp.Proto),
-					Cookies:     []har.Cookie{},
-					Headers:     toHARHeaders(logger.SanitizeHeaders(resp.Header)),
-					Content:     har.Content{Size: -1},
-					HeadersSize: -1,
-					BodySize:    -1,
-				}
-			} else {
-				entry.Response = har.Response{
-					Cookies:     []har.Cookie{},
-					Headers:     []har.Header{},
-					Content:     har.Content{Size: -1},
-					HeadersSize: -1,
-					BodySize:    -1,
-				}
-			}
-
-			collector.Add(entry)
-			return resp, err
-		})
-	}
-}
-
-func toHARHeaders(h http.Header) []har.Header {
-	headers := make([]har.Header, 0, len(h))
-	for name, vals := range h {
-		for _, v := range vals {
-			headers = append(headers, har.Header{Name: name, Value: v})
-		}
-	}
-	return headers
-}
-
-func toHARQueryString(q url.Values) []har.QueryString {
-	qs := make([]har.QueryString, 0, len(q))
-	for k, vs := range q {
-		for _, v := range vs {
-			qs = append(qs, har.QueryString{Name: k, Value: v})
-		}
-	}
-	return qs
-}
-
-func harHTTPVersion(proto string) string {
-	if strings.TrimSpace(proto) == "" {
-		return "HTTP/1.1"
-	}
-	return proto
-}
-
 // WriteHARFile serializes collector.Entries() into a HAR 1.2 file at
 // path. Designed for use from a context.AfterFunc hook owned by the
-// caller — commons/http does not register any lifecycle itself.
+// caller — commons/http does not register any lifecycle itself, though
+// har.Registry does it for property-driven capture.
 func WriteHARFile(collector *har.Collector, path string) error {
-	file := har.File{
-		Log: har.Log{
-			Version: "1.2",
-			Creator: har.Creator{Name: "flanksource-commons", Version: "0"},
-			Pages:   []har.Page{},
-			Entries: collector.Entries(),
-		},
-	}
-	data, err := json.MarshalIndent(file, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal HAR: %w", err)
-	}
-	return os.WriteFile(path, append(data, '\n'), 0o644)
+	return har.WriteFile(collector, path)
 }
 
 // HAR enables HAR capture with default config.
