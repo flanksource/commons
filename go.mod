@@ -1,6 +1,6 @@
 module github.com/flanksource/commons
 
-go 1.25.1
+go 1.26.0
 
 require (
 	dario.cat/mergo v1.0.2
@@ -81,8 +81,8 @@ require (
 	github.com/deckarep/golang-set/v2 v2.8.0 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/dlclark/regexp2 v1.11.5 // indirect
-	github.com/flanksource/gomplate/v3 v3.24.81 // indirect
-	github.com/flanksource/is-healthy v1.0.87 // indirect
+	github.com/flanksource/gomplate/v3 v3.24.89 // indirect
+	github.com/flanksource/is-healthy v1.0.90 // indirect
 	github.com/flanksource/kubectl-neat v1.0.4 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
@@ -92,7 +92,7 @@ require (
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
-	github.com/google/cel-go v0.27.0 // indirect
+	github.com/google/cel-go v0.31.0 // indirect
 	github.com/gosimple/slug v1.15.0 // indirect
 	github.com/gosimple/unidecode v1.0.1 // indirect
 	github.com/hairyhenderson/toml v0.4.2-0.20210923231440-40456b8e66cf // indirect
@@ -147,12 +147,12 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/sourcemap.v1 v1.0.5 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	k8s.io/api v0.35.2 // indirect
-	k8s.io/apiextensions-apiserver v0.35.2 // indirect
-	k8s.io/apimachinery v0.35.2 // indirect
-	k8s.io/client-go v0.35.2 // indirect
-	k8s.io/klog/v2 v2.130.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20260304202019-5b3e3fdb0acf // indirect
+	k8s.io/api v0.36.1 // indirect
+	k8s.io/apiextensions-apiserver v0.36.1 // indirect
+	k8s.io/apimachinery v0.36.2 // indirect
+	k8s.io/client-go v0.36.1 // indirect
+	k8s.io/klog/v2 v2.140.0 // indirect
+	k8s.io/kube-openapi v0.0.0-20260317180543-43fb72c5454a // indirect
 	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2 // indirect
 	layeh.com/gopher-json v0.0.0-20201124131017-552bb3c4c3bf // indirect
 	sigs.k8s.io/gateway-api v1.5.0 // indirect
@@ -189,7 +189,7 @@ require (
 	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
 	golang.org/x/tools v0.45.0 // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
+	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 )
 
 // replace github.com/flanksource/clicky => ../clicky
