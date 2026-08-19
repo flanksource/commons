@@ -3,6 +3,7 @@ package har
 import (
 	"bytes"
 	"io"
+	"math"
 	"testing"
 )
 
@@ -57,5 +58,31 @@ func TestReadBodyReportsUnknownTruncatedSize(t *testing.T) {
 		if result.totalSize != -1 {
 			t.Fatalf("content length %d: total size = %d, want unknown size -1", contentLength, result.totalSize)
 		}
+	}
+}
+
+func TestReadBodyTreatsMaximumLimitAsUnbounded(t *testing.T) {
+	content := []byte("complete body")
+	source := &countingReadCloser{Reader: bytes.NewReader(content)}
+
+	result, restored := readBody(source, math.MaxInt64, int64(len(content)))
+	t.Cleanup(func() { _ = restored.Close() })
+
+	if result.text != string(content) {
+		t.Fatalf("captured %q, want complete body %q", result.text, content)
+	}
+	if result.truncated {
+		t.Fatal("maximum body limit marked the capture truncated")
+	}
+	if result.totalSize != int64(len(content)) {
+		t.Fatalf("total size = %d, want %d", result.totalSize, len(content))
+	}
+
+	full, err := io.ReadAll(restored)
+	if err != nil {
+		t.Fatalf("read restored body: %v", err)
+	}
+	if !bytes.Equal(full, content) {
+		t.Fatalf("restored body = %q, want %q", full, content)
 	}
 }

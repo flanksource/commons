@@ -15,7 +15,7 @@ jobs:
       matrix:
         platform: [ubuntu-latest]
         go-version:
-          - 1.25.x
+          - 1.26.x
     runs-on: ${{ matrix.platform }}
     permissions:
       contents: read
