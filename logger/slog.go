@@ -161,6 +161,7 @@ func New(prefix string) *SlogLogger {
 		flags.jsonLogs = true
 		logger = &SlogLogger{
 			Level: lvl,
+			json:  true,
 			Logger: slog.New(slog.NewJSONHandler(destination, &slog.HandlerOptions{
 				AddSource: reportCaller,
 				Level:     lvl,
@@ -209,6 +210,7 @@ func NewWithWriter(writer io.Writer) *SlogLogger {
 	if logJson {
 		logger = &SlogLogger{
 			Level: lvl,
+			json:  true,
 			Logger: slog.New(slog.NewJSONHandler(writer, &slog.HandlerOptions{
 				AddSource: reportCaller,
 				Level:     lvl,
@@ -308,7 +310,10 @@ type SlogLogger struct {
 	Level     *slog.LevelVar
 	Parent    *SlogLogger
 	skipLevel int
+	json      bool
 }
+
+func (s SlogLogger) IsJSON() bool { return s.json }
 
 func (s SlogLogger) Warnf(format string, args ...interface{}) {
 	if !s.Logger.Enabled(todo, slog.LevelWarn) {
@@ -361,7 +366,7 @@ func (s SlogLogger) handle(r slog.Record, format string, args ...interface{}) {
 }
 
 func (s SlogLogger) handleRaw(r slog.Record, msg string) {
-	if IsJsonLogs() {
+	if s.IsJSON() {
 		if s.Prefix != "" {
 			r.Add("logger", s.Prefix)
 		}
@@ -408,6 +413,7 @@ func (v slogVerbose) Always() Verbose {
 		Logger: slog.New(&alwaysHandler{inner: v.SlogLogger.Logger.Handler()}),
 		Level:  v.SlogLogger.Level,
 		Prefix: v.SlogLogger.Prefix,
+		json:   v.SlogLogger.json,
 	}
 	return v
 }
@@ -611,6 +617,7 @@ func (s SlogLogger) WithSkipReportLevel(i int) Logger {
 		Level:     s.Level,
 		Prefix:    s.Prefix,
 		skipLevel: i,
+		json:      s.json,
 	}
 }
 
@@ -619,6 +626,7 @@ func (s SlogLogger) WithValues(keysAndValues ...interface{}) Logger {
 		Logger: s.Logger.With(keysAndValues...),
 		Level:  s.Level,
 		Prefix: s.Prefix,
+		json:   s.json,
 	}
 }
 
