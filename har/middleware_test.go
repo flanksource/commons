@@ -53,6 +53,9 @@ func TestHAR_BasicCapture(t *testing.T) {
 	if entry.Response.Status != 200 {
 		t.Errorf("expected status 200, got %d", entry.Response.Status)
 	}
+	if entry.Response.StatusText != "OK" {
+		t.Errorf("expected HAR status text OK, got %q", entry.Response.StatusText)
+	}
 	if entry.Response.Content.Text != `{"status":"ok"}` {
 		t.Errorf("unexpected body: %q", entry.Response.Content.Text)
 	}
@@ -161,6 +164,7 @@ func TestHAR_BodyTruncation(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", bodySize))
 		w.WriteHeader(200)
 		fmt.Fprint(w, bigBody)
 	}))

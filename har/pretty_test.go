@@ -120,6 +120,44 @@ func TestEntry_RowDetail_WithContent(t *testing.T) {
 	}
 }
 
+func TestEntry_DetailFiltersSections(t *testing.T) {
+	entry := har.Entry{
+		Request: har.Request{
+			Headers:     []har.Header{{Name: "Authorization", Value: "B****"}},
+			QueryString: []har.QueryString{{Name: "namespace", Value: "tenant-x"}},
+			PostData:    &har.PostData{MimeType: "application/json", Text: `{"request":true}`},
+		},
+		Response: har.Response{
+			Headers: []har.Header{{Name: "Content-Type", Value: "application/json"}},
+			Content: har.Content{MimeType: "application/json", Text: `{"response":true}`},
+		},
+	}
+
+	headers := entry.Detail(har.DetailOptions{
+		RequestHeaders:  true,
+		QueryString:     true,
+		ResponseHeaders: true,
+	}).String()
+	for _, expected := range []string{"Request Headers", "Authorization", "Query Parameters", "namespace", "Response Headers"} {
+		if !strings.Contains(headers, expected) {
+			t.Fatalf("headers detail missing %q: %s", expected, headers)
+		}
+	}
+	if strings.Contains(headers, "Request Body") || strings.Contains(headers, "Response Body") {
+		t.Fatalf("headers detail included a body: %s", headers)
+	}
+
+	bodies := entry.Detail(har.DetailOptions{RequestBody: true, ResponseBody: true}).String()
+	for _, expected := range []string{"Request Body", `"request": true`, "Response Body", `"response": true`} {
+		if !strings.Contains(bodies, expected) {
+			t.Fatalf("body detail missing %q: %s", expected, bodies)
+		}
+	}
+	if strings.Contains(bodies, "Request Headers") || strings.Contains(bodies, "Response Headers") {
+		t.Fatalf("body detail included headers: %s", bodies)
+	}
+}
+
 func TestEntry_RowDetail_Truncated(t *testing.T) {
 	entry := har.Entry{
 		Request:  har.Request{Method: "GET", URL: "/big"},

@@ -55,6 +55,22 @@ func headersToDescriptionList(headers []Header) api.DescriptionList {
 	return api.DescriptionList{Items: items}
 }
 
+func queryToDescriptionList(query []QueryString) api.DescriptionList {
+	items := make([]api.KeyValuePair, len(query))
+	for i, parameter := range query {
+		items[i] = api.KeyValuePair{Key: parameter.Name, Value: parameter.Value}
+	}
+	return api.DescriptionList{Items: items}
+}
+
+type DetailOptions struct {
+	RequestHeaders  bool
+	QueryString     bool
+	RequestBody     bool
+	ResponseHeaders bool
+	ResponseBody    bool
+}
+
 // Columns implements api.TableProvider.
 func (e Entry) Columns() []api.ColumnDef {
 	return []api.ColumnDef{
@@ -86,16 +102,33 @@ func (e Entry) Row() map[string]any {
 
 // RowDetail implements api.DetailProvider for expandable table rows.
 func (e Entry) RowDetail() api.Textable {
+	return e.Detail(DetailOptions{
+		RequestHeaders: true, QueryString: true, RequestBody: true,
+		ResponseHeaders: true, ResponseBody: true,
+	})
+}
+
+// Detail returns only the selected request and response sections.
+func (e Entry) Detail(options DetailOptions) api.Textable {
 	t := api.Text{}
 	hasContent := false
 
-	if len(e.Request.Headers) > 0 {
+	if options.RequestHeaders && len(e.Request.Headers) > 0 {
 		hasContent = true
 		t = t.AddText("Request Headers", "font-bold text-muted").NewLine().
 			Add(headersToDescriptionList(e.Request.Headers))
 	}
 
-	if e.Request.PostData != nil && e.Request.PostData.Text != "" {
+	if options.QueryString && len(e.Request.QueryString) > 0 {
+		if hasContent {
+			t = t.NewLine()
+		}
+		hasContent = true
+		t = t.AddText("Query Parameters", "font-bold text-muted").NewLine().
+			Add(queryToDescriptionList(e.Request.QueryString))
+	}
+
+	if options.RequestBody && e.Request.PostData != nil && e.Request.PostData.Text != "" {
 		if hasContent {
 			t = t.NewLine()
 		}
@@ -104,7 +137,7 @@ func (e Entry) RowDetail() api.Textable {
 			Add(formatBody(e.Request.PostData.MimeType, e.Request.PostData.Text))
 	}
 
-	if len(e.Response.Headers) > 0 {
+	if options.ResponseHeaders && len(e.Response.Headers) > 0 {
 		if hasContent {
 			t = t.NewLine()
 		}
@@ -113,7 +146,7 @@ func (e Entry) RowDetail() api.Textable {
 			Add(headersToDescriptionList(e.Response.Headers))
 	}
 
-	if e.Response.Content.Text != "" {
+	if options.ResponseBody && e.Response.Content.Text != "" {
 		if hasContent {
 			t = t.NewLine()
 		}

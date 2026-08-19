@@ -51,7 +51,7 @@ func NewMetadataMiddleware(cfg HARConfig, handler func(*Entry)) middlewares.Midd
 			}
 			if resp != nil {
 				entry.Response.Status = resp.StatusCode
-				entry.Response.StatusText = resp.Status
+				entry.Response.StatusText = http.StatusText(resp.StatusCode)
 				entry.Response.HTTPVersion = httpVersion(resp.Proto)
 				entry.Response.Headers = harHeaders(resp.Header, cfg)
 			}

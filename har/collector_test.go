@@ -42,6 +42,45 @@ func TestCollector_AccumulatesMultipleEntries(t *testing.T) {
 	}
 }
 
+func TestCollector_BoundsEntriesAndCountsDropped(t *testing.T) {
+	cfg := har.DefaultConfig()
+	cfg.MaxEntries = 2
+	collector := har.NewCollector(cfg)
+
+	for i := range 5 {
+		collector.Add(&har.Entry{Request: har.Request{URL: fmt.Sprintf("https://example.test/%d", i)}})
+	}
+
+	entries := collector.Entries()
+	if len(entries) != 2 {
+		t.Fatalf("entries = %d, want 2", len(entries))
+	}
+	if entries[0].Request.URL != "https://example.test/0" || entries[1].Request.URL != "https://example.test/1" {
+		t.Fatalf("collector retained unexpected entries: %+v", entries)
+	}
+	if collector.DroppedEntries() != 3 {
+		t.Fatalf("dropped entries = %d, want 3", collector.DroppedEntries())
+	}
+}
+
+func TestCollector_ForwardsEntriesAfterLocalBound(t *testing.T) {
+	upstream := har.NewCollector(har.DefaultConfig())
+	cfg := har.DefaultConfig()
+	cfg.MaxEntries = 1
+	collector := har.NewCollectorWithHandler(cfg, upstream.Handler())
+
+	for i := range 3 {
+		collector.Add(&har.Entry{Request: har.Request{URL: fmt.Sprintf("https://example.test/%d", i)}})
+	}
+
+	if len(collector.Entries()) != 1 {
+		t.Fatalf("bounded collector entries = %d, want 1", len(collector.Entries()))
+	}
+	if len(upstream.Entries()) != 3 {
+		t.Fatalf("forwarded entries = %d, want 3", len(upstream.Entries()))
+	}
+}
+
 func TestCollector_RetryAccumulatesEntries(t *testing.T) {
 	callCount := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
