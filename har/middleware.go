@@ -75,9 +75,9 @@ func buildRequest(req *http.Request, cfg HARConfig) Request {
 
 	ct := req.Header.Get("Content-Type")
 	if req.Body != nil && shouldCapture(ct, cfg.CaptureContentTypes) {
-		body, restored := readBody(req.Body, cfg.MaxBodySize)
+		body, restored := readBody(req.Body, cfg.MaxBodySize, req.ContentLength)
 		req.Body = restored
-		har.BodySize = int64(len(body.raw))
+		har.BodySize = body.totalSize
 		har.PostData = &PostData{
 			MimeType: ct,
 			Text:     harBody(body.text, ct, cfg),
@@ -90,7 +90,7 @@ func buildRequest(req *http.Request, cfg HARConfig) Request {
 func buildResponse(resp *http.Response, cfg HARConfig) Response {
 	har := Response{
 		Status:      resp.StatusCode,
-		StatusText:  resp.Status,
+		StatusText:  http.StatusText(resp.StatusCode),
 		HTTPVersion: httpVersion(resp.Proto),
 		Cookies:     []Cookie{},
 		Headers:     harHeaders(resp.Header, cfg),
@@ -101,7 +101,7 @@ func buildResponse(resp *http.Response, cfg HARConfig) Response {
 
 	ct := resp.Header.Get("Content-Type")
 	if resp.Body != nil && (shouldCapture(ct, cfg.CaptureContentTypes) || resp.StatusCode >= 400) {
-		body, restored := readBody(resp.Body, cfg.MaxBodySize)
+		body, restored := readBody(resp.Body, cfg.MaxBodySize, resp.ContentLength)
 		resp.Body = restored
 		har.BodySize = body.totalSize
 		har.Content = Content{
@@ -117,30 +117,43 @@ func buildResponse(resp *http.Response, cfg HARConfig) Response {
 
 type bodyResult struct {
 	text      string
-	raw       []byte
 	totalSize int64
 	truncated bool
 }
 
-func readBody(r io.ReadCloser, maxSize int64) (bodyResult, io.ReadCloser) {
-	all, _ := io.ReadAll(r)
-	_ = r.Close()
+func readBody(r io.ReadCloser, maxSize, knownSize int64) (bodyResult, io.ReadCloser) {
+	if maxSize <= 0 {
+		all, _ := io.ReadAll(r)
+		return bodyResult{
+			text:      string(all),
+			totalSize: int64(len(all)),
+		}, &replayedBody{Reader: bytes.NewReader(all), Closer: r}
+	}
 
-	total := int64(len(all))
-	cap := all
-	truncated := false
-
-	if maxSize > 0 && total > maxSize {
-		cap = all[:maxSize]
-		truncated = true
+	prefix, _ := io.ReadAll(io.LimitReader(r, maxSize+1))
+	captured := prefix
+	truncated := int64(len(prefix)) > maxSize
+	if truncated {
+		captured = prefix[:maxSize]
+	}
+	totalSize := int64(len(prefix))
+	if truncated {
+		totalSize = -1
+		if knownSize > 0 {
+			totalSize = knownSize
+		}
 	}
 
 	return bodyResult{
-		text:      string(cap),
-		raw:       cap,
-		totalSize: total,
+		text:      string(captured),
+		totalSize: totalSize,
 		truncated: truncated,
-	}, io.NopCloser(bytes.NewReader(all))
+	}, &replayedBody{Reader: io.MultiReader(bytes.NewReader(prefix), r), Closer: r}
+}
+
+type replayedBody struct {
+	io.Reader
+	io.Closer
 }
 
 func shouldCapture(contentType string, allowed []string) bool {

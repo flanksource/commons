@@ -21,6 +21,11 @@ const SensitiveProperty = "http.har.sensitive"
 
 // HARConfig controls what the HAR middleware captures and how it redacts.
 type HARConfig struct {
+	// MaxEntries limits how many entries a Collector retains. Zero keeps all
+	// entries, which preserves the existing HAR-file behavior. Request-scoped
+	// diagnostics set an explicit bound.
+	MaxEntries int
+
 	// MaxBodySize is the maximum number of bytes captured per body.
 	// Bodies exceeding this are truncated and Content.Truncated is set to true.
 	// Default: 65536 (64 KB).
