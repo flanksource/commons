@@ -78,6 +78,16 @@ type Logger interface {
 	GetSlogLogger() *slog.Logger
 }
 
+type jsonLogger interface {
+	IsJSON() bool
+}
+
+// IsJSONLogger reports whether log emits structured JSON records.
+func IsJSONLogger(log Logger) bool {
+	jsonLog, ok := log.(jsonLogger)
+	return ok && jsonLog.IsJSON()
+}
+
 // Verbose provides conditional logging based on verbosity levels.
 // It's returned by Logger.V() and only logs if the specified level is enabled.
 //
