@@ -44,6 +44,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -135,7 +136,8 @@ type AuthConfig struct {
 //	resp, err := client.R(ctx).
 //		GET("https://api.example.com/data")
 type Client struct {
-	httpClient *http.Client
+	httpClient         *http.Client
+	connectDialContext func(context.Context, string, string) (net.Conn, error)
 
 	// authConfig specifies the authentication configuration
 	authConfig *AuthConfig

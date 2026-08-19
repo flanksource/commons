@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -130,7 +131,11 @@ func readBody(r io.ReadCloser, maxSize, knownSize int64) (bodyResult, io.ReadClo
 		}, &replayedBody{Reader: bytes.NewReader(all), Closer: r}
 	}
 
-	prefix, _ := io.ReadAll(io.LimitReader(r, maxSize+1))
+	limit := maxSize
+	if maxSize < math.MaxInt64 {
+		limit++
+	}
+	prefix, _ := io.ReadAll(io.LimitReader(r, limit))
 	captured := prefix
 	truncated := int64(len(prefix)) > maxSize
 	if truncated {
