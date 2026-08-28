@@ -23,7 +23,7 @@ const PropertyPrefix = "http."
 //	http.<feature>.har        / http.har        output path; unset disables capture
 //	http.<feature>.har.level  / http.har.level  "full" (default) or "metadata"
 //	http.har.sensitive                          capture credentials verbatim
-//	http.har.maxBodySize                        per-body capture cap
+//	http.har.response.body.length               per-body capture cap
 //
 // Collectors are deduplicated by absolute path, so several features writing to
 // the same file share one archive.

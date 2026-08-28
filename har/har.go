@@ -4,13 +4,13 @@ package har
 
 import "github.com/flanksource/commons/properties"
 
-const defaultMaxBodySize = 64 * 1024 // 64 KB
+const defaultMaxBodySize = 4 * 1024 * 1024 // 4 MiB
 
 // MaxBodySizeProperty is the -P/properties key that overrides the default
-// per-body capture cap (in bytes). Set e.g. -P http.har.maxBodySize=1048576
-// to capture request/response bodies larger than the 64 KB default, or
-// -P http.har.maxBodySize=0 to capture full bodies with no cap.
-const MaxBodySizeProperty = "http.har.maxBodySize"
+// per-body capture cap (in bytes). Set e.g.
+// -P http.har.response.body.length=1048576 to lower the request/response cap,
+// or set it to 0 to capture full bodies with no cap.
+const MaxBodySizeProperty = "http.har.response.body.length"
 
 // SensitiveProperty is the -P/properties key that disables redaction. By
 // default credentials in headers, bodies and query strings are masked, so a
@@ -28,7 +28,7 @@ type HARConfig struct {
 
 	// MaxBodySize is the maximum number of bytes captured per body.
 	// Bodies exceeding this are truncated and Content.Truncated is set to true.
-	// Default: 65536 (64 KB).
+	// Default: 4194304 (4 MiB).
 	MaxBodySize int64
 
 	// CaptureContentTypes lists MIME type prefixes for which body capture is enabled.
@@ -53,8 +53,10 @@ type HARConfig struct {
 }
 
 // DefaultConfig returns a HARConfig with sensible defaults. The per-body
-// capture cap honours the MaxBodySizeProperty (-P http.har.maxBodySize=…)
-// override; an unset or unparseable value keeps the 64 KB default, and a
+// capture cap honours the MaxBodySizeProperty
+// (-P http.har.response.body.length=…) override, which accepts a plain byte
+// count or a size suffix ("1048576", "1MiB", "4MB"); an unset or unparseable
+// value keeps the 4 MiB default, and a
 // value <= 0 disables truncation (full bodies captured).
 func DefaultConfig() HARConfig {
 	return HARConfig{

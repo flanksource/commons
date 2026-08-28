@@ -21,7 +21,7 @@ var documentedKeys = []string{
 	"--json-logs",
 	"HTTP_LOG_BASE_LEVEL",
 	"http.log.response.body.length",
-	"http.har.maxBodySize",
+	"http.har.response.body.length",
 	"--format",
 }
 
@@ -74,13 +74,13 @@ var _ = Describe("Help", func() {
 	It("selects a single topic by name", func() {
 		out := Help("http").String()
 		Expect(out).To(ContainSubstring("HTTP_LOG_BASE_LEVEL"))
-		Expect(out).ToNot(ContainSubstring("http.har.maxBodySize"))
+		Expect(out).ToNot(ContainSubstring("http.har.response.body.length"))
 		Expect(out).ToNot(ContainSubstring("--json-logs"))
 	})
 
 	It("excludes a topic with a negated name", func() {
 		out := Help("!har").String()
-		Expect(out).ToNot(ContainSubstring("http.har.maxBodySize"))
+		Expect(out).ToNot(ContainSubstring("http.har.response.body.length"))
 		Expect(out).To(ContainSubstring("HTTP_LOG_BASE_LEVEL"))
 		Expect(out).To(ContainSubstring("--json-logs"))
 	})

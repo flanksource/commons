@@ -2,20 +2,14 @@ package httpretty
 
 import (
 	"bytes"
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"io"
 	"mime"
-	"net"
 	"net/http"
-	"slices"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/flanksource/commons/logger/httpretty/internal/color"
-	"github.com/flanksource/commons/logger/httpretty/internal/header"
 )
 
 func newPrinter(l *Logger) printer {
@@ -180,15 +174,9 @@ func (p *printer) printResponseBodyOut(resp *http.Response) {
 		p.println("* body contains binary data")
 		return
 	}
-	if p.logger.MaxResponseBody > 0 && resp.ContentLength > p.logger.MaxResponseBody {
-		p.printf("* body is too long (%d bytes) to print, skipping (longer than %d bytes)\n", resp.ContentLength, p.logger.MaxResponseBody)
-		return
-	}
 	contentType := resp.Header.Get("Content-Type")
-	if resp.ContentLength == -1 {
-		if newBody := p.printBodyUnknownLength(contentType, p.logger.MaxResponseBody, resp.Body); newBody != nil {
-			resp.Body = newBody
-		}
+	if p.logger.MaxResponseBody > 0 || resp.ContentLength == -1 {
+		resp.Body = p.printResponseBodyPrefix(contentType, p.logger.MaxResponseBody, resp.Body, resp.ContentLength)
 		return
 	}
 	var buf bytes.Buffer
@@ -287,203 +275,6 @@ func (p *printer) printBodyUnknownLength(contentType string, maxLength int64, r 
 	return
 }
 
-func findPeerCertificate(hostname string, state *tls.ConnectionState) (cert *x509.Certificate) {
-	if chains := state.VerifiedChains; chains != nil && chains[0] != nil && chains[0][0] != nil {
-		return chains[0][0]
-	}
-	if hostname == "" && len(state.PeerCertificates) > 0 {
-		// skip finding a match for a given hostname if hostname is not available (e.g., a client certificate)
-		return state.PeerCertificates[0]
-	}
-	// the chain is not created when tls.Config.InsecureSkipVerify is set, then let's try to find a match to display
-	for _, cert := range state.PeerCertificates {
-		if err := cert.VerifyHostname(hostname); err == nil {
-			return cert
-		}
-	}
-	return nil
-}
-
-func (p *printer) printTLSInfo(state *tls.ConnectionState, skipVerifyChains bool) {
-	if state == nil {
-		return
-	}
-	protocol := tlsProtocolVersions[state.Version]
-	if protocol == "" {
-		protocol = fmt.Sprintf("%#v", state.Version)
-	}
-	cipher := tlsCiphers[state.CipherSuite]
-	if cipher == "" {
-		cipher = fmt.Sprintf("%#v", state.CipherSuite)
-	}
-	p.printf("* %s (%s)", p.format(color.FgBlue, protocol), p.format(color.FgBlue, cipher))
-	if !skipVerifyChains && state.VerifiedChains == nil {
-		p.print(" (insecure=true)")
-	}
-	if state.NegotiatedProtocol != "" {
-		p.printf(" ALPN:%v", p.format(color.FgBlue, state.NegotiatedProtocol))
-	}
-}
-
-func (p *printer) printOutgoingClientTLS(config *tls.Config) {
-	if config == nil || len(config.Certificates) == 0 {
-		return
-	}
-	// Please notice tls.Config.BuildNameToCertificate() doesn't store the certificate Leaf field.
-	// You need to explicitly parse and store it with something such as:
-	// cert.Leaf, err = x509.ParseCertificate(cert.Certificate)
-	if cert := config.Certificates[0].Leaf; cert != nil {
-		p.printClientCertificateSimple("", cert)
-	} else {
-		p.print(`* Client certificate: unparsed certificate found, skipping`)
-	}
-}
-
-func (p *printer) printClientCertificateSimple(hostname string, cert *x509.Certificate) {
-	// Simplified format for client certs (no TLS version available yet)
-	cn := cert.Subject.CommonName
-	if cn == "" {
-		cn = "unknown"
-	}
-
-	// Count additional SANs
-	additionalSANs := len(cert.DNSNames) - 1
-	if additionalSANs < 0 {
-		additionalSANs = 0
-	}
-
-	// Get issuer CN
-	issuerCN := cert.Issuer.CommonName
-	if issuerCN == "" {
-		issuerCN = "unknown"
-	}
-
-	// Calculate expiry
-	now := time.Now()
-	expiryDuration := cert.NotAfter.Sub(now)
-	var expiryStr string
-	if expiryDuration < 0 {
-		expiryStr = "expired"
-	} else if expiryDuration < 24*time.Hour {
-		expiryStr = fmt.Sprintf("%.0fh", expiryDuration.Hours())
-	} else {
-		expiryStr = fmt.Sprintf("%.0fd", expiryDuration.Hours()/24)
-	}
-
-	// Check validity
-	valid := true
-	if hostname != "" {
-		if err := cert.VerifyHostname(hostname); err != nil {
-			valid = false
-		}
-	}
-	if now.Before(cert.NotBefore) || now.After(cert.NotAfter) {
-		valid = false
-	}
-
-	// Build the single-line message
-	msg := fmt.Sprintf(" %s", cn)
-	if additionalSANs > 0 {
-		msg += fmt.Sprintf(" [+%d more]", additionalSANs)
-	}
-	msg += fmt.Sprintf(" (issued by: %s, expires in %s)", issuerCN, expiryStr)
-
-	// Color the entire line based on validity
-	if valid {
-		p.println(p.format(color.FgGreen, msg))
-	} else {
-		p.println(p.format(color.FgRed, msg))
-	}
-}
-
-func (p *printer) printIncomingClientTLS(state *tls.ConnectionState) {
-	// if no TLS state is null or no client TLS certificate is found, return early.
-	if state == nil || len(state.PeerCertificates) == 0 {
-		return
-	}
-	if cert := findPeerCertificate("", state); cert != nil {
-		p.printCertificate("", cert, state)
-	} else {
-		p.println(p.format(color.FgRed, "** No valid certificate was found"))
-	}
-}
-
-func (p *printer) printTLSServer(host string, state *tls.ConnectionState) {
-	if state == nil {
-		return
-	}
-	hostname, _, err := net.SplitHostPort(host)
-	if err != nil {
-		// assume the error is due to "missing port in address"
-		hostname = host
-	}
-	if cert := findPeerCertificate(hostname, state); cert != nil {
-		// server certificate messages are slightly similar to how "curl -v" shows
-		p.printCertificate(hostname, cert, state)
-	} else {
-		p.print(p.format(color.FgRed, "** No valid certificate was found"))
-	}
-}
-
-func (p *printer) printCertificate(hostname string, cert *x509.Certificate, state *tls.ConnectionState) {
-	// Format: TLS {version} {CN} [+{n} more] (issued by: {issuer}, expires in {age})
-	// Green for valid, Red for invalid/expired
-
-	cn := cert.Subject.CommonName
-	if cn == "" {
-		cn = "unknown"
-	}
-
-	// Count additional SANs
-	additionalSANs := len(cert.DNSNames) - 1
-	if additionalSANs < 0 {
-		additionalSANs = 0
-	}
-
-	// Get issuer CN
-	issuerCN := cert.Issuer.CommonName
-	if issuerCN == "" {
-		issuerCN = "unknown"
-	}
-
-	// Calculate expiry
-	now := time.Now()
-	expiryDuration := cert.NotAfter.Sub(now)
-	var expiryStr string
-	if expiryDuration < 0 {
-		expiryStr = "expired"
-	} else if expiryDuration < 24*time.Hour {
-		expiryStr = fmt.Sprintf("%.0fh", expiryDuration.Hours())
-	} else {
-		expiryStr = fmt.Sprintf("%.0fd", expiryDuration.Hours()/24)
-	}
-
-	// Check validity
-	valid := true
-	if hostname != "" {
-		if err := cert.VerifyHostname(hostname); err != nil {
-			valid = false
-		}
-	}
-	if now.Before(cert.NotBefore) || now.After(cert.NotAfter) {
-		valid = false
-	}
-
-	// Build the single-line message
-	msg := fmt.Sprintf(" %s", cn)
-	if additionalSANs > 0 {
-		msg += fmt.Sprintf(" [+%d more]", additionalSANs)
-	}
-	msg += fmt.Sprintf(" (issued by: %s, expires in %s)", issuerCN, expiryStr)
-
-	// Color the entire line based on validity
-	if valid {
-		p.println(p.format(color.FgGreen, msg))
-	} else {
-		p.println(p.format(color.FgRed, msg))
-	}
-}
-
 func (p *printer) printServerResponse(req *http.Request, rec *responseRecorder) {
 	if p.logger.ResponseHeader {
 		// TODO(henvic): see how httptest.ResponseRecorder adds extra headers due to Content-Type detection
@@ -505,7 +296,8 @@ func (p *printer) printServerResponse(req *http.Request, rec *responseRecorder) 
 		return
 	}
 	if p.logger.MaxResponseBody > 0 && rec.size > p.logger.MaxResponseBody {
-		p.printf("* body is too long (%d bytes) to print, skipping (longer than %d bytes)\n", rec.size, p.logger.MaxResponseBody)
+		p.printBodyReader(rec.Header().Get("Content-Type"), bytes.NewReader(rec.buf.Bytes()))
+		p.printf("* body truncated after %d bytes (total %d bytes)\n", p.logger.MaxResponseBody, rec.size)
 		return
 	}
 	p.printBodyReader(rec.Header().Get("Content-Type"), rec.buf)
@@ -571,158 +363,6 @@ func (p *printer) format(s ...interface{}) string {
 		return color.Format(s...)
 	}
 	return color.StripAttributes(s...)
-}
-
-func (p *printer) printHeaders(prefix rune, h http.Header) {
-	if !p.logger.SkipSanitize {
-		h = header.Sanitize(header.DefaultSanitizers, h)
-		h = sanitizeRedactedHeaders(h, p.logger.RedactedHeaders)
-	}
-
-	longest, sorted := sortHeaderKeys(h, p.logger.cloneSkipHeader())
-	for _, key := range sorted {
-		for _, v := range h[key] {
-			var pad string
-			if p.logger.Align {
-				pad = strings.Repeat(" ", longest-len(key))
-			}
-			p.printf("%c %s%s %s%s\n", prefix,
-				p.format(color.FgBlue, color.Bold, key),
-				p.format(color.FgRed, ":"),
-				pad,
-				p.format(color.FgYellow, v))
-		}
-	}
-}
-
-func sanitizeRedactedHeaders(h http.Header, patterns []string) http.Header {
-	if len(patterns) == 0 {
-		return h
-	}
-
-	out := h.Clone()
-	for key, values := range out {
-		if !matchHeaderPattern(key, patterns...) {
-			continue
-		}
-		redacted := make([]string, 0, len(values))
-		for _, value := range values {
-			redacted = append(redacted, redactHeaderValue(value))
-		}
-		out[key] = redacted
-	}
-	return out
-}
-
-func matchHeaderPattern(item string, patterns ...string) bool {
-	itemLower := strings.ToLower(http.CanonicalHeaderKey(item))
-	for _, pattern := range patterns {
-		patternLower := strings.ToLower(http.CanonicalHeaderKey(strings.TrimSpace(pattern)))
-		switch {
-		case patternLower == "" || patternLower == "!":
-			continue
-		case patternLower == "*":
-			return true
-		case strings.HasPrefix(patternLower, "*") && strings.HasSuffix(patternLower, "*"):
-			if strings.Contains(itemLower, strings.Trim(patternLower, "*")) {
-				return true
-			}
-		case strings.HasPrefix(patternLower, "*"):
-			if strings.HasSuffix(itemLower, strings.TrimPrefix(patternLower, "*")) {
-				return true
-			}
-		case strings.HasSuffix(patternLower, "*"):
-			if strings.HasPrefix(itemLower, strings.TrimSuffix(patternLower, "*")) {
-				return true
-			}
-		case itemLower == patternLower:
-			return true
-		}
-	}
-	return false
-}
-
-func redactHeaderValue(value string) string {
-	if value == "" {
-		return ""
-	}
-	if scheme, credential, ok := strings.Cut(value, " "); ok && credential != "" {
-		return scheme + " " + strings.Repeat("█", 8)
-	}
-	return strings.Repeat("█", 8)
-}
-
-func sortHeaderKeys(h http.Header, skipped map[string]struct{}) (int, []string) {
-	var (
-		keys    = make([]string, 0, len(h))
-		longest int
-	)
-	for key := range h {
-		if _, skip := skipped[key]; skip {
-			continue
-		}
-		keys = append(keys, key)
-		if l := len(key); l > longest {
-			longest = l
-		}
-	}
-	sort.Strings(keys)
-	if i := slices.Index(keys, "Host"); i > -1 {
-		keys = append([]string{"Host"}, slices.Delete(keys, i, i+1)...)
-	}
-	return longest, keys
-}
-
-func (p *printer) printRequestHeader(req *http.Request) {
-	uri := req.URL.String()
-	if req.URL.Host == "" {
-		host := req.Host
-		if host == "" {
-			host = req.Header.Get("Host")
-		}
-		scheme := req.URL.Scheme
-		if scheme == "" {
-			if req.TLS != nil {
-				scheme = "https"
-			} else {
-				scheme = "http"
-			}
-		}
-		uri = fmt.Sprintf("%s://%s%s", scheme, host, req.URL.RequestURI())
-	}
-
-	proto := ""
-	if req.Proto != "" && req.Proto != "HTTP/1.1" {
-		proto = " " + p.format(color.FgBlue, req.Proto)
-	}
-
-	p.printf("%s %s%s\n",
-		p.format(color.FgBlue, color.Bold, req.Method),
-		p.format(color.FgYellow, uri),
-		proto)
-	p.printHeaders('>', addRequestHeaders(req))
-	p.println()
-}
-
-// addRequestHeaders returns a copy of the given header with an additional headers set, if known.
-func addRequestHeaders(req *http.Request) http.Header {
-	cp := http.Header{}
-	for k, v := range req.Header {
-		cp[k] = v
-	}
-
-	if len(req.Header.Values("Content-Length")) == 0 && req.ContentLength > 0 {
-		cp.Set("Content-Length", fmt.Sprintf("%d", req.ContentLength))
-	}
-
-	host := req.Host
-	if host == "" {
-		host = req.URL.Host
-	}
-	if host != "" && host != req.URL.Host {
-		cp.Set("Host", host)
-	}
-	return cp
 }
 
 func (p *printer) printRequestBody(req *http.Request) {
