@@ -1,11 +1,37 @@
 package logger
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"strings"
 
 	"github.com/flanksource/commons/logger/httpretty"
 	"github.com/flanksource/commons/properties"
 )
+
+type redactedJSONFormatter struct{}
+
+func (redactedJSONFormatter) Match(mediaType string) bool {
+	return strings.Contains(mediaType, "json")
+}
+
+func (redactedJSONFormatter) Format(w io.Writer, src []byte) error {
+	redacted := []byte(StripSecrets(string(src)))
+	if !json.Valid(redacted) {
+		_, err := fmt.Fprint(w, string(redacted))
+		return err
+	}
+
+	var formatted bytes.Buffer
+	if err := json.Indent(&formatted, redacted, "", "    "); err != nil {
+		return err
+	}
+	_, err := w.Write(formatted.Bytes())
+	return err
+}
 
 var SensitiveHeaders = []string{
 	"Authorization",
@@ -13,6 +39,21 @@ var SensitiveHeaders = []string{
 	"Cookie",
 	"Proxy-Authorization",
 	"Cookie",
+}
+
+const (
+	HTTPLogResponseBodyLengthProperty = "http.log.response.body.length"
+	defaultHTTPLogResponseBodyLength  = int64(4 * 1024)
+)
+
+// HTTPLogResponseBodyLength returns the configured response body log limit.
+// fallback is used when the property is unset or invalid; non-positive
+// fallbacks use the 4 KiB default.
+func HTTPLogResponseBodyLength(fallback int64) int64 {
+	if fallback <= 0 {
+		fallback = defaultHTTPLogResponseBodyLength
+	}
+	return int64(properties.Int(int(fallback), HTTPLogResponseBodyLengthProperty))
 }
 
 // NewHttpLogger creates an HTTP logger that logs at predefined levels.
@@ -28,15 +69,16 @@ func NewHttpLogger(logger Logger, rt http.RoundTripper) http.RoundTripper {
 	}
 
 	l := &httpretty.Logger{
-		Time:           logger.IsLevelEnabled(5),
-		TLS:            logger.IsLevelEnabled(6),
-		Auth:           logger.IsLevelEnabled(6),
-		RequestHeader:  logger.IsLevelEnabled(5),
-		RequestBody:    logger.IsLevelEnabled(6),
-		ResponseHeader: logger.IsLevelEnabled(5),
-		ResponseBody:   logger.IsLevelEnabled(7),
-		Colors:         true, // erase line if you don't like colors
-		Formatters:     []httpretty.Formatter{&httpretty.JSONFormatter{}},
+		Time:            logger.IsLevelEnabled(5),
+		TLS:             logger.IsLevelEnabled(6),
+		Auth:            logger.IsLevelEnabled(6),
+		RequestHeader:   logger.IsLevelEnabled(5),
+		RequestBody:     logger.IsLevelEnabled(6),
+		ResponseHeader:  logger.IsLevelEnabled(5),
+		ResponseBody:    logger.IsLevelEnabled(7),
+		Colors:          true, // erase line if you don't like colors
+		Formatters:      []httpretty.Formatter{redactedJSONFormatter{}},
+		MaxResponseBody: HTTPLogResponseBodyLength(0),
 	}
 
 	l.SkipHeader(SensitiveHeaders)
@@ -70,8 +112,8 @@ func NewHttpLoggerWithLevels(logger Logger, rt http.RoundTripper, headerLevel, b
 		ResponseBody:    logger.IsLevelEnabled(bodyLevel),
 		Auth:            logger.IsLevelEnabled(headerLevel),
 		Colors:          true, // erase line if you don't like colors
-		Formatters:      []httpretty.Formatter{&httpretty.JSONFormatter{}},
-		MaxResponseBody: int64(properties.Int(4*1024, "http.log.response.body.length")),
+		Formatters:      []httpretty.Formatter{redactedJSONFormatter{}},
+		MaxResponseBody: HTTPLogResponseBodyLength(0),
 	}
 
 	l.SkipHeader(SensitiveHeaders)

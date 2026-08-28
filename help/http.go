@@ -19,7 +19,7 @@ func httpTopic() api.Text {
 	return body.Add(lines(
 		knob("-Plog.level.http=<level>", "raise the http logger alone, leaving the rest quiet"),
 		knob("HTTP_LOG_BASE_LEVEL=<level>", "move the whole ladder; also -Phttp.log.base-level"),
-		knob("-Phttp.log.response.body.length", "bytes of response body logged (default 4096)"),
+		knob("-Phttp.log.response.body.length", "response prefix bytes logged before a truncation marker (default 4096)"),
 		knob("-Phttp.request.maxBufferSize", "bytes of a streamed request body buffered for retry"),
 		knob("-Phttp.body.disabled", "never log request or response bodies"),
 		knob("-Phttp.headers.disabled", "never log request or response headers"),

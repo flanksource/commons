@@ -185,6 +185,30 @@ func TestHAR_BodyTruncation(t *testing.T) {
 	}
 }
 
+func TestHAR_TruncatedJSONBodyRedactsSecrets(t *testing.T) {
+	const (
+		secret    = "supersecret"
+		jsonBody  = `{"password":"supersecret","padding":"xxxxxxxxxxxxxxxxxxxxxxxx"}`
+		bodyLimit = 40
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, jsonBody)
+	}))
+	defer srv.Close()
+
+	cfg := har.DefaultConfig()
+	cfg.MaxBodySize = bodyLimit
+	entry := captureOne(t, cfg, srv, http.MethodGet, "/", nil, nil)
+
+	if !entry.Response.Content.Truncated {
+		t.Fatal("expected Content.Truncated to be true")
+	}
+	if strings.Contains(entry.Response.Content.Text, secret) {
+		t.Fatalf("truncated HAR response leaked a secret: %s", entry.Response.Content.Text)
+	}
+}
+
 func TestHAR_NonCapturedContentType(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "image/png")

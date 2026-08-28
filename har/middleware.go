@@ -231,7 +231,7 @@ func redactBody(text, contentType string, extraKeys []string) string {
 func redactJSON(text string, extraKeys []string) string {
 	var m map[string]any
 	if err := json.Unmarshal([]byte(text), &m); err != nil {
-		return text
+		return logger.StripSecrets(text)
 	}
 	redacted := stripSecretMap(m, extraKeys)
 	out, err := json.Marshal(redacted)
@@ -275,7 +275,7 @@ func stripSecretValue(v any, extraKeys []string) any {
 func redactForm(text string, extraKeys []string) string {
 	vals, err := url.ParseQuery(text)
 	if err != nil {
-		return text
+		return logger.StripSecrets(text)
 	}
 	for k, vs := range vals {
 		if isRedactedKey(k, extraKeys) {

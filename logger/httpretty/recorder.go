@@ -36,13 +36,20 @@ type responseRecorder struct {
 
 // Write the data to the connection as part of an HTTP reply, and records it.
 func (rr *responseRecorder) Write(p []byte) (int, error) {
-	rr.size += int64(len(p))
-	if rr.maxReadableBody > 0 && rr.size > rr.maxReadableBody {
-		rr.buf = nil
-		return rr.ResponseWriter.Write(p)
+	n, err := rr.ResponseWriter.Write(p)
+	rr.size += int64(n)
+	readable := n
+	if rr.maxReadableBody > 0 {
+		remaining := rr.maxReadableBody - int64(rr.buf.Len())
+		if remaining <= 0 {
+			return n, err
+		}
+		if int64(readable) > remaining {
+			readable = int(remaining)
+		}
 	}
-	defer rr.buf.Write(p)
-	return rr.ResponseWriter.Write(p)
+	_, _ = rr.buf.Write(p[:readable])
+	return n, err
 }
 
 // WriteHeader sends an HTTP response header with the provided
