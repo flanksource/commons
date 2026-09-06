@@ -103,6 +103,7 @@ func BindFlags(flags *pflag.FlagSet) {
 // It supports loading from files, dynamic updates, file watching, and change notifications.
 type Properties struct {
 	m         map[string]string   // The property map
+	metadata  sync.Map            // Typed accessor declarations
 	filename  string              // Currently loaded file
 	listeners []func(*Properties) // Change listeners
 	lock      sync.RWMutex        // Protects concurrent access
@@ -243,6 +244,18 @@ func Int(def int, key string) int {
 	return Global.Int(def, key)
 }
 
+func Bytes(def int, key string) int {
+	return Global.Bytes(def, key)
+}
+
+func Choice(def string, options []string, keys ...string) string {
+	return Global.Choice(def, options, keys...)
+}
+
+func LogLevel(def string, options []string, keys ...string) string {
+	return Global.LogLevel(def, options, keys...)
+}
+
 func BusinessHours() (timeinterval.TimeIntervals, error) {
 	hours, err := Global.TimeIntervals(businessHoursKey)
 	if err != nil {
@@ -274,6 +287,7 @@ func TimeIntervals(keys ...string) (timeinterval.TimeIntervals, error) {
 }
 
 func (p *Properties) On(def bool, keys ...string) bool {
+	p.registerDefault(PropertyTypeBool, strconv.FormatBool(def), keys...)
 	for _, key := range keys {
 		if v := p.Get(key); v != "" {
 			return strings.ToLower(v) == "true"
@@ -283,6 +297,27 @@ func (p *Properties) On(def bool, keys ...string) bool {
 }
 
 func (p *Properties) String(def string, keys ...string) string {
+	p.registerDefault(PropertyTypeString, def, keys...)
+	for _, key := range keys {
+		if v := p.Get(key); v != "" {
+			return v
+		}
+	}
+	return def
+}
+
+func (p *Properties) Choice(def string, options []string, keys ...string) string {
+	p.registerChoice(PropertyTypeChoice, def, options, keys...)
+	for _, key := range keys {
+		if v := p.Get(key); v != "" {
+			return v
+		}
+	}
+	return def
+}
+
+func (p *Properties) LogLevel(def string, options []string, keys ...string) string {
+	p.registerChoice(PropertyTypeLogLevel, def, options, keys...)
 	for _, key := range keys {
 		if v := p.Get(key); v != "" {
 			return v
@@ -292,6 +327,7 @@ func (p *Properties) String(def string, keys ...string) string {
 }
 
 func (p *Properties) Duration(def time.Duration, keys ...string) time.Duration {
+	p.registerDefault(PropertyTypeDuration, def.String(), keys...)
 	for _, key := range keys {
 		if v := p.Get(key); v != "" {
 			if d, err := time.ParseDuration(v); err == nil {
@@ -304,6 +340,17 @@ func (p *Properties) Duration(def time.Duration, keys ...string) time.Duration {
 }
 
 func (p *Properties) Int(def int, key string) int {
+	p.registerDefault(PropertyTypeInt, strconv.Itoa(def), key)
+	if v := p.Get(key); v != "" {
+		if i, err := strconv.Atoi(v); err == nil {
+			return i
+		}
+	}
+	return def
+}
+
+func (p *Properties) Bytes(def int, key string) int {
+	p.registerDefault(PropertyTypeBytes, strconv.Itoa(def), key)
 	if v := p.Get(key); v != "" {
 		if i, err := strconv.Atoi(v); err == nil {
 			return i
@@ -321,6 +368,11 @@ func (p *Properties) TimeIntervals(keys ...string) (timeinterval.TimeIntervals, 
 	if len(keys) == 0 {
 		keys = []string{businessHoursKey}
 	}
+	propertyKeys := make([]string, 0, len(keys))
+	for _, key := range keys {
+		propertyKeys = append(propertyKeys, "time_interval."+key)
+	}
+	p.registerType(PropertyTypeTimeIntervals, propertyKeys...)
 
 	var output []timeinterval.TimeInterval
 	for _, key := range keys {
