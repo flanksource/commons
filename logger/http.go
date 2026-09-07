@@ -53,7 +53,7 @@ func HTTPLogResponseBodyLength(fallback int64) int64 {
 	if fallback <= 0 {
 		fallback = defaultHTTPLogResponseBodyLength
 	}
-	return int64(properties.Int(int(fallback), HTTPLogResponseBodyLengthProperty))
+	return int64(properties.Bytes(int(fallback), HTTPLogResponseBodyLengthProperty))
 }
 
 // NewHttpLogger creates an HTTP logger that logs at predefined levels.
