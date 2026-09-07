@@ -72,6 +72,10 @@ func isNonSensitiveKey(v string) bool {
 var inlineSecretPattern = regexp.MustCompile(`(?i)(["']?)([a-z0-9_.-]*(?:user|pass|secret|key|token|sessionid|sessid|authorization)[a-z0-9_.-]*)(["']?\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;&}]+)`)
 var inlineAuthorizationPattern = regexp.MustCompile(`(?i)\b(authorization)(\s*[:=]\s*)([A-Za-z]+)\s+([^\s,;]+)`)
 
+// inlineKeyValuePattern matches any key/value pair, so caller-supplied
+// extraKeys can be matched against keys the built-in patterns don't know.
+var inlineKeyValuePattern = regexp.MustCompile(`(["']?)([A-Za-z0-9_.-]+)(["']?\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;&}]+)`)
+
 func IsSensitiveKey(v string) bool {
 	v = normalizeSensitiveKey(v)
 	if isNonSensitiveKey(v) {
@@ -194,24 +198,56 @@ func RedactLogMessage(text string) string {
 
 // StripSecrets takes a URL, YAML, INI, or log-formatted text and removes any potentially secret data.
 // Short redacted values keep a tiny prefix/suffix to aid troubleshooting; long values only keep length.
-func StripSecrets(text string) string {
+//
+// extraKeys adds application-specific key names (case-insensitive substring
+// match) on top of the built-in heuristics, so a caller that knows "session_id"
+// is sensitive gets it redacted here too.
+func StripSecrets(text string, extraKeys ...string) string {
 	if text == "" {
 		return ""
 	}
 	if uri, ok := parseAbsoluteURL(text); ok {
-		redactURLQuery(uri)
+		redactURLQuery(uri, extraKeys)
 		return uri.Redacted()
 	}
 
 	lines := strings.Split(text, "\n")
 	for i, line := range lines {
-		if redacted, ok := redactSensitiveLine(line); ok {
+		if redacted, ok := redactSensitiveLine(line, extraKeys); ok {
 			lines[i] = redacted
 			continue
 		}
-		lines[i] = redactInlineSecrets(line)
+		lines[i] = redactInlineSecrets(line, extraKeys)
 	}
 	return strings.Join(lines, "\n")
+}
+
+// matchesSensitiveKey reports whether key is sensitive, either by the built-in
+// IsSensitiveLogKey heuristics or by a case-insensitive substring match against
+// any of extraKeys.
+func matchesSensitiveKey(key string, extraKeys []string) bool {
+	if IsSensitiveLogKey(key) {
+		return true
+	}
+	normalized := normalizeSensitiveKey(key)
+	if normalized == "" || isNonSensitiveKey(normalized) {
+		return false
+	}
+	folded := foldSensitiveKey(normalized)
+	for _, extra := range extraKeys {
+		extra = foldSensitiveKey(normalizeSensitiveKey(extra))
+		if extra != "" && strings.Contains(folded, extra) {
+			return true
+		}
+	}
+	return false
+}
+
+// foldSensitiveKey drops the separators that distinguish the spellings of one
+// key, so an extraKey of "session_id" also matches the header "Session-ID" and
+// the field "session.id".
+func foldSensitiveKey(key string) string {
+	return strings.NewReplacer("_", "", "-", "", ".", "").Replace(key)
 }
 
 func parseAbsoluteURL(text string) (*url.URL, bool) {
@@ -219,11 +255,11 @@ func parseAbsoluteURL(text string) (*url.URL, bool) {
 	return uri, err == nil && uri.Scheme != "" && uri.Host != ""
 }
 
-func redactURLQuery(uri *url.URL) {
+func redactURLQuery(uri *url.URL, extraKeys []string) {
 	values := uri.Query()
 	changed := false
 	for key, vals := range values {
-		if !IsSensitiveLogKey(key) {
+		if !matchesSensitiveKey(key, extraKeys) {
 			continue
 		}
 		for i, v := range vals {
@@ -237,13 +273,13 @@ func redactURLQuery(uri *url.URL) {
 	}
 }
 
-func redactSensitiveLine(line string) (string, bool) {
+func redactSensitiveLine(line string, extraKeys []string) (string, bool) {
 	idx := strings.IndexAny(line, ":=")
 	if idx <= 0 {
 		return "", false
 	}
 	key := strings.Trim(line[:idx], " \t\"'{[")
-	if !IsSensitiveLogKey(key) {
+	if !matchesSensitiveKey(key, extraKeys) {
 		return "", false
 	}
 
@@ -280,7 +316,7 @@ func redactSecretLiteral(s string) string {
 	return PrintableSecret(s)
 }
 
-func redactInlineSecrets(line string) string {
+func redactInlineSecrets(line string, extraKeys []string) string {
 	line = inlineAuthorizationPattern.ReplaceAllStringFunc(line, func(match string) string {
 		parts := inlineAuthorizationPattern.FindStringSubmatch(match)
 		if len(parts) != 5 {
@@ -288,9 +324,21 @@ func redactInlineSecrets(line string) string {
 		}
 		return parts[1] + parts[2] + parts[3] + " " + printableValue(parts[4])
 	})
-	return inlineSecretPattern.ReplaceAllStringFunc(line, func(match string) string {
+	line = inlineSecretPattern.ReplaceAllStringFunc(line, func(match string) string {
 		parts := inlineSecretPattern.FindStringSubmatch(match)
 		if len(parts) != 5 || !IsSensitiveLogKey(parts[2]) {
+			return match
+		}
+		return parts[1] + parts[2] + parts[3] + redactSecretLiteral(parts[4])
+	})
+	if len(extraKeys) == 0 {
+		return line
+	}
+	// inlineSecretPattern only knows the built-in substrings, so caller-supplied
+	// keys need a pass over every key/value pair on the line.
+	return inlineKeyValuePattern.ReplaceAllStringFunc(line, func(match string) string {
+		parts := inlineKeyValuePattern.FindStringSubmatch(match)
+		if len(parts) != 5 || !matchesSensitiveKey(parts[2], extraKeys) {
 			return match
 		}
 		return parts[1] + parts[2] + parts[3] + redactSecretLiteral(parts[4])

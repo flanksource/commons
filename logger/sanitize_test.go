@@ -156,6 +156,53 @@ func TestStripSecrets(t *testing.T) {
 	}
 }
 
+func TestStripSecretsExtraKeys(t *testing.T) {
+	const sessionID = "ABCDEF0123456789"
+
+	testCases := []struct {
+		name      string
+		input     string
+		extraKeys []string
+		redacted  bool
+	}{
+		{
+			name:     "unknown key stays visible without extra keys",
+			input:    `{"session_id":"` + sessionID + `","name":"alice"}`,
+			redacted: false,
+		},
+		{
+			name:      "json field matched by an extra key",
+			input:     `{"session_id":"` + sessionID + `","name":"alice"}`,
+			extraKeys: []string{"session_id"},
+			redacted:  true,
+		},
+		{
+			name:      "form field matched by an extra key",
+			input:     "session_id=" + sessionID + "&name=alice",
+			extraKeys: []string{"session_id"},
+			redacted:  true,
+		},
+		{
+			name:      "extra key matched case-insensitively",
+			input:     "Session-ID: " + sessionID,
+			extraKeys: []string{"session_id"},
+			redacted:  true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := StripSecrets(tc.input, tc.extraKeys...)
+			if strings.Contains(got, sessionID) == tc.redacted {
+				t.Errorf("StripSecrets(%q, %v) = %q, want secret redacted=%v", tc.input, tc.extraKeys, got, tc.redacted)
+			}
+			if !strings.Contains(got, "alice") && strings.Contains(tc.input, "alice") {
+				t.Errorf("StripSecrets(%q, %v) = %q, want non-sensitive fields preserved", tc.input, tc.extraKeys, got)
+			}
+		})
+	}
+}
+
 func TestTracefRedactsSecrets(t *testing.T) {
 	originalOutput := GetOutput()
 	originalLevel := currentLogger.GetLevel()

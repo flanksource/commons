@@ -47,13 +47,18 @@ const (
 )
 
 // HTTPLogResponseBodyLength returns the configured response body log limit.
-// fallback is used when the property is unset or invalid; non-positive
-// fallbacks use the 4 KiB default.
+// fallback is used when the property is unset, invalid, or non-positive;
+// non-positive fallbacks use the 4 KiB default. The limit is always positive:
+// an unbounded limit would make httpretty buffer and log a whole response.
 func HTTPLogResponseBodyLength(fallback int64) int64 {
 	if fallback <= 0 {
 		fallback = defaultHTTPLogResponseBodyLength
 	}
-	return int64(properties.Bytes(int(fallback), HTTPLogResponseBodyLengthProperty))
+	limit := int64(properties.Bytes(int(fallback), HTTPLogResponseBodyLengthProperty))
+	if limit <= 0 {
+		return fallback
+	}
+	return limit
 }
 
 // NewHttpLogger creates an HTTP logger that logs at predefined levels.

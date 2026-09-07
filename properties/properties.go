@@ -353,7 +353,6 @@ func (p *Properties) Int(def int, key string) int {
 // the property is unset or does not parse. Values use the ParseBytes syntax: a
 // decimal integer with an optional size suffix, e.g. "1048576", "1MiB" or
 // "4MB".
-//
 // Only unset and unparseable values fall back to def; a value that parses to 0
 // or less is returned as-is so callers can use it to disable a cap. Callers
 // that require a positive limit must reject non-positive results themselves,
@@ -361,8 +360,8 @@ func (p *Properties) Int(def int, key string) int {
 func (p *Properties) Bytes(def int, key string) int {
 	p.registerDefault(PropertyTypeBytes, strconv.Itoa(def), key)
 	if v := p.Get(key); v != "" {
-		if i, err := strconv.Atoi(v); err == nil {
-			return i
+		if parsed, err := ParseBytes(v); err == nil && int64(int(parsed)) == parsed {
+			return int(parsed)
 		}
 	}
 	return def
