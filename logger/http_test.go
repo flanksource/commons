@@ -24,6 +24,21 @@ var _ = Describe("HTTP response body log limit", func() {
 		Expect(HTTPLogResponseBodyLength(4 * 1024)).To(Equal(int64(9_999_999)))
 	})
 
+	It("accepts a byte-size suffix", func() {
+		properties.Set(HTTPLogResponseBodyLengthProperty, "1MiB")
+		Expect(HTTPLogResponseBodyLength(4 * 1024)).To(Equal(int64(1024 * 1024)))
+	})
+
+	DescribeTable("keeps the limit positive so a response is never logged unbounded",
+		func(configured string) {
+			properties.Set(HTTPLogResponseBodyLengthProperty, configured)
+			Expect(HTTPLogResponseBodyLength(2 * 1024)).To(Equal(int64(2 * 1024)))
+		},
+		Entry("zero", "0"),
+		Entry("negative", "-1"),
+		Entry("unparseable", "not-a-size"),
+	)
+
 	It("redacts an incomplete JSON prefix", func() {
 		const secret = "supersecret"
 		var output bytes.Buffer

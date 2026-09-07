@@ -145,8 +145,17 @@ type Client struct {
 	// traceConfig stores the trace configuration for use by auth middlewares
 	traceConfig TraceConfig
 
-	// transportMiddlewares are like http middlewares for transport
+	// transportMiddlewares are installed directly around httpClient.Transport,
+	// outermost first, so they execute in the order Use registered them.
 	transportMiddlewares []middlewares.Middleware
+
+	// baseTransport is httpClient.Transport as it stood before the first Use,
+	// so chained Use calls can rebuild the chain in registration order.
+	baseTransport http.RoundTripper
+
+	// authMiddlewares wrap the whole client call (httpClient.Do) outside the
+	// HAR middlewares, so headers they add are captured in HAR entries.
+	authMiddlewares []middlewares.Middleware
 
 	// retryConfig specifies the configuration for retries.
 	retryConfig RetryConfig
@@ -569,7 +578,9 @@ func (c *Client) OAuth(config middlewares.OauthConfig) *Client {
 			config.TokenTransport = harMiddleware
 		}
 	}
-	c.Use(middlewares.NewOauthTransport(config).RoundTripper)
+	// Installed outside the HAR middlewares (not via Use, which installs
+	// around the transport) so HAR captures the Authorization header.
+	c.authMiddlewares = append(c.authMiddlewares, middlewares.NewOauthTransport(config).RoundTripper)
 	return c
 }
 
@@ -1061,10 +1072,10 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 
 	c.httpClient.CheckRedirect = c.checkRedirectFunc()
 
-	// HAR middlewares are applied innermost (closest to transport) so they see
-	// the final request after auth middleware has added headers.
+	// HAR middlewares are applied inside the auth middlewares so they see the
+	// final request after auth middleware has added headers.
 	inner := applyMiddleware(middlewares.RoundTripperFunc(r.client.httpClient.Do), r.client.harMiddlewares...)
-	roundTripper := applyMiddleware(inner, r.client.transportMiddlewares...)
+	roundTripper := applyMiddleware(inner, r.client.authMiddlewares...)
 	httpResponse, err := roundTripper.RoundTrip(req)
 	if err != nil {
 		return nil, err
@@ -1098,8 +1109,18 @@ func toMap(h http.Header) map[string]string {
 //			return rt.RoundTrip(req)
 //		})
 //	})
-func (c *Client) Use(middlewares ...middlewares.Middleware) *Client {
-	c.transportMiddlewares = append(c.transportMiddlewares, middlewares...)
+func (c *Client) Use(middleware ...middlewares.Middleware) *Client {
+	if c.httpClient.Transport == nil {
+		c.InsecureSkipVerify(true)
+	}
+	// The whole chain is rebuilt from the transport Use first saw, so a later
+	// Use appends behind the middleware already registered instead of wrapping
+	// outside it: Use(A).Use(B) and Use(A, B) both run A before B.
+	if len(c.transportMiddlewares) == 0 {
+		c.baseTransport = c.httpClient.Transport
+	}
+	c.transportMiddlewares = append(c.transportMiddlewares, middleware...)
+	c.httpClient.Transport = applyMiddleware(c.baseTransport, c.transportMiddlewares...)
 	return c
 }
 

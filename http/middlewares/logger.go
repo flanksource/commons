@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flanksource/clicky"
 	"github.com/flanksource/clicky/api"
 	"github.com/flanksource/commons/console"
 	commonsCtx "github.com/flanksource/commons/context"
@@ -60,7 +59,7 @@ func (f *formURLEncodedFormatter) Format(w io.Writer, src []byte) error {
 		}
 		m[k] = joined
 	}
-	fmt.Fprint(w, clicky.Map(m).ANSI())
+	fmt.Fprint(w, api.Map(nonEmptyValues(m)).ANSI())
 	return nil
 }
 
@@ -190,7 +189,18 @@ func formatValueBlock(title string, values url.Values) string {
 	if len(values) == 0 {
 		return ""
 	}
-	return fmt.Sprintf("%s:\n%s", title, clicky.Map(redactedValueMap(values)).ANSI())
+	return fmt.Sprintf("%s:\n%s", title, api.Map(nonEmptyValues(redactedValueMap(values))).ANSI())
+}
+
+func nonEmptyValues[T any](values map[string]T) map[string]T {
+	filtered := make(map[string]T, len(values))
+	for key, value := range values {
+		formatted := fmt.Sprintf("%v", value)
+		if formatted != "" && formatted != "<nil>" {
+			filtered[key] = value
+		}
+	}
+	return filtered
 }
 
 func accessURL(req *http.Request) string {
@@ -456,9 +466,9 @@ func readErrorBody(resp *http.Response, maxLen int64) string {
 	limit := logger.HTTPLogResponseBodyLength(maxLen)
 	body, restored, truncated, _ := readBodyPrefix(resp.Body, limit)
 	resp.Body = restored
-	body = strings.TrimSpace(body)
+	body = logger.StripSecrets(strings.TrimSpace(body))
 	if truncated {
-		return fmt.Sprintf("%s\n* body truncated after %d bytes", logger.StripSecrets(body), limit)
+		return fmt.Sprintf("%s\n* body truncated after %d bytes", body, limit)
 	}
 	return body
 }
