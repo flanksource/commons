@@ -19,19 +19,63 @@ var CommonRedactedHeaders = []string{
 // SensitiveKeys are substrings that mark a body/query key as a secret. "sessionid"
 // and "sessid" cover the common session identifiers (JSESSIONID, PHPSESSID,
 // ASP.NET_SessionId, x-sessionid) without redacting unrelated "session*" fields.
-var SensitiveKeys = []string{"user", "pass", "secret", "key", "token", "username", "password", "authorization", "sessionid", "sessid"}
+//
+// A bare "user" is deliberately absent. It identifies a principal, it does not
+// authenticate one, and as a substring it swallowed every key containing it —
+// "user", "userId", "currentUser", and any object describing who a request ran
+// as. Redacting those hides the half of a diagnostic that says who was acting
+// while protecting nothing: the credential is named by "password", "secret",
+// "token", "key", or "authorization", all of which are still matched. The
+// paired-credential form "username" remains, so basic-auth style dumps are
+// unchanged.
+var SensitiveKeys = []string{"pass", "secret", "key", "token", "username", "password", "authorization", "sessionid", "sessid"}
 
+// NonSensitiveKeys names keys that must never be redacted even though they
+// contain a sensitive substring. Matching is exact (case-insensitive) rather
+// than by substring, so an exemption cannot silently widen: "token_type"
+// exempts that key alone, not everything containing it.
+//
+// Extend it with MarkNonSensitive rather than assigning, so an application's
+// exemptions compose with the defaults instead of replacing them.
 var NonSensitiveKeys = []string{"token_type", "grant_type"}
+
+// MarkNonSensitive exempts keys from redaction by name. Use it for a field
+// whose name collides with a secret substring but whose value is not a secret
+// — a "publicKey" fingerprint, a "tokenCount", an "authorizationModel" — so the
+// value survives into logs and error envelopes instead of becoming "****".
+//
+// Call it during package init or program startup: it mutates process-global
+// state and is not safe to race against concurrent logging.
+func MarkNonSensitive(keys ...string) {
+	for _, key := range keys {
+		key = normalizeSensitiveKey(key)
+		if key == "" || isNonSensitiveKey(key) {
+			continue
+		}
+		NonSensitiveKeys = append(NonSensitiveKeys, key)
+	}
+}
+
+func normalizeSensitiveKey(v string) string {
+	return strings.Trim(strings.TrimSpace(strings.ToLower(v)), "_")
+}
+
+func isNonSensitiveKey(v string) bool {
+	for _, k := range NonSensitiveKeys {
+		if v == normalizeSensitiveKey(k) {
+			return true
+		}
+	}
+	return false
+}
 
 var inlineSecretPattern = regexp.MustCompile(`(?i)(["']?)([a-z0-9_.-]*(?:user|pass|secret|key|token|sessionid|sessid|authorization)[a-z0-9_.-]*)(["']?\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;&}]+)`)
 var inlineAuthorizationPattern = regexp.MustCompile(`(?i)\b(authorization)(\s*[:=]\s*)([A-Za-z]+)\s+([^\s,;]+)`)
 
 func IsSensitiveKey(v string) bool {
-	v = strings.Trim(strings.TrimSpace(strings.ToLower(v)), "_")
-	for _, k := range NonSensitiveKeys {
-		if v == k {
-			return false
-		}
+	v = normalizeSensitiveKey(v)
+	if isNonSensitiveKey(v) {
+		return false
 	}
 	for _, k := range SensitiveKeys {
 		if v == k || strings.Contains(v, k) {
@@ -43,10 +87,8 @@ func IsSensitiveKey(v string) bool {
 
 func IsSensitiveLogKey(v string) bool {
 	v = strings.Trim(strings.TrimSpace(strings.ToLower(v)), " _-.'\"{}[]")
-	for _, k := range NonSensitiveKeys {
-		if v == k {
-			return false
-		}
+	if isNonSensitiveKey(v) {
+		return false
 	}
 	switch v {
 	case "authorization", "apikey", "api_key", "key", "pass", "passwd", "password", "pwd", "secret", "sessid", "sessionid", "token", "username":

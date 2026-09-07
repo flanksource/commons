@@ -60,7 +60,7 @@ type HARConfig struct {
 // value <= 0 disables truncation (full bodies captured).
 func DefaultConfig() HARConfig {
 	return HARConfig{
-		MaxBodySize:         int64(properties.Int(defaultMaxBodySize, MaxBodySizeProperty)),
+		MaxBodySize:         int64(properties.Bytes(defaultMaxBodySize, MaxBodySizeProperty)),
 		CaptureContentTypes: []string{"application/json", "application/x-www-form-urlencoded"},
 		CaptureSensitive:    properties.On(false, SensitiveProperty),
 	}

@@ -29,6 +29,10 @@ const rootName = "root"
 
 var namedLoggers cmap.Map[string, *SlogLogger]
 var todo = context.TODO()
+var propertyLogLevels = []string{
+	"fatal", "error", "warn", "info", "debug", "trace",
+	"trace1", "trace2", "trace3", "trace4", "silent",
+}
 
 // outputBox wraps the current io.Writer so all atomic stores carry the same
 // concrete type (*outputBox) — a hard requirement of sync/atomic.Value.
@@ -148,9 +152,9 @@ func New(prefix string) *SlogLogger {
 	if flags.level != "" {
 		rootLevel = flags.level
 	} else {
-		rootLevel = properties.String("info", "log.level")
+		rootLevel = properties.LogLevel("info", propertyLogLevels, "log.level")
 	}
-	namedLevel := properties.String(rootLevel, "log.level."+prefix)
+	namedLevel := properties.LogLevel(rootLevel, propertyLogLevels, "log.level."+prefix)
 
 	// Handlers write through sharedWriter (a thin indirection over
 	// currentOutput) so a later SetOutput retargets every existing logger,
@@ -204,7 +208,7 @@ func NewWithWriter(writer io.Writer) *SlogLogger {
 	if flags.level != "" {
 		rootLevel = flags.level
 	} else {
-		rootLevel = properties.String("info", "log.level")
+		rootLevel = properties.LogLevel("info", propertyLogLevels, "log.level")
 	}
 
 	if logJson {

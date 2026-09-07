@@ -196,7 +196,7 @@ func (r *Request) Body(v any) error {
 		// A raw reader is single-use; buffer it once (up to maxBufferSize) so a
 		// retried attempt can replay the same bytes instead of sending an empty
 		// body. Bodies over the cap stream through un-buffered and cannot retry.
-		limit := properties.Int(defaultMaxBufferSize, MaxBufferSizeProperty)
+		limit := properties.Bytes(defaultMaxBufferSize, MaxBufferSizeProperty)
 		if limit <= 0 {
 			b, err := io.ReadAll(t)
 			if err != nil {
