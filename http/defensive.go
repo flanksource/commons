@@ -18,8 +18,11 @@ type DefensiveOptions struct {
 	Public    bool
 	Private   bool
 	Localhost bool
-	Proxy     bool
-	Redirect  bool
+	// Proxy enables proxy use and trusts the selected proxy to resolve and
+	// enforce hostname destinations. Direct connections and literal destination
+	// addresses remain subject to the configured address policy.
+	Proxy    bool
+	Redirect bool
 }
 
 // NewDefensive creates a client that can reach public HTTP(S) destinations only.
@@ -57,6 +60,7 @@ func Defensive(options DefensiveOptions) middlewares.Middleware {
 			if configured.Proxy == nil {
 				configured.Proxy = stdhttp.ProxyFromEnvironment
 			}
+			configured.Proxy = defensiveProxy(configured.Proxy)
 		} else {
 			configured.Proxy = nil
 		}
@@ -68,7 +72,7 @@ func Defensive(options DefensiveOptions) middlewares.Middleware {
 		configured.TLSClientConfig.InsecureSkipVerify = false
 		configured.DialTLSContext = defensiveTLSDialContext(configured.DialContext, configured.TLSClientConfig)
 
-		return &defensiveRoundTripper{transport: configured, options: options, resolver: net.DefaultResolver}
+		return &defensiveRoundTripper{transport: configured, options: options}
 	}
 }
 
@@ -86,7 +90,6 @@ func (t misconfiguredRoundTripper) RoundTrip(*stdhttp.Request) (*stdhttp.Respons
 type defensiveRoundTripper struct {
 	transport *stdhttp.Transport
 	options   DefensiveOptions
-	resolver  defensiveResolver
 }
 
 func (t *defensiveRoundTripper) RoundTrip(request *stdhttp.Request) (*stdhttp.Response, error) {
@@ -99,49 +102,28 @@ func (t *defensiveRoundTripper) RoundTrip(request *stdhttp.Request) (*stdhttp.Re
 	if err := validateDefensiveCredentials(request); err != nil {
 		return nil, err
 	}
-	if err := t.validateProxiedDestination(request); err != nil {
-		return nil, err
-	}
 	return t.transport.RoundTrip(request)
 }
 
-// validateProxiedDestination resolves and checks the requested host when the
-// connection goes through a proxy. A proxied dial only ever sees the proxy's
-// address, so without this the destination policy is unenforced and the proxy
-// can be asked to reach a private or metadata address.
-func (t *defensiveRoundTripper) validateProxiedDestination(request *stdhttp.Request) error {
-	if !t.options.Proxy || t.transport.Proxy == nil {
-		return nil
-	}
-	proxyURL, err := t.transport.Proxy(request)
-	if err != nil {
-		return fmt.Errorf("resolve proxy for %q: %w", request.URL, err)
-	}
-	if proxyURL == nil {
-		// Direct connection: defensiveDialContext validates the destination.
-		return nil
-	}
-
-	host := request.URL.Hostname()
-	if ip := net.ParseIP(host); ip != nil {
-		return validateDefensiveIP(ip, t.options)
-	}
-	if isMetadataHost(host) {
-		return fmt.Errorf("defensive HTTP client refuses metadata host %q", host)
-	}
-	addresses, err := t.resolver.LookupIPAddr(request.Context(), host)
-	if err != nil {
-		return fmt.Errorf("resolve defensive HTTP host %q: %w", host, err)
-	}
-	if len(addresses) == 0 {
-		return fmt.Errorf("resolve defensive HTTP host %q: no addresses returned", host)
-	}
-	for _, resolved := range addresses {
-		if err := validateDefensiveIP(resolved.IP, t.options); err != nil {
-			return fmt.Errorf("resolve defensive HTTP host %q to %s: %w", host, resolved.IP, err)
+func defensiveProxy(selector func(*stdhttp.Request) (*url.URL, error)) func(*stdhttp.Request) (*url.URL, error) {
+	return func(request *stdhttp.Request) (*url.URL, error) {
+		proxyURL, err := selector(request)
+		if err != nil {
+			return nil, fmt.Errorf("resolve defensive HTTP proxy: %w", err)
 		}
+		if proxyURL == nil || proxyURL.User == nil {
+			return proxyURL, nil
+		}
+
+		scheme := strings.ToLower(proxyURL.Scheme)
+		if scheme == "" {
+			scheme = "http"
+		}
+		if scheme != "https" {
+			return nil, fmt.Errorf("defensive HTTP client refuses proxy credentials over %q", scheme)
+		}
+		return proxyURL, nil
 	}
-	return nil
 }
 
 // validateDefensiveCredentials refuses to put credentials on the wire in

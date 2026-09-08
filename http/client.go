@@ -186,12 +186,12 @@ type Client struct {
 
 	curlLog bool
 
-	// harCollector accumulates HAR entries from all sources (main requests,
-	// OAuth token fetches, redirect hops, retries).
+	// harCollector is also attached to authentication transports that do not
+	// use the client's primary transport.
 	harCollector *har.Collector
 
-	// harMiddlewares are applied innermost (closest to transport) so they
-	// capture the final request after auth middleware has added headers.
+	// harMiddlewares capture each transport attempt, including redirect hops,
+	// after request authentication has been applied.
 	harMiddlewares []middlewares.Middleware
 
 	// maxRedirects controls how many redirects to follow. -1 means no following.
@@ -1032,6 +1032,12 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 		r.client.httpClient.Transport = &curlLogTransport{base: base}
 	}
 
+	transport := r.client.httpClient.Transport
+	if transport == nil {
+		transport = http.DefaultTransport
+	}
+	transport = applyMiddleware(transport, r.client.harMiddlewares...)
+
 	if c.authConfig != nil {
 		if c.authConfig.AWSCredentialsProvider != nil {
 			awsCfg := middlewares.AWSSigv4Config{
@@ -1043,7 +1049,7 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 			if c.traceConfig.Auth {
 				awsCfg.Tracer = func(msg string) { logger.Tracef("%s", msg) }
 			}
-			r.client.httpClient.Transport = middlewares.NewAWSSigv4Transport(awsCfg, r.client.httpClient.Transport)
+			transport = middlewares.NewAWSSigv4Transport(awsCfg, transport)
 		} else {
 			parts := strings.Split(c.authConfig.Username, "@")
 			domain := ""
@@ -1052,30 +1058,31 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 			}
 
 			if c.authConfig.Ntlmv2 {
-				r.client.httpClient.Transport = &httpntlmv2.NtlmTransport{
+				transport = &httpntlmv2.NtlmTransport{
 					Domain:       domain,
 					User:         parts[0],
 					Password:     c.authConfig.Password,
-					RoundTripper: r.client.httpClient.Transport,
+					RoundTripper: transport,
 				}
 			} else if c.authConfig.Ntlm {
-				r.client.httpClient.Transport = &httpntlm.NtlmTransport{
+				transport = &httpntlm.NtlmTransport{
 					Domain:   domain,
 					User:     parts[0],
 					Password: c.authConfig.Password,
 				}
+				// The legacy NTLM transport does not accept an underlying transport.
+				transport = applyMiddleware(transport, r.client.harMiddlewares...)
 			} else if c.authConfig.Digest {
-				r.client.httpClient.Transport = newDigestTransport(c.authConfig.Username, c.authConfig.Password, r.client.httpClient.Transport)
+				transport = newDigestTransport(c.authConfig.Username, c.authConfig.Password, transport)
 			}
 		}
 	}
 
-	c.httpClient.CheckRedirect = c.checkRedirectFunc()
+	httpClient := *r.client.httpClient
+	httpClient.Transport = transport
+	httpClient.CheckRedirect = c.checkRedirectFunc()
 
-	// HAR middlewares are applied inside the auth middlewares so they see the
-	// final request after auth middleware has added headers.
-	inner := applyMiddleware(middlewares.RoundTripperFunc(r.client.httpClient.Do), r.client.harMiddlewares...)
-	roundTripper := applyMiddleware(inner, r.client.authMiddlewares...)
+	roundTripper := applyMiddleware(middlewares.RoundTripperFunc(httpClient.Do), r.client.authMiddlewares...)
 	httpResponse, err := roundTripper.RoundTrip(req)
 	if err != nil {
 		return nil, err
@@ -1131,12 +1138,6 @@ func (c *Client) checkRedirectFunc() func(req *http.Request, via []*http.Request
 		}
 		if len(via) >= c.maxRedirects {
 			return fmt.Errorf("stopped after %d redirects", c.maxRedirects)
-		}
-
-		// req.Response is the redirect response that caused this redirect
-		if c.harCollector != nil && req.Response != nil {
-			prev := via[len(via)-1]
-			c.harCollector.Add(har.CaptureRedirect(prev, req.Response, c.harCollector.Config))
 		}
 
 		return nil
