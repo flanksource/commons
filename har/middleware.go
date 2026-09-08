@@ -53,15 +53,6 @@ func capture(req *http.Request, next http.RoundTripper, cfg HARConfig, handler f
 	return resp, err
 }
 
-// CaptureRedirect builds a HAR entry from a redirect hop's request and response.
-func CaptureRedirect(req *http.Request, resp *http.Response, cfg HARConfig) *Entry {
-	return &Entry{
-		StartedDateTime: time.Now().UTC().Format(time.RFC3339),
-		Request:         buildRequest(req, cfg),
-		Response:        buildResponse(resp, cfg),
-	}
-}
-
 func buildRequest(req *http.Request, cfg HARConfig) Request {
 	har := Request{
 		Method:      req.Method,

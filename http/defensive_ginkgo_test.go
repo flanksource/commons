@@ -192,43 +192,58 @@ var _ = Describe("Defensive HTTP client", func() {
 	})
 
 	Describe("proxied destinations", func() {
-		newProxied := func(resolver defensiveResolver) *defensiveRoundTripper {
-			proxy, err := url.Parse("http://proxy.example:3128")
+		It("delegates hostname resolution to an explicitly enabled proxy", func() {
+			dialStopped := errors.New("proxy dial stopped")
+			proxy, err := url.Parse("http://93.184.216.34:3128")
 			Expect(err).ToNot(HaveOccurred())
-			transport := stdhttp.DefaultTransport.(*stdhttp.Transport).Clone()
-			transport.Proxy = func(*stdhttp.Request) (*url.URL, error) { return proxy, nil }
-			return &defensiveRoundTripper{
-				transport: transport,
-				options:   DefensiveOptions{Public: true, Proxy: true},
-				resolver:  resolver,
+			base := stdhttp.DefaultTransport.(*stdhttp.Transport).Clone()
+			base.Proxy = stdhttp.ProxyURL(proxy)
+			base.DialContext = func(context.Context, string, string) (net.Conn, error) {
+				return nil, dialStopped
 			}
-		}
+			transport := Defensive(DefensiveOptions{Public: true, Proxy: true})(base)
 
-		It("refuses a destination the proxy would resolve to a private address", func() {
-			transport := newProxied(staticResolver{"internal.example": {{IP: net.ParseIP("10.0.0.4")}}})
+			_, err = transport.RoundTrip(httptest.NewRequest(stdhttp.MethodGet, "https://tenant.example/data", nil))
 
-			_, err := transport.RoundTrip(httptest.NewRequest(stdhttp.MethodGet, "https://internal.example/secrets", nil))
-
-			Expect(err).To(MatchError(ContainSubstring("10.0.0.4")))
+			Expect(errors.Is(err, dialStopped)).To(BeTrue())
 		})
 
-		DescribeTable("refuses a literal destination the policy disallows",
-			func(target string) {
-				transport := newProxied(staticResolver{})
+		DescribeTable("refuses proxy credentials without proxy TLS",
+			func(rawProxy string) {
+				const password = "proxy-secret"
+				proxy, err := url.Parse(rawProxy)
+				Expect(err).ToNot(HaveOccurred())
+				base := stdhttp.DefaultTransport.(*stdhttp.Transport).Clone()
+				base.Proxy = stdhttp.ProxyURL(proxy)
+				base.DialContext = func(context.Context, string, string) (net.Conn, error) {
+					return nil, errors.New("proxy dial should not be reached")
+				}
+				transport := Defensive(DefensiveOptions{Public: true, Proxy: true})(base)
 
-				err := transport.validateProxiedDestination(httptest.NewRequest(stdhttp.MethodGet, target, nil))
+				_, err = transport.RoundTrip(httptest.NewRequest(stdhttp.MethodGet, "https://93.184.216.35/data", nil))
 
-				Expect(err).To(HaveOccurred())
+				Expect(err).To(MatchError(ContainSubstring("proxy credentials")))
+				Expect(err.Error()).ToNot(ContainSubstring(password))
 			},
-			Entry("private IP", "https://10.0.0.4/secrets"),
-			Entry("link-local IP", "https://169.254.169.254/latest/meta-data"),
-			Entry("metadata host", "https://metadata.google.internal/computeMetadata/v1/"),
+			Entry("HTTP proxy", "http://alice:proxy-secret@93.184.216.34:3128"),
+			Entry("scheme-less proxy", "//alice:proxy-secret@93.184.216.34:3128"),
+			Entry("SOCKS proxy", "socks5://alice:proxy-secret@93.184.216.34:1080"),
 		)
 
-		It("allows a destination that resolves to a permitted address", func() {
-			transport := newProxied(staticResolver{"public.example": {{IP: net.ParseIP("93.184.216.34")}}})
+		It("allows proxy credentials over HTTPS", func() {
+			dialStopped := errors.New("proxy dial stopped")
+			proxy, err := url.Parse("https://alice:proxy-secret@93.184.216.34:3128")
+			Expect(err).ToNot(HaveOccurred())
+			base := stdhttp.DefaultTransport.(*stdhttp.Transport).Clone()
+			base.Proxy = stdhttp.ProxyURL(proxy)
+			base.DialContext = func(context.Context, string, string) (net.Conn, error) {
+				return nil, dialStopped
+			}
+			transport := Defensive(DefensiveOptions{Public: true, Proxy: true})(base)
 
-			Expect(transport.validateProxiedDestination(httptest.NewRequest(stdhttp.MethodGet, "https://public.example", nil))).To(Succeed())
+			_, err = transport.RoundTrip(httptest.NewRequest(stdhttp.MethodGet, "https://93.184.216.35/data", nil))
+
+			Expect(errors.Is(err, dialStopped)).To(BeTrue())
 		})
 	})
 

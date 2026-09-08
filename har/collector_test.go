@@ -125,39 +125,6 @@ func TestCollector_RetryAccumulatesEntries(t *testing.T) {
 	}
 }
 
-func TestCollector_RedirectCapturesAllHops(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/start":
-			http.Redirect(w, r, "/middle", http.StatusFound)
-		case "/middle":
-			http.Redirect(w, r, "/end", http.StatusFound)
-		case "/end":
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(200)
-			fmt.Fprint(w, `{"done":true}`)
-		}
-	}))
-	defer srv.Close()
-
-	collector := har.NewCollector(har.DefaultConfig())
-	client := commonshttp.NewClient().
-		HARCollector(collector).
-		RedirectPolicy(5)
-
-	resp, err := client.R(context.Background()).Get(srv.URL + "/start")
-	if err != nil {
-		t.Fatalf("request failed: %v", err)
-	}
-	resp.Body.Close()
-
-	entries := collector.Entries()
-	// 2 redirect hops captured by CheckRedirect + 1 final request captured by middleware
-	if len(entries) < 3 {
-		t.Fatalf("expected at least 3 entries (2 redirects + final), got %d", len(entries))
-	}
-}
-
 func TestCollector_OAuthTokenRequestCaptured(t *testing.T) {
 	tokenSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
