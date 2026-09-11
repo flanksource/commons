@@ -15,7 +15,7 @@ jobs:
   # release from then on while resolving actions ("Repository access blocked").
   create-release:
     permissions: {}
-    uses: flanksource/action-workflows/.github/workflows/create-release.yml@5d7f5f3616936fd703e58c5ee7e4527dc9f6adcc # main
+    uses: flanksource/action-workflows/.github/workflows/create-release.yml@f8512a65d38c1ea53d5c83a4e30ee2ae56acac6f # main
     secrets:
       token: ${{ secrets.FLANKBOT }}
 
