@@ -1,6 +1,6 @@
 module github.com/flanksource/commons
 
-go 1.26.0
+go 1.26.1
 
 require (
 	dario.cat/mergo v1.0.2
@@ -11,7 +11,7 @@ require (
 	github.com/bsm/gomega v1.27.10
 	github.com/emirpasic/gods/v2 v2.0.0-alpha
 	github.com/fatih/color v1.18.0
-	github.com/flanksource/clicky v1.21.1
+	github.com/flanksource/clicky v1.21.63
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/goccy/go-yaml v1.19.2
 	github.com/google/go-cmp v0.7.0
@@ -82,7 +82,7 @@ require (
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/flanksource/gomplate/v3 v3.24.89 // indirect
-	github.com/flanksource/is-healthy v1.0.90 // indirect
+	github.com/flanksource/is-healthy v1.0.92 // indirect
 	github.com/flanksource/kubectl-neat v1.0.4 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
