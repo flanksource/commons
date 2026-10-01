@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strconv"
 )
 
 // Marshal delegates to json.Marshal
@@ -138,6 +139,10 @@ func convertNumber(n json.Number) (interface{}, error) {
 	// Attempt to convert to an int64 first
 	if i, err := n.Int64(); err == nil {
 		return i, nil
+	}
+	// Keep integers in (MaxInt64, MaxUint64] exact so they round-trip into uint64 fields.
+	if u, err := strconv.ParseUint(n.String(), 10, 64); err == nil {
+		return u, nil
 	}
 	// Return a float64 (default json.Decode() behavior)
 	// An overflow will return an error

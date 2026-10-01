@@ -85,32 +85,20 @@ func mergeSortedSlice(left, right, serverOrder []interface{}, mergeKey string, k
 	}
 
 	// left and right should be non-overlapping.
-	size := len(left) + len(right)
 	i, j := 0, 0
-	s := make([]interface{}, size)
+	s := make([]interface{}, 0, len(left))
 
-	for k := 0; k < size; k++ {
-		if i >= len(left) && j < len(right) {
-			// have items left in `right` list
-			s[k] = right[j]
-			j++
-		} else if j >= len(right) && i < len(left) {
-			// have items left in `left` list
-			s[k] = left[i]
+	for i < len(left) && j < len(right) {
+		if less, foundBoth := less(left[i], right[j]); foundBoth && less {
+			s = append(s, left[i])
 			i++
 		} else {
-			// compare them if i and j are both in bound
-			less, foundBoth := less(left[i], right[j])
-			if foundBoth && less {
-				s[k] = left[i]
-				i++
-			} else {
-				s[k] = right[j]
-				j++
-			}
+			s = append(s, right[j])
+			j++
 		}
 	}
-	return s
+	s = append(s, left[i:]...)
+	return append(s, right[j:]...)
 }
 
 // index returns the index of the item in the given items, or -1 if it doesn't exist
