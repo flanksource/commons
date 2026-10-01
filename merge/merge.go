@@ -21,12 +21,26 @@
 //
 //	Pre   []string `merge:"append"`        // the base's elements, then the override's
 //	Allow []string `merge:"append,unique"` // as append, with repeats dropped
+//	Ports []Port   `json:"ports" patchStrategy:"merge" patchMergeKey:"port"` // a Kubernetes strategic merge
+//
+// A list carrying Kubernetes' own patch tags merges exactly as a Kubernetes
+// strategic merge patch applies — the override's list is the patch and the
+// base's the object it lands on — using k8s.io/apimachinery's implementation,
+// ported into merge/strategicpatch. Elements sharing a merge key merge field by
+// field (and by their own patch tags, recursively), elements only the override
+// names are added, and elements only the base holds are kept; a list of scalars
+// under patchStrategy "merge" becomes the union. Elements cross into the patch
+// through their JSON encoding, so JSON decides what an element says: a field
+// without omitempty always speaks and so always wins, and a field JSON does not
+// encode is not carried.
 //
 // Tags are read on struct fields reached through structs and through pointers
 // that are non-nil on both sides. A tag that cannot mean what it says — append on
 // something that is not a list, unique over a non-comparable element type, a rule
-// this package does not define — panics rather than being ignored, because a
-// silently ignored tag reads exactly like an honoured one.
+// this package does not define, a patch strategy on something that is not a list
+// or beside a merge rule, a merge key with no strategy, an element without its
+// merge key — panics rather than being ignored, because a silently ignored tag
+// reads exactly like an honoured one.
 //
 // Policy names the exceptions that belong to a whole type rather than to one
 // field, including the types whose merge is a domain rule rather than a
@@ -135,7 +149,8 @@ type accumulator struct {
 }
 
 // walk rewrites each of the override's `append`-tagged slices to the
-// concatenation of the base's and its own, ahead of the merge. The default rule —
+// concatenation of the base's and its own, and each `patchStrategy`-tagged slice
+// to the strategic merge of the two, ahead of the merge. The default rule —
 // a non-empty override slice replaces the base's — then lands the accumulated
 // value, so the tag needs no machinery of its own and cannot interact with the
 // policy types, which own their rule and are not walked.
@@ -162,6 +177,12 @@ func (a accumulator) walk(base, override reflect.Value, path string) {
 				continue
 			}
 			fieldPath := path + "." + field.Name
+			if patchStrategic(field, fieldPath) {
+				if merged := strategicMerge(base.Type(), field, base.Field(i), override.Field(i), fieldPath); merged.IsValid() {
+					override.Field(i).Set(merged)
+				}
+				continue
+			}
 			tag, tagged := field.Tag.Lookup(tagName)
 			if !tagged {
 				a.walk(base.Field(i), override.Field(i), fieldPath)
