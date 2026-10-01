@@ -42,6 +42,7 @@ package http
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"crypto/x509"
 	"fmt"
 	"net"
@@ -152,6 +153,10 @@ type Client struct {
 	// baseTransport is httpClient.Transport as it stood before the first Use,
 	// so chained Use calls can rebuild the chain in registration order.
 	baseTransport http.RoundTripper
+
+	// transportErr records a failure from a fluent transport setter; every
+	// request made through the client fails with it.
+	transportErr error
 
 	// authMiddlewares wrap the whole client call (httpClient.Do) outside the
 	// HAR middlewares, so headers they add are captured in HAR entries.
@@ -365,25 +370,46 @@ func (c *Client) Timeout(d time.Duration) *Client {
 
 // DisableKeepAlives prevents reuse of TCP connections
 func (c *Client) DisableKeepAlive(val bool) *Client {
-	if c.httpClient.Transport == nil {
-		c.httpClient.Transport = http.DefaultTransport
+	customTransport, err := c.concreteTransport()
+	if err != nil {
+		c.transportErr = errors.Join(c.transportErr, fmt.Errorf("DisableKeepAlive: %w", err))
+		return c
 	}
-
-	customTransport := c.httpClient.Transport.(*http.Transport).Clone()
 	customTransport.DisableKeepAlives = val
-	c.httpClient.Transport = customTransport
+	c.setConcreteTransport(customTransport)
 	return c
 }
 
-func (c *Client) initTLSConfig() {
-	if c.httpClient.Transport == nil {
-		c.httpClient.Transport = http.DefaultTransport
+// concreteTransport returns a clone of the *http.Transport at the bottom of
+// the middleware chain installed by Use, with a non-nil TLSClientConfig.
+func (c *Client) concreteTransport() (*http.Transport, error) {
+	rt := c.httpClient.Transport
+	if len(c.transportMiddlewares) > 0 {
+		rt = c.baseTransport
 	}
+	if rt == nil {
+		rt = http.DefaultTransport
+	}
+	t, ok := rt.(*http.Transport)
+	if !ok {
+		return nil, fmt.Errorf("http client base transport is %T, expected *http.Transport", rt)
+	}
+	t = t.Clone()
+	if t.TLSClientConfig == nil {
+		t.TLSClientConfig = &tls.Config{}
+	}
+	return t, nil
+}
 
-	customTransport := c.httpClient.Transport.(*http.Transport).Clone()
-	if customTransport.TLSClientConfig == nil {
-		customTransport.TLSClientConfig = &tls.Config{}
+// setConcreteTransport replaces the transport at the bottom of the middleware
+// chain and rebuilds the chain around it.
+func (c *Client) setConcreteTransport(t *http.Transport) {
+	if len(c.transportMiddlewares) == 0 {
+		c.httpClient.Transport = t
+		return
 	}
+	c.baseTransport = t
+	c.httpClient.Transport = applyMiddleware(t, c.transportMiddlewares...)
 }
 
 type TLSConfig struct {
@@ -413,13 +439,14 @@ type TLSConfig struct {
 //		HandshakeTimeout:   10 * time.Second,
 //	})
 func (c *Client) TLSConfig(conf TLSConfig) (*Client, error) {
-	c.initTLSConfig()
-
 	if conf.HandshakeTimeout == 0 {
 		conf.HandshakeTimeout = time.Second * 10
 	}
 
-	transport := c.httpClient.Transport.(*http.Transport).Clone()
+	transport, err := c.concreteTransport()
+	if err != nil {
+		return nil, err
+	}
 	transport.TLSClientConfig.InsecureSkipVerify = conf.InsecureSkipVerify
 	transport.TLSHandshakeTimeout = conf.HandshakeTimeout
 
@@ -444,7 +471,7 @@ func (c *Client) TLSConfig(conf TLSConfig) (*Client, error) {
 	}
 
 	c.tlsConfig = transport.TLSClientConfig
-	c.httpClient.Transport = transport
+	c.setConcreteTransport(transport)
 	return c, nil
 }
 
@@ -457,12 +484,14 @@ func (c *Client) TLSConfig(conf TLSConfig) (*Client, error) {
 //	// Accept any certificate (dangerous!)
 //	client.InsecureSkipVerify(true)
 func (c *Client) InsecureSkipVerify(val bool) *Client {
-	c.initTLSConfig()
-
-	customTransport := c.httpClient.Transport.(*http.Transport).Clone()
+	customTransport, err := c.concreteTransport()
+	if err != nil {
+		c.transportErr = errors.Join(c.transportErr, fmt.Errorf("InsecureSkipVerify: %w", err))
+		return c
+	}
 	customTransport.TLSClientConfig.InsecureSkipVerify = val
 	c.tlsConfig = customTransport.TLSClientConfig
-	c.httpClient.Transport = customTransport
+	c.setConcreteTransport(customTransport)
 	return c
 }
 
@@ -476,14 +505,14 @@ func (c *Client) Proxy(url string) *Client {
 	return c
 }
 
-func (c *Client) setProxy(proxyURL *url.URL) {
-	if c.httpClient.Transport == nil {
-		c.httpClient.Transport = http.DefaultTransport
+func (c *Client) setProxy(proxyURL *url.URL) error {
+	customTransport, err := c.concreteTransport()
+	if err != nil {
+		return fmt.Errorf("proxy %s: %w", proxyURL.Redacted(), err)
 	}
-
-	customTransport := c.httpClient.Transport.(*http.Transport).Clone()
 	customTransport.Proxy = http.ProxyURL(proxyURL)
-	c.httpClient.Transport = customTransport
+	c.setConcreteTransport(customTransport)
+	return nil
 }
 
 // Auth configures authentication credentials for the client.
@@ -970,6 +999,9 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 		// initialize default TLS settings
 		c.InsecureSkipVerify(true)
 	}
+	if c.transportErr != nil {
+		return nil, c.transportErr
+	}
 
 	uri := *r.url
 	uri.Host = fmt.Sprintf("%s:%s", host, uri.Port())
@@ -1026,7 +1058,9 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 			return nil, err
 		}
 
-		c.setProxy(proxyURL)
+		if err := c.setProxy(proxyURL); err != nil {
+			return nil, err
+		}
 	}
 
 	if c.curlLog {
