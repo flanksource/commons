@@ -55,9 +55,6 @@ func capture(req *http.Request, next http.RoundTripper, cfg HARConfig, record re
 		StartedDateTime: started.UTC().Format(startedDateTimeLayout),
 		Request:         buildRequest(req, cfg),
 	}
-	if !cfg.CaptureSensitive && entry.Request.PostData != nil {
-		entry.Request.PostData.Text = logger.RedactAuthorization(entry.Request.PostData.Text, req.Header.Get("Authorization"))
-	}
 	complete := record(started, *entry)
 
 	resp, err := next.RoundTrip(req)
@@ -72,10 +69,6 @@ func capture(req *http.Request, next http.RoundTripper, cfg HARConfig, record re
 	entry.Time = entry.Timings.Wait + entry.Timings.Receive
 	if failure := errors.Join(err, bodyErr); failure != nil {
 		entry.Error = failure.Error()
-	}
-	if !cfg.CaptureSensitive {
-		entry.Response.Content.Text = logger.RedactAuthorization(entry.Response.Content.Text, req.Header.Get("Authorization"))
-		entry.Error = logger.RedactAuthorization(entry.Error, req.Header.Get("Authorization"))
 	}
 
 	complete(entry)
@@ -106,15 +99,6 @@ func buildRequest(req *http.Request, cfg HARConfig) Request {
 	}
 
 	return har
-}
-
-// RedactRequest projects URL, query values and headers through the HAR redaction policy.
-func RedactRequest(address *url.URL, headers http.Header, cfg HARConfig) Request {
-	request := Request{URL: harURL(address, cfg), Headers: harHeaders(headers, cfg), QueryString: []QueryString{}}
-	if address != nil {
-		request.QueryString = harQueryString(address.Query(), cfg)
-	}
-	return request
 }
 
 // buildResponse captures the response and returns the error the body read hit,
