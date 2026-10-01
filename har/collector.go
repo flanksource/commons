@@ -78,22 +78,20 @@ func (c *Collector) Add(e *Entry) {
 }
 
 // track registers entry as in flight under a new collector-unique ID and
-// returns the function that replaces it with its completed form.
+// returns the function that replaces it with its completed form. Durable
+// collectors hand the full in-flight entry (including the request body) to
+// onStart and keep no in-memory copy of it.
 func (c *Collector) track(started time.Time, entry Entry) func(*Entry) {
 	c.mu.Lock()
-	if c.pending == nil {
-		c.pending = map[uint64]inflight{}
-	}
 	c.nextID++
 	id := c.nextID
 	entry.ID = strconv.FormatUint(id, 10)
-	pendingEntry := entry
-	if c.durable && pendingEntry.Request.PostData != nil {
-		body := *pendingEntry.Request.PostData
-		body.Text = ""
-		pendingEntry.Request.PostData = &body
+	if !c.durable {
+		if c.pending == nil {
+			c.pending = map[uint64]inflight{}
+		}
+		c.pending[id] = inflight{started: started, entry: entry}
 	}
-	c.pending[id] = inflight{started: started, entry: pendingEntry}
 	onStart := c.onStart
 	c.mu.Unlock()
 	if onStart != nil {
