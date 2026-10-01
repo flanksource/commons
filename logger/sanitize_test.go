@@ -156,6 +156,53 @@ func TestStripSecrets(t *testing.T) {
 	}
 }
 
+func TestStripSecretsExtraKeys(t *testing.T) {
+	const sessionID = "ABCDEF0123456789"
+
+	testCases := []struct {
+		name      string
+		input     string
+		extraKeys []string
+		redacted  bool
+	}{
+		{
+			name:     "unknown key stays visible without extra keys",
+			input:    `{"session_id":"` + sessionID + `","name":"alice"}`,
+			redacted: false,
+		},
+		{
+			name:      "json field matched by an extra key",
+			input:     `{"session_id":"` + sessionID + `","name":"alice"}`,
+			extraKeys: []string{"session_id"},
+			redacted:  true,
+		},
+		{
+			name:      "form field matched by an extra key",
+			input:     "session_id=" + sessionID + "&name=alice",
+			extraKeys: []string{"session_id"},
+			redacted:  true,
+		},
+		{
+			name:      "extra key matched case-insensitively",
+			input:     "Session-ID: " + sessionID,
+			extraKeys: []string{"session_id"},
+			redacted:  true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := StripSecrets(tc.input, tc.extraKeys...)
+			if strings.Contains(got, sessionID) == tc.redacted {
+				t.Errorf("StripSecrets(%q, %v) = %q, want secret redacted=%v", tc.input, tc.extraKeys, got, tc.redacted)
+			}
+			if !strings.Contains(got, "alice") && strings.Contains(tc.input, "alice") {
+				t.Errorf("StripSecrets(%q, %v) = %q, want non-sensitive fields preserved", tc.input, tc.extraKeys, got)
+			}
+		})
+	}
+}
+
 func TestTracefRedactsSecrets(t *testing.T) {
 	originalOutput := GetOutput()
 	originalLevel := currentLogger.GetLevel()
@@ -203,6 +250,17 @@ func TestIsSensitiveKey(t *testing.T) {
 		{"grant_type", false},
 		{"Content-Type", false},
 		{"Accept", false},
+		// A principal's name identifies who acted; it does not authenticate
+		// them. Matching "user" as a substring redacted every one of these,
+		// which removes the most useful half of a diagnostic and protects
+		// nothing — the credential beside them is still caught.
+		{"user", false},
+		{"userId", false},
+		{"currentUser", false},
+		{"user_name", false},
+		{"identity", false},
+		{"username", true},
+		{"UserName", true},
 	}
 
 	for _, tc := range testCases {
@@ -211,5 +269,40 @@ func TestIsSensitiveKey(t *testing.T) {
 				t.Errorf("IsSensitiveKey(%q) = %v, want %v", tc.key, got, tc.expected)
 			}
 		})
+	}
+}
+
+// TestMarkNonSensitive covers the escape hatch for a field whose name collides
+// with a secret substring but whose value is not one. Without it the only fix
+// is to rename the field, which distorts an API to satisfy a log filter.
+func TestMarkNonSensitive(t *testing.T) {
+	original := NonSensitiveKeys
+	t.Cleanup(func() { NonSensitiveKeys = original })
+
+	const key = "token_count"
+	if !IsSensitiveKey(key) || !IsSensitiveLogKey(key) {
+		t.Fatalf("precondition: %q must be redacted before it is exempted", key)
+	}
+
+	MarkNonSensitive("Token_Count")
+
+	if IsSensitiveKey(key) {
+		t.Errorf("IsSensitiveKey(%q) = true, want false after exemption", key)
+	}
+	// Both predicates honour the same list, so an exemption cannot hold on one
+	// surface and not the other.
+	if IsSensitiveLogKey(key) {
+		t.Errorf("IsSensitiveLogKey(%q) = true, want false after exemption", key)
+	}
+	// Exact, not substring: exempting one key must not exempt everything that
+	// contains it.
+	if !IsSensitiveKey("token_count_secret") {
+		t.Error(`IsSensitiveKey("token_count_secret") = false, want true — an exemption must not widen`)
+	}
+
+	MarkNonSensitive("token_count")
+	if len(NonSensitiveKeys) != len(original)+1 {
+		t.Errorf("NonSensitiveKeys grew to %d entries, want %d — re-marking must be a no-op",
+			len(NonSensitiveKeys), len(original)+1)
 	}
 }
