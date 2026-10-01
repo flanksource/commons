@@ -75,4 +75,27 @@ var _ = Describe("Client connect timeout", func() {
 		Expect(errors.Is(err, context.DeadlineExceeded)).To(BeTrue())
 		Expect(time.Since(started)).To(BeNumerically("<", time.Second))
 	})
+
+	It("replaces an earlier connection timeout", func() {
+		dialCompleted := errors.New("dial completed after the first timeout")
+		client := NewClient()
+		client.httpClient.Transport = &stdhttp.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			timer := time.NewTimer(50 * time.Millisecond)
+			defer timer.Stop()
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-timer.C:
+				return nil, dialCompleted
+			}
+		}}
+
+		_, err := client.ConnectTimeout(10 * time.Millisecond)
+		Expect(err).ToNot(HaveOccurred())
+		_, err = client.ConnectTimeout(100 * time.Millisecond)
+		Expect(err).ToNot(HaveOccurred())
+
+		_, err = client.httpClient.Get("http://example.test")
+		Expect(errors.Is(err, dialCompleted)).To(BeTrue())
+	})
 })

@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/flanksource/clicky"
 	"github.com/flanksource/clicky/api"
 	"github.com/flanksource/commons/hash"
 	"github.com/flanksource/commons/logger"
@@ -41,7 +40,7 @@ type OauthConfig struct {
 }
 
 func (c OauthConfig) Pretty() api.Text {
-	t := clicky.Text(c.TokenURL)
+	t := api.Text{Content: c.TokenURL}
 	t = t.Space().
 		Append("id=", "text-muted").Append(c.ClientID).
 		Append(" scopes=", "text-muted").Append(c.Scopes).

@@ -24,9 +24,13 @@ func (c *Client) ConnectTimeout(timeout time.Duration) (*Client, error) {
 	}
 
 	configured := transport.Clone()
-	dialContext := configured.DialContext
+	dialContext := c.connectDialContext
 	if dialContext == nil {
-		dialContext = (&net.Dialer{}).DialContext
+		dialContext = configured.DialContext
+		if dialContext == nil {
+			dialContext = (&net.Dialer{}).DialContext
+		}
+		c.connectDialContext = dialContext
 	}
 	configured.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
 		connectCtx, cancel := context.WithTimeout(ctx, timeout)

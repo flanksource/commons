@@ -5,19 +5,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"mime"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
-	"github.com/flanksource/clicky"
 	"github.com/flanksource/clicky/api"
 	"github.com/flanksource/commons/console"
 	commonsCtx "github.com/flanksource/commons/context"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/logger/httpretty"
-	"github.com/flanksource/commons/properties"
 )
 
 type jsonFormatter struct{}
@@ -29,7 +28,8 @@ func (j *jsonFormatter) Match(mediatype string) bool {
 func (j *jsonFormatter) Format(w io.Writer, src []byte) error {
 	var m map[string]any
 	if err := json.Unmarshal(src, &m); err != nil {
-		return err
+		fmt.Fprint(w, api.CodeBlock("json", logger.StripSecrets(string(src))).ANSI())
+		return nil
 	}
 	sanitized := logger.StripSecretsFromMap(m)
 	b, err := json.MarshalIndent(sanitized, "", "    ")
@@ -59,7 +59,7 @@ func (f *formURLEncodedFormatter) Format(w io.Writer, src []byte) error {
 		}
 		m[k] = joined
 	}
-	fmt.Fprint(w, clicky.Map(m).ANSI())
+	fmt.Fprint(w, api.Map(nonEmptyValues(m)).ANSI())
 	return nil
 }
 
@@ -93,6 +93,36 @@ func readBody(body io.ReadCloser) (string, io.ReadCloser) {
 	return string(data), io.NopCloser(bytes.NewReader(data))
 }
 
+type replayedReadCloser struct {
+	io.Reader
+	io.Closer
+}
+
+func readBodyPrefix(body io.ReadCloser, maxLength int64) (string, io.ReadCloser, bool, error) {
+	if body == nil {
+		return "", nil, false, nil
+	}
+	if maxLength <= 0 {
+		value, restored := readBody(body)
+		return value, restored, false, nil
+	}
+
+	readLimit := maxLength
+	if maxLength < math.MaxInt64 {
+		readLimit++
+	}
+	prefix, err := io.ReadAll(io.LimitReader(body, readLimit))
+	restored := &replayedReadCloser{
+		Reader: io.MultiReader(bytes.NewReader(prefix), body),
+		Closer: body,
+	}
+	truncated := int64(len(prefix)) > maxLength
+	if truncated {
+		prefix = prefix[:maxLength]
+	}
+	return string(prefix), restored, truncated, err
+}
+
 // redactBody strips secrets from a request/response body before logging. The
 // "redact" name marks its result as an obfuscator barrier for CodeQL's
 // clear-text-logging analysis.
@@ -114,6 +144,13 @@ func redactBody(body string) any {
 		return sanitized
 	}
 	return body
+}
+
+func redactBodyPrefix(body string, truncated bool) any {
+	if truncated {
+		return logger.StripSecrets(body)
+	}
+	return redactBody(body)
 }
 
 func formParams(req *http.Request) (url.Values, bool) {
@@ -152,7 +189,18 @@ func formatValueBlock(title string, values url.Values) string {
 	if len(values) == 0 {
 		return ""
 	}
-	return fmt.Sprintf("%s:\n%s", title, clicky.Map(redactedValueMap(values)).ANSI())
+	return fmt.Sprintf("%s:\n%s", title, api.Map(nonEmptyValues(redactedValueMap(values))).ANSI())
+}
+
+func nonEmptyValues[T any](values map[string]T) map[string]T {
+	filtered := make(map[string]T, len(values))
+	for key, value := range values {
+		formatted := fmt.Sprintf("%v", value)
+		if formatted != "" && formatted != "<nil>" {
+			filtered[key] = value
+		}
+	}
+	return filtered
 }
 
 func accessURL(req *http.Request) string {
@@ -270,10 +318,16 @@ func jsonLogger(config TraceConfig, verbose logger.Verbose, rt http.RoundTripper
 		kv = append(kv, "responseHeaders", redactedHeaderMap(resp.Header, config.RedactedHeaders...))
 	}
 	if config.Response && resp.Body != nil {
-		var respBody string
-		respBody, resp.Body = readBody(resp.Body)
+		respBody, restored, truncated, readErr := readBodyPrefix(resp.Body, logger.HTTPLogResponseBodyLength(config.MaxBodyLength))
+		resp.Body = restored
 		if respBody != "" {
-			kv = append(kv, "responseBody", redactBody(respBody))
+			kv = append(kv, "responseBody", redactBodyPrefix(respBody, truncated))
+		}
+		if truncated {
+			kv = append(kv, "responseBodyTruncated", true)
+		}
+		if readErr != nil {
+			kv = append(kv, "responseBodyReadError", readErr.Error())
 		}
 	}
 
@@ -323,7 +377,7 @@ func prettyLogger(config TraceConfig, verbose logger.Verbose, rt http.RoundTripp
 		Colors:          true,
 		Formatters:      []httpretty.Formatter{&jsonFormatter{}, &formURLEncodedFormatter{}},
 		MaxRequestBody:  config.MaxBodyLength,
-		MaxResponseBody: config.MaxBodyLength,
+		MaxResponseBody: logger.HTTPLogResponseBodyLength(config.MaxBodyLength),
 		RedactedHeaders: append(config.RedactedHeaders, logger.CommonRedactedHeaders...),
 	}
 	l.SetOutput(&buf)
@@ -363,7 +417,7 @@ func prettyLogger(config TraceConfig, verbose logger.Verbose, rt http.RoundTripp
 			}
 			msg = strings.Join(lines, "\n")
 		}
-		logAt(verbose, req, verbosityLevel(config), strings.TrimSpace(msg))
+		logAt(verbose, req, verbosityLevel(config), "%s", strings.TrimSpace(msg))
 	}
 	return resp, err
 }
@@ -404,21 +458,17 @@ func logPrettyAccess(config TraceConfig, verbose logger.Verbose, req *http.Reque
 }
 
 // readErrorBody reads and restores resp.Body (so downstream consumers still see
-// it), returning the body truncated to maxLen runes. maxLen <= 0 falls back to
-// the http.log.response.body.length property (4KB default).
+// it), returning the body truncated to the configured byte limit.
 func readErrorBody(resp *http.Response, maxLen int64) string {
 	if resp == nil || resp.Body == nil {
 		return ""
 	}
-	limit := maxLen
-	if limit <= 0 {
-		limit = int64(properties.Int(4*1024, "http.log.response.body.length"))
-	}
-	body, restored := readBody(resp.Body)
+	limit := logger.HTTPLogResponseBodyLength(maxLen)
+	body, restored, truncated, _ := readBodyPrefix(resp.Body, limit)
 	resp.Body = restored
-	body = strings.TrimSpace(body)
-	if int64(len(body)) > limit {
-		return body[:limit] + "… (truncated)"
+	body = logger.StripSecrets(strings.TrimSpace(body))
+	if truncated {
+		return fmt.Sprintf("%s\n* body truncated after %d bytes", body, limit)
 	}
 	return body
 }

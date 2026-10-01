@@ -7,6 +7,7 @@ import (
 	"net"
 	netHTTP "net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 	"time"
 
@@ -108,10 +109,34 @@ func TestHTTP(t *testing.T) {
 	// })
 
 	t.Run("example GET & POST with basic logging middleware", func(t *testing.T) {
+		server := httptest.NewServer(netHTTP.HandlerFunc(func(w netHTTP.ResponseWriter, r *netHTTP.Request) {
+			user, password, _ := r.BasicAuth()
+			if user != "username" || password != "password" {
+				w.WriteHeader(netHTTP.StatusUnauthorized)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"method": r.Method,
+				"path":   r.URL.Path,
+				"apiKey": r.Header.Get("API-KEY"),
+				"scope":  r.Header.Get("Scope"),
+			})
+		}))
+		defer server.Close()
+
+		// The base URL host is unresolvable on purpose: ConnectTo must redirect
+		// the connection to the test server without rewriting the request path.
+		serverHost, serverPort, err := net.SplitHostPort(server.Listener.Addr().String())
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+
 		client := http.NewClient().
-			BaseURL("https://dummyjson.com").
+			BaseURL(fmt.Sprintf("http://dummyjson.test:%s", serverPort)).
 			Auth("username", "password").
-			ConnectTo("dummyjson.com").
+			ConnectTo(serverHost).
 			Use(loggerMiddlware).
 			Retry(2, time.Second, 2.0).
 			Header("API-KEY", "123456")
@@ -130,6 +155,11 @@ func TestHTTP(t *testing.T) {
 
 			if !response.IsOK() {
 				t.Errorf("Got bad response: %d", response.StatusCode)
+			}
+
+			want := map[string]any{"method": "POST", "path": "/products/add", "apiKey": "123456", "scope": "request"}
+			if !reflect.DeepEqual(bodyResponse, want) {
+				t.Errorf("expected %v, got %v", want, bodyResponse)
 			}
 		}
 
