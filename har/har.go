@@ -4,13 +4,13 @@ package har
 
 import "github.com/flanksource/commons/properties"
 
-const defaultMaxBodySize = 64 * 1024 // 64 KB
+const defaultMaxBodySize = 4 * 1024 * 1024 // 4 MiB
 
 // MaxBodySizeProperty is the -P/properties key that overrides the default
-// per-body capture cap (in bytes). Set e.g. -P http.har.maxBodySize=1048576
-// to capture request/response bodies larger than the 64 KB default, or
-// -P http.har.maxBodySize=0 to capture full bodies with no cap.
-const MaxBodySizeProperty = "http.har.maxBodySize"
+// per-body capture cap (in bytes). Set e.g.
+// -P http.har.response.body.length=1048576 to lower the request/response cap,
+// or set it to 0 to capture full bodies with no cap.
+const MaxBodySizeProperty = "http.har.response.body.length"
 
 // SensitiveProperty is the -P/properties key that disables redaction. By
 // default credentials in headers, bodies and query strings are masked, so a
@@ -28,7 +28,7 @@ type HARConfig struct {
 
 	// MaxBodySize is the maximum number of bytes captured per body.
 	// Bodies exceeding this are truncated and Content.Truncated is set to true.
-	// Default: 65536 (64 KB).
+	// Default: 4194304 (4 MiB).
 	MaxBodySize int64
 
 	// CaptureContentTypes lists MIME type prefixes for which body capture is enabled.
@@ -53,12 +53,14 @@ type HARConfig struct {
 }
 
 // DefaultConfig returns a HARConfig with sensible defaults. The per-body
-// capture cap honours the MaxBodySizeProperty (-P http.har.maxBodySize=…)
-// override; an unset or unparseable value keeps the 64 KB default, and a
+// capture cap honours the MaxBodySizeProperty
+// (-P http.har.response.body.length=…) override, which accepts a plain byte
+// count or a size suffix ("1048576", "1MiB", "4MB"); an unset or unparseable
+// value keeps the 4 MiB default, and a
 // value <= 0 disables truncation (full bodies captured).
 func DefaultConfig() HARConfig {
 	return HARConfig{
-		MaxBodySize:         int64(properties.Int(defaultMaxBodySize, MaxBodySizeProperty)),
+		MaxBodySize:         int64(properties.Bytes(defaultMaxBodySize, MaxBodySizeProperty)),
 		CaptureContentTypes: []string{"application/json", "application/x-www-form-urlencoded"},
 		CaptureSensitive:    properties.On(false, SensitiveProperty),
 	}
@@ -98,6 +100,15 @@ type Creator struct {
 }
 
 // Entry represents a single HTTP request/response pair.
+//
+// ID, Pending and Error are HAR 1.2 custom fields (underscore-prefixed). ID is
+// assigned by a Collector when it starts tracking the request and is kept by
+// its completed entry, so a viewer can follow one round trip from pending to
+// completed; each redirect hop and retry attempt is its own round trip with
+// its own ID. Entries captured by the handler-only middlewares have no ID.
+// Pending marks a snapshot of a request still in flight, whose Time and
+// Timings.Wait are the elapsed milliseconds when the snapshot was taken. Error
+// is the transport or body-read error the request ended with.
 type Entry struct {
 	StartedDateTime string   `json:"startedDateTime"`
 	Time            float64  `json:"time"`
@@ -105,6 +116,9 @@ type Entry struct {
 	Response        Response `json:"response"`
 	Cache           Cache    `json:"cache"`
 	Timings         Timings  `json:"timings"`
+	ID              string   `json:"_id,omitempty"`
+	Pending         bool     `json:"_pending,omitempty"`
+	Error           string   `json:"_error,omitempty"`
 }
 
 // Cache holds cache information for an entry (required by spec; left empty by hx).

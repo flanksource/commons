@@ -185,6 +185,30 @@ func TestHAR_BodyTruncation(t *testing.T) {
 	}
 }
 
+func TestHAR_TruncatedJSONBodyRedactsSecrets(t *testing.T) {
+	const (
+		secret    = "supersecret"
+		jsonBody  = `{"password":"supersecret","padding":"xxxxxxxxxxxxxxxxxxxxxxxx"}`
+		bodyLimit = 40
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, jsonBody)
+	}))
+	defer srv.Close()
+
+	cfg := har.DefaultConfig()
+	cfg.MaxBodySize = bodyLimit
+	entry := captureOne(t, cfg, srv, http.MethodGet, "/", nil, nil)
+
+	if !entry.Response.Content.Truncated {
+		t.Fatal("expected Content.Truncated to be true")
+	}
+	if strings.Contains(entry.Response.Content.Text, secret) {
+		t.Fatalf("truncated HAR response leaked a secret: %s", entry.Response.Content.Text)
+	}
+}
+
 func TestHAR_NonCapturedContentType(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
@@ -301,6 +325,59 @@ func TestHAR_RedactedBodyKeysScrubExtraIdentifiers(t *testing.T) {
 	}
 	if strings.Contains(entry.Request.URL, session) {
 		t.Errorf("jsessionid leaked in captured URL: %s", entry.Request.URL)
+	}
+}
+
+// A body that fails to parse still has to be scrubbed with the caller's
+// RedactedBodyKeys — the global sanitizer alone does not know them.
+func TestHAR_RedactedBodyKeysAppliedToUnparseableBodies(t *testing.T) {
+	const sessionID = "ABCDEF0123456789"
+
+	for _, tc := range []struct {
+		name        string
+		contentType string
+		requestBody string
+		responseAs  string
+	}{
+		{
+			name:        "malformed JSON",
+			contentType: "application/json",
+			requestBody: `{"session_id":"` + sessionID + `","name":"alice"`,
+			responseAs:  `{"session_id":"` + sessionID + `"`,
+		},
+		{
+			name:        "malformed form",
+			contentType: "application/x-www-form-urlencoded",
+			requestBody: "session_id=" + sessionID + "&name=alice&bad=%zz",
+			responseAs:  "session_id=" + sessionID + "&bad=%zz",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", tc.contentType)
+				w.WriteHeader(200)
+				_, _ = io.WriteString(w, tc.responseAs)
+			}))
+			defer srv.Close()
+
+			cfg := har.DefaultConfig()
+			cfg.RedactedBodyKeys = []string{"session_id"}
+
+			entry := captureOne(t, cfg, srv,
+				http.MethodPost, "/login",
+				strings.NewReader(tc.requestBody),
+				map[string]string{"Content-Type": tc.contentType})
+
+			if entry.Request.PostData == nil {
+				t.Fatal("expected PostData to be set")
+			}
+			if strings.Contains(entry.Request.PostData.Text, sessionID) {
+				t.Errorf("session_id survived redaction in request body: %s", entry.Request.PostData.Text)
+			}
+			if strings.Contains(entry.Response.Content.Text, sessionID) {
+				t.Errorf("session_id survived redaction in response body: %s", entry.Response.Content.Text)
+			}
+		})
 	}
 }
 
