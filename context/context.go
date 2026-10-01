@@ -325,7 +325,7 @@ func (c Context) Error(err error, msg ...any) {
 	if o, ok := oops.AsOops(err); ok {
 		c.Logger.WithSkipReportLevel(1).Errorf("%#v", o.ToMap())
 	} else {
-		c.Logger.WithSkipReportLevel(1).Errorf(err.Error())
+		c.Logger.WithSkipReportLevel(1).Errorf("%s", err.Error())
 	}
 }
 
@@ -333,7 +333,7 @@ func (c Context) Errorf(format string, args ...interface{}) {
 	err := fmt.Sprintf(format, args...)
 	c.GetSpan().RecordError(errors.New(err))
 	c.GetSpan().SetStatus(codes.Error, err)
-	c.Logger.WithSkipReportLevel(1).Errorf(err)
+	c.Logger.WithSkipReportLevel(1).Errorf("%s", err)
 }
 
 func (c Context) Infof(format string, args ...interface{}) {
@@ -341,7 +341,7 @@ func (c Context) Infof(format string, args ...interface{}) {
 		// info level logs should only be pushed for debug traces
 		c.GetSpan().AddEvent(fmt.Sprintf(format, args...), trace.WithAttributes(attribute.String("level", "info")))
 	}
-	c.Logger.WithSkipReportLevel(1).Infof(fmt.Sprintf(format, args...))
+	c.Logger.WithSkipReportLevel(1).Infof(format, args...)
 }
 
 func (c Context) Warnf(format string, args ...interface{}) {
@@ -349,7 +349,7 @@ func (c Context) Warnf(format string, args ...interface{}) {
 		// info level logs should only be pushed for debug traces
 		c.GetSpan().AddEvent(fmt.Sprintf(format, args...), trace.WithAttributes(attribute.String("level", "warn")))
 	}
-	c.Logger.WithSkipReportLevel(1).Warnf(fmt.Sprintf(format, args...))
+	c.Logger.WithSkipReportLevel(1).Warnf(format, args...)
 }
 
 func (c Context) Logf(level int, format string, args ...interface{}) {
