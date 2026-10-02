@@ -41,6 +41,41 @@ func stallingServer(t *testing.T, bodies *[]string, mu *sync.Mutex, attempts *in
 	return srv
 }
 
+// The legacy Retry() loop replays only RFC 9110 idempotent methods after a
+// transport error; anything else needs an explicit RetryStrategy.
+func TestLegacyRetryReplaysOnlyIdempotentMethods(t *testing.T) {
+	for method, wantAttempts := range map[string]int{
+		netHTTP.MethodGet:    2,
+		netHTTP.MethodPut:    2,
+		netHTTP.MethodDelete: 2,
+		netHTTP.MethodPost:   1,
+		netHTTP.MethodPatch:  1,
+		"PURGE":              1,
+	} {
+		t.Run(method, func(t *testing.T) {
+			var (
+				mu       sync.Mutex
+				bodies   []string
+				attempts int
+			)
+			srv := stallingServer(t, &bodies, &mu, &attempts)
+
+			_, _ = http.NewClient().
+				BaseURL(srv.URL).
+				Timeout(50*time.Millisecond).
+				Retry(1, time.Millisecond, 1).
+				R(context.Background()).
+				Do(method, "/")
+
+			mu.Lock()
+			defer mu.Unlock()
+			if attempts != wantAttempts {
+				t.Errorf("%s made %d attempts, want %d", method, attempts, wantAttempts)
+			}
+		})
+	}
+}
+
 // A retried POST must replay the request body on every attempt. roundTrip
 // drains the body reader, so before the fix a retry sent an empty body — the
 // downstream JSON validation failure. The retry path fires on a transport

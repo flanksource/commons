@@ -333,11 +333,17 @@ func (r *Request) do() (resp *Response, err error) {
 }
 
 // replayableMethod reports whether the legacy retry loop may resend a request
-// after a transport error. POST and PATCH are not idempotent: a transport
-// error (e.g. a client timeout) does not prove the server did not act on the
-// first attempt, so replaying could apply the change twice.
+// after a transport error. Only the RFC 9110 idempotent methods qualify: a
+// transport error (e.g. a client timeout) does not prove the server did not act
+// on the first attempt, so replaying POST, PATCH, CONNECT or an extension method
+// could apply its effect twice. Those need an explicit RetryStrategy.
 func replayableMethod(method string) bool {
-	return method != http.MethodPost && method != http.MethodPatch
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace, http.MethodPut, http.MethodDelete:
+		return true
+	default:
+		return false
+	}
 }
 
 // doWithStrategy runs the request loop under a caller-supplied RetryStrategy.

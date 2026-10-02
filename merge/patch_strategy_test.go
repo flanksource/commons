@@ -131,6 +131,42 @@ type mergeKeyWithoutStrategy struct {
 	Items []strategicItem `json:"items" patchMergeKey:"name"`
 }
 
+type misspelledPatchStrategy struct {
+	Items []strategicItem `json:"items" patchStrategy:"merg" patchMergeKey:"name"`
+}
+
+type retainKeysOnAScalar struct {
+	Name string `json:"name" patchStrategy:"retainKeys"`
+}
+
+// retainKeysStruct mirrors appsv1.DeploymentSpec.Strategy: a struct field
+// tagged retainKeys, which without a $retainKeys directive merges per field.
+type retainKeysStruct struct {
+	Strategy  strategicItem  `json:"strategy" patchStrategy:"retainKeys"`
+	StrategyP *strategicItem `json:"strategyP,omitempty" patchStrategy:"retainKeys"`
+}
+
+func TestApply_RetainKeysStructMergesFieldByField(t *testing.T) {
+	base := retainKeysStruct{
+		Strategy:  strategicItem{Name: "x", A: "base-a"},
+		StrategyP: &strategicItem{Name: "y", A: "base-a"},
+	}
+	override := retainKeysStruct{
+		Strategy:  strategicItem{B: "override-b"},
+		StrategyP: &strategicItem{B: "override-b"},
+	}
+
+	got := merge.Apply(base, override, merge.Policy{})
+
+	want := retainKeysStruct{
+		Strategy:  strategicItem{Name: "x", A: "base-a", B: "override-b"},
+		StrategyP: &strategicItem{Name: "y", A: "base-a", B: "override-b"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %+v / %+v, want %+v / %+v", got.Strategy, got.StrategyP, want.Strategy, want.StrategyP)
+	}
+}
+
 // A patch declaration that cannot be honoured fails at the merge, naming the
 // field, rather than degrading to wholesale replacement.
 func TestApply_UnsatisfiablePatchStrategyPanics(t *testing.T) {
@@ -154,6 +190,14 @@ func TestApply_UnsatisfiablePatchStrategyPanics(t *testing.T) {
 		"a patch strategy on something that is not a list": {
 			field: "patchStrategyOnAScalar.Name",
 			apply: func() { merge.Apply(patchStrategyOnAScalar{}, patchStrategyOnAScalar{}, merge.Policy{}) },
+		},
+		"an unknown patch strategy": {
+			field: "misspelledPatchStrategy.Items",
+			apply: func() { merge.Apply(misspelledPatchStrategy{}, misspelledPatchStrategy{}, merge.Policy{}) },
+		},
+		"retainKeys on something that is not a struct": {
+			field: "retainKeysOnAScalar.Name",
+			apply: func() { merge.Apply(retainKeysOnAScalar{}, retainKeysOnAScalar{}, merge.Policy{}) },
 		},
 		"a merge key without a patch strategy": {
 			field: "mergeKeyWithoutStrategy.Items",

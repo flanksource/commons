@@ -15,16 +15,38 @@ const (
 	patchMergeKeyTag = "patchMergeKey"
 )
 
+// The patchStrategy values Kubernetes' strategic merge patch understands.
+const (
+	strategyMerge      = "merge"
+	strategyReplace    = "replace"
+	strategyRetainKeys = "retainKeys"
+)
+
 // patchStrategic reports whether a field declares a Kubernetes patch strategy,
 // and rejects the declarations that cannot mean what they say.
+//
+// A struct tagged only retainKeys (e.g. appsv1.DeploymentSpec.Strategy) is not
+// strategic here: without a $retainKeys directive in the patch, a strategic
+// merge patch merges it field by field, which is what the structural walk does.
 func patchStrategic(field reflect.StructField, path string) bool {
 	strategy, hasStrategy := field.Tag.Lookup(patchStrategyTag)
 	_, hasKey := field.Tag.Lookup(patchMergeKeyTag)
-	switch {
-	case !hasStrategy && !hasKey:
+	if !hasStrategy && !hasKey {
 		return false
-	case !hasStrategy:
+	}
+	if !hasStrategy {
 		panic(fmt.Sprintf("merge: %s declares %s but no %s", path, patchMergeKeyTag, patchStrategyTag))
+	}
+	for _, s := range strings.Split(strategy, ",") {
+		if s != strategyMerge && s != strategyReplace && s != strategyRetainKeys {
+			panic(fmt.Sprintf("merge: %s is tagged %s:%q, but %q is not one of %s, %s or %s",
+				path, patchStrategyTag, strategy, s, strategyMerge, strategyReplace, strategyRetainKeys))
+		}
+	}
+	if strategy == strategyRetainKeys && !hasKey && isStruct(field.Type) {
+		return false
+	}
+	switch {
 	case field.Type.Kind() != reflect.Slice:
 		panic(fmt.Sprintf("merge: %s is tagged %s:%q but is a %s, not a list",
 			path, patchStrategyTag, strategy, field.Type.Kind()))
@@ -34,6 +56,13 @@ func patchStrategic(field reflect.StructField, path string) bool {
 			path, tagName, rule, patchStrategyTag, strategy))
 	}
 	return true
+}
+
+func isStruct(t reflect.Type) bool {
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	return t.Kind() == reflect.Struct
 }
 
 // strategicMerge applies the override's list to the base's as a Kubernetes
