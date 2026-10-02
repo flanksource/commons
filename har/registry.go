@@ -94,7 +94,7 @@ func (r *Registry) Transport(feature string, base http.RoundTripper) (http.Round
 	}
 
 	if level == Metadata {
-		return NewMetadataMiddleware(collector.Config, collector.Add)(base), nil
+		return collector.MetadataMiddleware()(base), nil
 	}
 	return collector.Middleware()(base), nil
 }

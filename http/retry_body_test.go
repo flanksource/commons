@@ -14,6 +14,13 @@ import (
 	"github.com/flanksource/commons/properties"
 )
 
+// retryTransportErrors replays a request after a transport error, for up to
+// three attempts. The legacy Retry() loop never replays POST, so body-replay
+// coverage opts in through a RetryStrategy exactly as callers must.
+func retryTransportErrors(_ *http.Response, err error, attempt int) (bool, time.Duration) {
+	return err != nil && attempt < 2, time.Millisecond
+}
+
 // stallingServer records every request body it receives and stalls the first
 // attempt past the client timeout, forcing the transport-error retry path.
 func stallingServer(t *testing.T, bodies *[]string, mu *sync.Mutex, attempts *int) *httptest.Server {
@@ -66,7 +73,7 @@ func TestRetryReplaysRequestBody(t *testing.T) {
 	resp, err := http.NewClient().
 		BaseURL(srv.URL).
 		Timeout(50*time.Millisecond).
-		Retry(3, time.Millisecond, 1.0).
+		RetryStrategy(retryTransportErrors).
 		R(context.Background()).
 		Post("/", payload)
 	if err != nil {
@@ -116,7 +123,7 @@ func TestRetryReplaysReaderBody(t *testing.T) {
 	resp, err := http.NewClient().
 		BaseURL(srv.URL).
 		Timeout(50*time.Millisecond).
-		Retry(3, time.Millisecond, 1.0).
+		RetryStrategy(retryTransportErrors).
 		R(context.Background()).
 		Post("/", io.Reader(strings.NewReader(payload)))
 	if err != nil {
@@ -153,7 +160,7 @@ func TestRequestBodyUnderCapStillBuffers(t *testing.T) {
 	resp, err := http.NewClient().
 		BaseURL(srv.URL).
 		Timeout(50*time.Millisecond).
-		Retry(3, time.Millisecond, 1.0).
+		RetryStrategy(retryTransportErrors).
 		R(context.Background()).
 		Post("/", io.Reader(strings.NewReader(payload)))
 	if err != nil {
@@ -194,7 +201,7 @@ func TestRequestBodyOverCapStreamsOnceAndRefusesRetry(t *testing.T) {
 	_, err := http.NewClient().
 		BaseURL(srv.URL).
 		Timeout(50*time.Millisecond).
-		Retry(3, time.Millisecond, 1.0).
+		RetryStrategy(retryTransportErrors).
 		R(context.Background()).
 		Post("/", io.Reader(strings.NewReader(payload)))
 	if err == nil {
@@ -232,7 +239,7 @@ func TestRequestBodyCapDisabled(t *testing.T) {
 	resp, err := http.NewClient().
 		BaseURL(srv.URL).
 		Timeout(50*time.Millisecond).
-		Retry(3, time.Millisecond, 1.0).
+		RetryStrategy(retryTransportErrors).
 		R(context.Background()).
 		Post("/", io.Reader(strings.NewReader(payload)))
 	if err != nil {

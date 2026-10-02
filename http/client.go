@@ -287,6 +287,11 @@ func (c *Client) UserAgent(agent string) *Client {
 // Failed requests will be retried up to maxRetries times, with delays
 // calculated as baseDuration * (exponent ^ attemptNumber).
 //
+// Only transport errors are retried, and only for idempotent methods: POST
+// and PATCH are never replayed, since the server may have acted on the failed
+// attempt. Retrying stops as soon as the request context is done, including
+// during the backoff wait. Use RetryStrategy to retry POST/PATCH explicitly.
+//
 // Parameters:
 //   - maxRetries: Maximum number of retry attempts (0 disables retries)
 //   - baseDuration: Initial delay between retries
@@ -848,7 +853,7 @@ func (c *Client) WithContext(ctx CommonsHTTPContext, feature string) *Client {
 		case HARFull:
 			c = c.HARCollector(collector)
 		case HARMetadata:
-			c.Use(har.NewMetadataMiddleware(collector.Config, collector.Add))
+			c.Use(collector.MetadataMiddleware())
 		}
 	}
 	return c

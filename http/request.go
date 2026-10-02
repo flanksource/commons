@@ -147,6 +147,11 @@ func (r *Request) Delete(url string) (*Response, error) {
 // Retry configures retry behavior for this specific request,
 // overriding the client's default retry configuration.
 //
+// Only transport errors are retried, and only for idempotent methods: POST
+// and PATCH are never replayed, since the server may have acted on the failed
+// attempt. Retrying stops as soon as the request context is done, including
+// during the backoff wait. Use RetryStrategy to retry POST/PATCH explicitly.
+//
 // Parameters:
 //   - maxRetries: Maximum number of retry attempts
 //   - baseDuration: Initial delay between retries
@@ -288,7 +293,13 @@ func (r *Request) Do(method, reqURL string) (resp *Response, err error) {
 	return r.do()
 }
 
+// do runs the request. Without a RetryStrategy it uses the legacy RetryConfig
+// loop, which retries transport errors only for methods safe to replay (see
+// replayableMethod) and stops as soon as the request context is done.
 func (r *Request) do() (resp *Response, err error) {
+	if r.ctx == nil {
+		return nil, fmt.Errorf("%s %s: request has a nil context, create it with Client.R(ctx)", r.method, r.url)
+	}
 	if r.retryStrategy != nil {
 		return r.doWithStrategy()
 	}
@@ -303,12 +314,14 @@ func (r *Request) do() (resp *Response, err error) {
 			response.Request = r
 		}
 		if err != nil {
-			if retriesRemaining <= 0 {
+			if retriesRemaining <= 0 || r.ctx.Err() != nil || !replayableMethod(r.method) {
 				return nil, err
 			}
 
 			retriesRemaining--
-			exponentialBackoff(r.retryConfig, retriesRemaining)
+			if waitErr := exponentialBackoff(r.ctx, r.retryConfig, retriesRemaining); waitErr != nil {
+				return nil, fmt.Errorf("retry backoff abandoned after %w: %w", err, waitErr)
+			}
 			if err := r.prepareRetry(); err != nil {
 				return nil, err
 			}
@@ -317,6 +330,14 @@ func (r *Request) do() (resp *Response, err error) {
 
 		return response, nil
 	}
+}
+
+// replayableMethod reports whether the legacy retry loop may resend a request
+// after a transport error. POST and PATCH are not idempotent: a transport
+// error (e.g. a client timeout) does not prove the server did not act on the
+// first attempt, so replaying could apply the change twice.
+func replayableMethod(method string) bool {
+	return method != http.MethodPost && method != http.MethodPatch
 }
 
 // doWithStrategy runs the request loop under a caller-supplied RetryStrategy.

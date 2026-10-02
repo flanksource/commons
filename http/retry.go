@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"math"
 	"time"
 )
@@ -16,11 +17,18 @@ type RetryConfig struct {
 	Factor float64
 }
 
-func exponentialBackoff(config RetryConfig, retriesRemaining uint) time.Duration {
+// exponentialBackoff waits out the backoff before the next retry, returning
+// ctx.Err() as soon as ctx is done instead of sleeping past it.
+func exponentialBackoff(ctx context.Context, config RetryConfig, retriesRemaining uint) error {
 	factor := math.Pow(config.Factor, float64(config.MaxRetries-retriesRemaining))
 	// grow backoff time exponentially as the retryCount approaches zero
-	sleepDuration := config.RetryWait * time.Duration(factor)
+	timer := time.NewTimer(config.RetryWait * time.Duration(factor))
+	defer timer.Stop()
 
-	time.Sleep(sleepDuration)
-	return sleepDuration
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
