@@ -39,9 +39,13 @@ var _ = Describe("HAR capture", func() {
 		}
 		entries := collector.Entries()
 		hops := make([]capturedHop, len(entries))
+		ids := map[string]bool{}
 		for i, entry := range entries {
 			hops[i] = capturedHop{URL: entry.Request.URL, Status: entry.Response.Status}
+			Expect(entry.ID).ToNot(BeEmpty(), "hop %d must carry a collector id", i)
+			ids[entry.ID] = true
 		}
+		Expect(ids).To(HaveLen(len(entries)), "every redirect hop is its own round trip with its own id")
 		Expect(hops).To(Equal([]capturedHop{
 			{URL: server.URL + "/start", Status: stdhttp.StatusFound},
 			{URL: server.URL + "/middle", Status: stdhttp.StatusFound},
