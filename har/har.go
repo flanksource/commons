@@ -100,6 +100,15 @@ type Creator struct {
 }
 
 // Entry represents a single HTTP request/response pair.
+//
+// ID, Pending and Error are HAR 1.2 custom fields (underscore-prefixed). ID is
+// assigned by a Collector when it starts tracking the request and is kept by
+// its completed entry, so a viewer can follow one round trip from pending to
+// completed; each redirect hop and retry attempt is its own round trip with
+// its own ID. Entries captured by the handler-only middlewares have no ID.
+// Pending marks a snapshot of a request still in flight, whose Time and
+// Timings.Wait are the elapsed milliseconds when the snapshot was taken. Error
+// is the transport or body-read error the request ended with.
 type Entry struct {
 	StartedDateTime string   `json:"startedDateTime"`
 	Time            float64  `json:"time"`
@@ -107,6 +116,9 @@ type Entry struct {
 	Response        Response `json:"response"`
 	Cache           Cache    `json:"cache"`
 	Timings         Timings  `json:"timings"`
+	ID              string   `json:"_id,omitempty"`
+	Pending         bool     `json:"_pending,omitempty"`
+	Error           string   `json:"_error,omitempty"`
 }
 
 // Cache holds cache information for an entry (required by spec; left empty by hx).

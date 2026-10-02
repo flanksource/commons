@@ -3,6 +3,7 @@ package har
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -15,44 +16,72 @@ import (
 	"github.com/flanksource/commons/logger"
 )
 
+// startedDateTimeLayout is RFC 3339 with fixed millisecond precision, so a
+// client can tick the elapsed time of a pending entry.
+const startedDateTimeLayout = "2006-01-02T15:04:05.000Z07:00"
+
+// recordFunc registers the entry for a request that is about to be sent and
+// returns the function that receives its completed form.
+type recordFunc func(started time.Time, request Entry) (complete func(*Entry))
+
+// captureFunc performs one round trip through next, recording it via record.
+type captureFunc func(req *http.Request, next http.RoundTripper, cfg HARConfig, record recordFunc) (*http.Response, error)
+
 // NewMiddleware returns a middlewares.Middleware that captures each request/response
-// pair into a *Entry and calls handler. If handler is nil, the middleware is a no-op.
+// pair into a *Entry and calls handler once the request completes. If handler
+// is nil, the middleware is a no-op. Use Collector.Middleware to also see
+// requests while they are in flight.
 func NewMiddleware(cfg HARConfig, handler func(*Entry)) middlewares.Middleware {
+	return handlerMiddleware(capture, cfg, handler)
+}
+
+func handlerMiddleware(fn captureFunc, cfg HARConfig, handler func(*Entry)) middlewares.Middleware {
 	if handler == nil {
 		return func(next http.RoundTripper) http.RoundTripper {
 			return next
 		}
 	}
+	record := func(time.Time, Entry) func(*Entry) { return handler }
 	return func(next http.RoundTripper) http.RoundTripper {
 		return middlewares.RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
-			return capture(req, next, cfg, handler)
+			return fn(req, next, cfg, record)
 		})
 	}
 }
 
-func capture(req *http.Request, next http.RoundTripper, cfg HARConfig, handler func(*Entry)) (*http.Response, error) {
+func capture(req *http.Request, next http.RoundTripper, cfg HARConfig, record recordFunc) (*http.Response, error) {
 	started := time.Now()
-
 	entry := &Entry{
-		StartedDateTime: started.UTC().Format(time.RFC3339),
+		StartedDateTime: started.UTC().Format(startedDateTimeLayout),
 		Request:         buildRequest(req, cfg),
 	}
+	complete := record(started, *entry)
 
-	waitStart := time.Now()
 	resp, err := next.RoundTrip(req)
-	waitMs := float64(time.Since(waitStart).Microseconds()) / 1000.0
+	entry.Timings.Wait = millis(time.Since(started))
 
-	entry.Timings = Timings{Wait: waitMs}
-	entry.Time = waitMs
-
+	var bodyErr error
 	if resp != nil {
-		entry.Response = buildResponse(resp, cfg)
+		receiveStart := time.Now()
+		entry.Response, bodyErr = buildResponse(resp, cfg)
+		entry.Timings.Receive = millis(time.Since(receiveStart))
+	}
+	entry.Time = entry.Timings.Wait + entry.Timings.Receive
+	if failure := errors.Join(err, bodyErr); failure != nil {
+		entry.Error = failure.Error()
 	}
 
-	handler(entry)
+	complete(entry)
 	return resp, err
 }
 
+func millis(d time.Duration) float64 {
+	return float64(d.Microseconds()) / 1000.0
+}
+
+// buildRequest captures the request body without recording a read error: the
+// replayed body hands that error to the transport, which fails the round trip
+// with it, so it reaches the entry through the RoundTrip error.
 func buildRequest(req *http.Request, cfg HARConfig) Request {
 	har := Request{
 		Method:      req.Method,
@@ -79,7 +108,9 @@ func buildRequest(req *http.Request, cfg HARConfig) Request {
 	return har
 }
 
-func buildResponse(resp *http.Response, cfg HARConfig) Response {
+// buildResponse captures the response and returns the error the body read hit,
+// which the caller will also see when it reads the replayed body.
+func buildResponse(resp *http.Response, cfg HARConfig) (Response, error) {
 	har := Response{
 		Status:      resp.StatusCode,
 		StatusText:  http.StatusText(resp.StatusCode),
@@ -92,41 +123,48 @@ func buildResponse(resp *http.Response, cfg HARConfig) Response {
 	}
 
 	ct := resp.Header.Get("Content-Type")
-	if resp.Body != nil && (shouldCapture(ct, cfg.CaptureContentTypes) || resp.StatusCode >= 400) {
-		body, restored := readBody(resp.Body, cfg.MaxBodySize, resp.ContentLength)
-		resp.Body = restored
-		har.BodySize = body.totalSize
-		har.Content = Content{
-			Size:      body.totalSize,
-			MimeType:  ct,
-			Text:      harBody(body.text, ct, cfg),
-			Truncated: body.truncated,
-		}
+	if resp.Body == nil || (!shouldCapture(ct, cfg.CaptureContentTypes) && resp.StatusCode < 400) {
+		return har, nil
 	}
-
-	return har
+	body, restored := readBody(resp.Body, cfg.MaxBodySize, resp.ContentLength)
+	resp.Body = restored
+	har.BodySize = body.totalSize
+	har.Content = Content{
+		Size:      body.totalSize,
+		MimeType:  ct,
+		Text:      harBody(body.text, ct, cfg),
+		Truncated: body.truncated,
+	}
+	return har, body.err
 }
 
 type bodyResult struct {
 	text      string
 	totalSize int64
 	truncated bool
+	// err is the error the capture read hit before EOF or the size limit.
+	err error
 }
 
+// readBody captures up to maxSize bytes of r (all of it when maxSize <= 0) and
+// returns a replacement body that replays them. When the capture read failed,
+// the replacement yields the captured bytes and then that same error, so the
+// caller's read fails exactly as it would have without capture.
 func readBody(r io.ReadCloser, maxSize, knownSize int64) (bodyResult, io.ReadCloser) {
 	if maxSize <= 0 {
-		all, _ := io.ReadAll(r)
+		all, err := io.ReadAll(r)
 		return bodyResult{
 			text:      string(all),
 			totalSize: int64(len(all)),
-		}, &replayedBody{Reader: bytes.NewReader(all), Closer: r}
+			err:       err,
+		}, replayBody(r, all, err, nil)
 	}
 
 	limit := maxSize
 	if maxSize < math.MaxInt64 {
 		limit++
 	}
-	prefix, _ := io.ReadAll(io.LimitReader(r, limit))
+	prefix, err := io.ReadAll(io.LimitReader(r, limit))
 	captured := prefix
 	truncated := int64(len(prefix)) > maxSize
 	if truncated {
@@ -144,12 +182,35 @@ func readBody(r io.ReadCloser, maxSize, knownSize int64) (bodyResult, io.ReadClo
 		text:      string(captured),
 		totalSize: totalSize,
 		truncated: truncated,
-	}, &replayedBody{Reader: io.MultiReader(bytes.NewReader(prefix), r), Closer: r}
+		err:       err,
+	}, replayBody(r, prefix, err, r)
+}
+
+// replayBody serves captured, then either readErr (when the capture failed) or
+// unread (the rest of the stream, nil when the capture consumed all of it).
+// Closing it closes body.
+func replayBody(body io.ReadCloser, captured []byte, readErr error, unread io.Reader) io.ReadCloser {
+	rest := unread
+	if readErr != nil {
+		rest = errReader{err: readErr}
+	}
+	if rest == nil {
+		return &replayedBody{Reader: bytes.NewReader(captured), Closer: body}
+	}
+	return &replayedBody{Reader: io.MultiReader(bytes.NewReader(captured), rest), Closer: body}
 }
 
 type replayedBody struct {
 	io.Reader
 	io.Closer
+}
+
+type errReader struct {
+	err error
+}
+
+func (r errReader) Read([]byte) (int, error) {
+	return 0, r.err
 }
 
 func shouldCapture(contentType string, allowed []string) bool {
