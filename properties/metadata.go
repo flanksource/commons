@@ -66,10 +66,11 @@ func (p *Properties) registerType(valueType PropertyType, keys ...string) {
 }
 
 func (p *Properties) List() []Property {
+	overrides := commandline.snapshot()
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	keys := make(map[string]struct{}, len(p.m)+len(commandlineProperties))
+	keys := make(map[string]struct{}, len(p.m)+len(overrides))
 	for key := range p.m {
 		keys[key] = struct{}{}
 	}
@@ -77,7 +78,7 @@ func (p *Properties) List() []Property {
 		keys[key.(string)] = struct{}{}
 		return true
 	})
-	for key := range commandlineProperties {
+	for key := range overrides {
 		keys[key] = struct{}{}
 	}
 
@@ -98,7 +99,7 @@ func (p *Properties) List() []Property {
 			property.Type = metadata.Type
 			property.Options = append([]string(nil), metadata.Options...)
 		}
-		if value, overridden := commandlineProperties[key]; overridden {
+		if value, overridden := overrides[key]; overridden {
 			if value == "" && metadata.HasDefault {
 				property.Value = metadata.Default
 			} else {

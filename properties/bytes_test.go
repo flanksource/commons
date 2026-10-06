@@ -44,9 +44,7 @@ var _ = Describe("byte sizes", func() {
 
 		BeforeEach(func() {
 			store = &Properties{m: make(map[string]string)}
-			previous := commandlineProperties
-			commandlineProperties = nil
-			DeferCleanup(func() { commandlineProperties = previous })
+			isolateCommandline()
 		})
 
 		It("honours a suffixed override that lowers the default cap", func() {

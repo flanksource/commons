@@ -12,9 +12,7 @@ var _ = Describe("property metadata", func() {
 
 	BeforeEach(func() {
 		store = &Properties{m: make(map[string]string)}
-		previous := commandlineProperties
-		commandlineProperties = nil
-		DeferCleanup(func() { commandlineProperties = previous })
+		isolateCommandline()
 	})
 
 	It("lists typed defaults even when no value was explicitly stored", func() {
@@ -42,7 +40,7 @@ var _ = Describe("property metadata", func() {
 	It("reports explicit and command-line values with their declared metadata", func() {
 		store.Set("server.port", "9090")
 		Expect(store.Int(8080, "server.port")).To(Equal(9090))
-		commandlineProperties = map[string]string{"server.host": "example.internal"}
+		commandline.replace(map[string]string{"server.host": "example.internal"})
 		Expect(store.String("localhost", "server.host")).To(Equal("example.internal"))
 
 		Expect(store.List()).To(Equal([]Property{

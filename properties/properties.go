@@ -57,6 +57,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"path"
 	"strconv"
@@ -71,8 +72,6 @@ import (
 )
 
 const businessHoursKey = "business_hours"
-
-var commandlineProperties map[string]string
 
 // Global is the default properties instance used by package-level functions.
 // It's automatically initialized and ready to use.
@@ -95,8 +94,14 @@ var LoadFile = func(filename string) error {
 //	properties.BindFlags(flags)
 //	flags.Parse(os.Args[1:])
 //	// Now you can use: ./app -P key1=value1 -P key2=value2
+//
+// Each call gives the flag set its own value, so flag sets can be bound and parsed concurrently;
+// the most recently parsed -P values are the command-line overrides.
 func BindFlags(flags *pflag.FlagSet) {
-	flags.StringToStringVarP(&commandlineProperties, "properties", "P", nil, "System properties")
+	parsed := new(map[string]string)
+	flags.StringToStringVarP(parsed, "properties", "P", nil, "System properties")
+	flag := flags.Lookup("properties")
+	flag.Value = &commandlineFlag{Value: flag.Value, parsed: parsed}
 }
 
 // Properties represents a thread-safe key-value store for application configuration.
@@ -130,18 +135,16 @@ func (p *Properties) notify() {
 
 func (p *Properties) GetAll() map[string]string {
 	p.lock.RLock()
-	defer p.lock.RUnlock()
-	m := p.m
+	m := maps.Clone(p.m)
+	p.lock.RUnlock()
 	//command line properties take priority
-	for k, v := range commandlineProperties {
-		m[k] = v
-	}
+	maps.Copy(m, commandline.snapshot())
 	return m
 }
 
 func (p *Properties) Get(key string) string {
 	//command line properties take priority
-	if v, ok := commandlineProperties[key]; ok {
+	if v, ok := commandline.get(key); ok {
 		return v
 	}
 
@@ -169,7 +172,7 @@ func (p *Properties) LoadFile(filename string) error {
 	file, err := os.Open(filename)
 	if errors.Is(err, os.ErrNotExist) {
 		slog.Warn(fmt.Sprintf("%s does not exist", filename))
-		p.Update(commandlineProperties)
+		p.Update(commandline.snapshot())
 		return nil
 	} else if err != nil {
 		return err
@@ -204,9 +207,7 @@ func (p *Properties) LoadFile(filename string) error {
 		return scanner.Err()
 	}
 
-	for k, v := range commandlineProperties {
-		props[k] = v
-	}
+	maps.Copy(props, commandline.snapshot())
 	p.Update(props)
 
 	return nil
