@@ -1,7 +1,9 @@
 package http
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,6 +14,14 @@ import (
 	"github.com/flanksource/commons/logger"
 )
 
+// ErrBodyConsumed is returned when a response body is read after an earlier
+// read (Into, AsJSON, AsString or a direct Body read) already consumed it.
+// Enable Client.BufferBody to read a body more than once.
+var ErrBodyConsumed = errors.New("response body already consumed; enable Client.BufferBody to read it more than once")
+
+// DefaultMaxBufferedBodyBytes is the response size Client.BufferBody(0) buffers.
+const DefaultMaxBufferedBodyBytes int64 = 16 << 20
+
 // Response extends the stdlib http.Response type and extends its functionality
 type Response struct {
 	// The underlying http.Response is embed into Response.
@@ -20,6 +30,68 @@ type Response struct {
 	// Request is the Response's related Request.
 	Request    *Request
 	RawRequest *http.Request
+
+	// buffered holds the whole body when the client enabled BufferBody, so
+	// every reader sees it; nil means the body streams and can be read once.
+	buffered []byte
+}
+
+// trackedBody records whether anything has read the stream yet, so a second
+// read fails with ErrBodyConsumed instead of returning an empty body.
+type trackedBody struct {
+	io.ReadCloser
+	read bool
+}
+
+func (b *trackedBody) Read(p []byte) (int, error) {
+	b.read = true
+	return b.ReadCloser.Read(p)
+}
+
+// newResponse wraps httpResponse, buffering its body (up to maxBuffered bytes)
+// when maxBuffered > 0, else tracking reads of the stream.
+func newResponse(httpResponse *http.Response, maxBuffered int64) (*Response, error) {
+	response := &Response{Response: httpResponse}
+	if httpResponse.Body == nil {
+		return response, nil
+	}
+	if maxBuffered <= 0 {
+		httpResponse.Body = &trackedBody{ReadCloser: httpResponse.Body}
+		return response, nil
+	}
+	defer func() { _ = httpResponse.Body.Close() }()
+	body, err := io.ReadAll(io.LimitReader(httpResponse.Body, maxBuffered+1))
+	if err != nil {
+		return nil, fmt.Errorf("%s: reading response body: %w", requestLabel(httpResponse.Request), err)
+	}
+	if int64(len(body)) > maxBuffered {
+		return nil, fmt.Errorf("%s: response body exceeds %d byte buffer limit", requestLabel(httpResponse.Request), maxBuffered)
+	}
+	response.buffered = body
+	httpResponse.Body = io.NopCloser(bytes.NewReader(body))
+	return response, nil
+}
+
+func requestLabel(req *http.Request) string {
+	if req == nil || req.URL == nil {
+		return "response"
+	}
+	return req.Method + " " + req.URL.String()
+}
+
+// bodyReader returns a reader over the whole body, or ErrBodyConsumed when an
+// unbuffered body has already been read.
+func (r *Response) bodyReader() (io.Reader, error) {
+	if r.buffered != nil {
+		return bytes.NewReader(r.buffered), nil
+	}
+	if r.Response == nil || r.Response.Body == nil {
+		return nil, fmt.Errorf("response has no body")
+	}
+	if tracked, ok := r.Response.Body.(*trackedBody); ok && tracked.read {
+		return nil, fmt.Errorf("%s: %w", requestLabel(r.Response.Request), ErrBodyConsumed)
+	}
+	return r.Response.Body, nil
 }
 
 func (r *Response) GetHeaders() map[string]string {
@@ -42,7 +114,11 @@ func (r *Response) IsOK(responseCodes ...int) bool {
 }
 
 func (r *Response) Into(dest any) error {
-	return json.NewDecoder(r.Response.Body).Decode(dest)
+	body, err := r.bodyReader()
+	if err != nil {
+		return err
+	}
+	return json.NewDecoder(body).Decode(dest)
 }
 
 func (h *Response) AsJSON() (map[string]any, error) {
@@ -55,12 +131,18 @@ func (h *Response) AsJSON() (map[string]any, error) {
 }
 
 func (r *Response) AsString() (string, error) {
-	res, err := io.ReadAll(r.Response.Body)
+	if r.buffered != nil {
+		return string(r.buffered), nil
+	}
+	body, err := r.bodyReader()
 	if err != nil {
 		return "", err
 	}
 	defer r.Response.Body.Close()
-
+	res, err := io.ReadAll(body)
+	if err != nil {
+		return "", err
+	}
 	return string(res), nil
 }
 
@@ -115,10 +197,14 @@ func (h *Response) AsMap() (map[string]any, error) {
 	}
 	m["status"] = h.StatusCode
 
+	var err error
 	if h.IsJSON() {
-		m["body"], _ = h.AsJSON()
+		m["body"], err = h.AsJSON()
 	} else {
-		m["body"], _ = h.AsString()
+		m["body"], err = h.AsString()
+	}
+	if errors.Is(err, ErrBodyConsumed) {
+		return nil, err
 	}
 
 	return m, nil
@@ -139,12 +225,14 @@ func (h *Response) Debug() string {
 	for k, v := range logger.StripSecretsFromMap(h.HeaderMap()) {
 		fmt.Fprintf(&sb, "  %s: %s\n", console.Grayf("%s", k), v)
 	}
-	if h.IsJSON() {
+	if _, err := h.bodyReader(); errors.Is(err, ErrBodyConsumed) {
+		sb.WriteString("<body already consumed>")
+	} else if h.IsJSON() {
 		r, _ := h.AsJSON()
 		sb.WriteString(logger.Pretty(r))
 	} else {
-		body, _ := io.ReadAll(h.Body)
-		sb.WriteString(string(body))
+		body, _ := h.AsString()
+		sb.WriteString(body)
 	}
 	return sb.String()
 }
