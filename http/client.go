@@ -197,6 +197,10 @@ type Client struct {
 	// maxRedirects controls how many redirects to follow. -1 means no following.
 	maxRedirects int
 
+	// maxBufferedBody, when > 0, reads every response body into memory (up to
+	// this many bytes) so it can be read more than once. See BufferBody.
+	maxBufferedBody int64
+
 	// logger, when non-nil, overrides logger.GetLogger() for client-internal
 	// logging (currently only WithHttpLogging consumes it). Set via WithLogger.
 	logger logger.Logger
@@ -371,7 +375,7 @@ func (c *Client) DisableKeepAlive(val bool) *Client {
 
 	customTransport := c.httpClient.Transport.(*http.Transport).Clone()
 	customTransport.DisableKeepAlives = val
-	c.httpClient.Transport = customTransport
+	c.setTransport(customTransport)
 	return c
 }
 
@@ -384,6 +388,7 @@ func (c *Client) initTLSConfig() {
 	if customTransport.TLSClientConfig == nil {
 		customTransport.TLSClientConfig = &tls.Config{}
 	}
+	c.setTransport(customTransport)
 }
 
 type TLSConfig struct {
@@ -462,7 +467,7 @@ func (c *Client) InsecureSkipVerify(val bool) *Client {
 	customTransport := c.httpClient.Transport.(*http.Transport).Clone()
 	customTransport.TLSClientConfig.InsecureSkipVerify = val
 	c.tlsConfig = customTransport.TLSClientConfig
-	c.httpClient.Transport = customTransport
+	c.setTransport(customTransport)
 	return c
 }
 
@@ -483,7 +488,7 @@ func (c *Client) setProxy(proxyURL *url.URL) {
 
 	customTransport := c.httpClient.Transport.(*http.Transport).Clone()
 	customTransport.Proxy = http.ProxyURL(proxyURL)
-	c.httpClient.Transport = customTransport
+	c.setTransport(customTransport)
 }
 
 // Auth configures authentication credentials for the client.
@@ -890,6 +895,20 @@ func (c *Client) HARCollector(collector *har.Collector) *Client {
 
 // RedirectPolicy controls redirect following. maxRedirects=0 disables
 // redirect following entirely. Values >0 limit the number of redirects.
+// BufferBody reads each response body into memory as the response arrives, so
+// Into, AsJSON, AsString and Debug can all be called on it, any number of
+// times — e.g. decode a JSON error body and still report it as text. A body
+// larger than maxBytes fails the request rather than being truncated;
+// maxBytes <= 0 selects DefaultMaxBufferedBodyBytes (16MB). Without
+// BufferBody the body streams and a second read returns ErrBodyConsumed.
+func (c *Client) BufferBody(maxBytes int64) *Client {
+	if maxBytes <= 0 {
+		maxBytes = DefaultMaxBufferedBodyBytes
+	}
+	c.maxBufferedBody = maxBytes
+	return c
+}
+
 func (c *Client) RedirectPolicy(maxRedirects int) *Client {
 	c.maxRedirects = maxRedirects
 	return c
@@ -989,9 +1008,6 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 
 	if h := req.Header.Get("Host"); h != "" {
 		req.Host = h
-		if c.tlsConfig != nil {
-			c.tlsConfig.ServerName = h
-		}
 		req.Header.Del("Host")
 	}
 
@@ -1029,17 +1045,29 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 		c.setProxy(proxyURL)
 	}
 
-	if c.curlLog {
-		base := r.client.httpClient.Transport
-		if base == nil {
-			base = http.DefaultTransport
-		}
-		r.client.httpClient.Transport = &curlLogTransport{base: base}
-	}
-
 	transport := r.client.httpClient.Transport
 	if transport == nil {
 		transport = http.DefaultTransport
+	}
+	if c.tlsConfig != nil && req.Host != req.URL.Host {
+		base := c.httpClient.Transport
+		if c.baseTransport != nil {
+			base = c.baseTransport
+		}
+		raw, ok := base.(*http.Transport)
+		if !ok {
+			return nil, fmt.Errorf("HTTP Host override requires a configurable TLS transport")
+		}
+		isolated := raw.Clone()
+		isolated.TLSClientConfig.ServerName = req.Host
+		if hostname, _, err := net.SplitHostPort(req.Host); err == nil {
+			isolated.TLSClientConfig.ServerName = hostname
+		}
+		defer isolated.CloseIdleConnections()
+		transport = applyMiddleware(isolated, c.transportMiddlewares...)
+	}
+	if c.curlLog {
+		transport = &curlLogTransport{base: transport}
 	}
 	transport = applyMiddleware(transport, r.client.harMiddlewares...)
 
@@ -1084,7 +1112,7 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 	}
 
 	httpClient := *r.client.httpClient
-	httpClient.Transport = transport
+	httpClient.Transport = middlewares.ServerTiming(transport)
 	httpClient.CheckRedirect = c.checkRedirectFunc()
 
 	roundTripper := applyMiddleware(middlewares.RoundTripperFunc(httpClient.Do), r.client.authMiddlewares...)
@@ -1093,10 +1121,7 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 		return nil, err
 	}
 
-	response := &Response{
-		Response: httpResponse,
-	}
-	return response, nil
+	return newResponse(httpResponse, c.maxBufferedBody)
 }
 
 func toMap(h http.Header) map[string]string {
