@@ -65,9 +65,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
-	"github.com/spf13/pflag"
-
 	"github.com/flanksource/commons/timeinterval"
 )
 
@@ -83,25 +80,6 @@ var Global = &Properties{
 // into the global properties instance. It's equivalent to Global.LoadFile(filename).
 var LoadFile = func(filename string) error {
 	return Global.LoadFile(filename)
-}
-
-// BindFlags binds the -P/--properties flag to the given flag set, allowing
-// properties to be set via command line.
-//
-// Example:
-//
-//	flags := pflag.NewFlagSet("app", pflag.ContinueOnError)
-//	properties.BindFlags(flags)
-//	flags.Parse(os.Args[1:])
-//	// Now you can use: ./app -P key1=value1 -P key2=value2
-//
-// Each call gives the flag set its own value, so flag sets can be bound and parsed concurrently;
-// the most recently parsed -P values are the command-line overrides.
-func BindFlags(flags *pflag.FlagSet) {
-	parsed := new(map[string]string)
-	flags.StringToStringVarP(parsed, "properties", "P", nil, "System properties")
-	flag := flags.Lookup("properties")
-	flag.Value = &commandlineFlag{Value: flag.Value, parsed: parsed}
 }
 
 // Properties represents a thread-safe key-value store for application configuration.
@@ -188,7 +166,7 @@ func (p *Properties) LoadFile(filename string) error {
 	p.filename = filename
 
 	if p.close == nil {
-		p.close = p.Watch()
+		p.Watch()
 	}
 
 	slog.Info(fmt.Sprintf("Loading properties from %s", filename))
@@ -415,26 +393,40 @@ func (p *Properties) Watch() func() {
 		return p.close
 	}
 	slog.Info(fmt.Sprintf("Watching %s for changes", p.filename))
-	// Create new watcher.
-	watcher, err := fsnotify.NewWatcher()
+	info, err := os.Stat(p.filename)
 	if err != nil {
-		slog.Warn("Failed to create watcher for properties file: " + err.Error())
+		panic(fmt.Errorf("watch properties %s: %w", p.filename, err))
 	}
-
-	_ = watcher.Add(path.Dir(p.filename))
-
+	filename := p.filename
+	stopped := make(chan struct{})
+	var once sync.Once
+	p.close = func() { once.Do(func() { close(stopped) }) }
 	go func() {
-
-		for e := range watcher.Events {
-			if e.Name == p.filename && e.Op != fsnotify.Chmod {
-				if err := p.LoadFile(p.filename); err != nil {
-					fmt.Printf("Error reloading %s: %s\n", p.filename, err)
+		ticker := time.NewTicker(WatchInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stopped:
+				return
+			case <-ticker.C:
+				current, err := os.Stat(filename)
+				if err != nil {
+					slog.Error("stat properties file", "file", filename, "error", err)
+					continue
 				}
-
+				if current.ModTime().Equal(info.ModTime()) && current.Size() == info.Size() && os.SameFile(info, current) {
+					continue
+				}
+				if err := p.LoadFile(filename); err != nil {
+					slog.Error("reload properties file", "file", filename, "error", err)
+					continue
+				}
+				info = current
 			}
 		}
 	}()
-	return func() {
-		_ = watcher.Close()
-	}
+	return p.close
 }
+
+// WatchInterval is the interval used to poll a loaded properties file's mtime.
+const WatchInterval = 100 * time.Millisecond

@@ -14,6 +14,15 @@ var _ = Describe("command-line properties", func() {
 
 	BeforeEach(isolateCommandline)
 
+	It("retains pflag map introspection and the original function-value call shape", func() {
+		flags := pflag.NewFlagSet("introspection", pflag.ContinueOnError)
+		func(bind func(*pflag.FlagSet)) { bind(flags) }(BindFlags)
+		Expect(flags.Parse([]string{"-P", `first=one,"second=two,three"`})).To(Succeed())
+		values, err := flags.GetStringToString("properties")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(values).To(Equal(map[string]string{"first": "one", "second": "two,three"}))
+	})
+
 	newFlagSet := func(name string) *pflag.FlagSet {
 		flags := pflag.NewFlagSet(name, pflag.ContinueOnError)
 		BindFlags(flags)
