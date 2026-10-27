@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/flanksource/commons/collections/prommetrics"
 	"github.com/flanksource/commons/test/matchers"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -17,7 +18,7 @@ var _ = Describe("PriorityQueue", func() {
 		It("should handle string priority queue operations", func() {
 			pq, err := NewQueue(QueueOpts[string]{
 				Comparator: strings.Compare,
-				Metrics: MetricsOpts[string]{
+				Metrics: prommetrics.New(prommetrics.Options[string]{
 					Labels: map[string]any{
 						"const_label": "value1",
 					},
@@ -28,8 +29,7 @@ var _ = Describe("PriorityQueue", func() {
 							}
 							return i[0:1]
 						},
-					},
-				},
+					}}),
 			})
 
 			Expect(err).To(BeNil())
@@ -57,7 +57,7 @@ var _ = Describe("PriorityQueue", func() {
 	Describe("Object queue", func() {
 		It("should handle object priority queue operations with deduplication", func() {
 			pq, err := NewQueue(QueueOpts[*QueueItem]{
-				Metrics: MetricsOpts[*QueueItem]{
+				Metrics: prommetrics.New(prommetrics.Options[*QueueItem]{
 					Labels: map[string]any{
 						"const_label": "value1",
 					},
@@ -65,8 +65,8 @@ var _ = Describe("PriorityQueue", func() {
 						"prefix": func(i *QueueItem) string {
 							return "dummy"
 						},
-					},
-				},
+					}}),
+
 				Comparator: func(a, b *QueueItem) int {
 					return strings.Compare(a.Obj["name"].(string), b.Obj["name"].(string))
 				},
@@ -101,9 +101,8 @@ var _ = Describe("PriorityQueue", func() {
 				Equals:     func(a, b string) bool { return a == b },
 				Dedupe:     true,
 				Comparator: strings.Compare,
-				Metrics: MetricsOpts[string]{
-					Name: "dedupe_queue",
-				},
+				Metrics: prommetrics.New(prommetrics.Options[string]{
+					Name: "dedupe_queue"}),
 			})
 
 			Expect(err).To(BeNil())
@@ -136,9 +135,8 @@ var _ = Describe("PriorityQueue", func() {
 		It("should handle concurrent operations safely", func() {
 			pq, err := NewQueue(QueueOpts[string]{
 				Comparator: strings.Compare,
-				Metrics: MetricsOpts[string]{
-					Name: "concurrent_queue",
-				},
+				Metrics: prommetrics.New(prommetrics.Options[string]{
+					Name: "concurrent_queue"}),
 			})
 			Expect(err).To(BeNil())
 
@@ -194,9 +192,8 @@ var _ = Describe("PriorityQueue", func() {
 			pq, err := NewQueue(QueueOpts[string]{
 				Equals:     func(a, b string) bool { return a == b },
 				Comparator: strings.Compare,
-				Metrics: MetricsOpts[string]{
-					Disable: true,
-				},
+				Metrics: prommetrics.New(prommetrics.Options[string]{
+					Disable: true}),
 			})
 
 			Expect(err).To(BeNil())
