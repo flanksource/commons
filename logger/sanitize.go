@@ -12,7 +12,7 @@ import (
 )
 
 var CommonRedactedHeaders = []string{
-	"Authorization*", "Bearer*", "Session*", "*SessionId*", "*Sessid*", "*Cookie", "*Token", "*-Secret", "*-Key",
+	"Authorization*", "Proxy-Authorization", "Bearer*", "Session*", "*SessionId*", "*Sessid*", "*Cookie", "*Token", "*-Secret", "*-Key",
 	"Password", "Passwd", "Pwd",
 }
 
