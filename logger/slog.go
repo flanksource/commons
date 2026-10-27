@@ -9,16 +9,14 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unicode"
 
 	"github.com/flanksource/commons/is"
+	"github.com/flanksource/commons/logger/internal/tint"
 	"github.com/flanksource/commons/properties"
-	"github.com/kr/pretty"
-	"github.com/lmittmann/tint"
-	"github.com/lrita/cmap"
-	"github.com/samber/lo"
 )
 
 var (
@@ -27,7 +25,7 @@ var (
 
 const rootName = "root"
 
-var namedLoggers cmap.Map[string, *SlogLogger]
+var namedLoggers sync.Map
 var todo = context.TODO()
 var propertyLogLevels = []string{
 	"fatal", "error", "warn", "info", "debug", "trace",
@@ -88,8 +86,8 @@ func GetOutput() io.Writer {
 
 func GetNamedLoggingLevels() (levels map[string]string) {
 	levels = make(map[string]string)
-	namedLoggers.Range(func(key string, value *SlogLogger) bool {
-		levels[key] = FromSlogLevel(value.Level.Level()).String()
+	namedLoggers.Range(func(key, value any) bool {
+		levels[key.(string)] = FromSlogLevel(value.(*SlogLogger).Level.Level()).String()
 		return true
 	})
 	return levels
@@ -273,7 +271,7 @@ func camelCaseWords(s string) []string {
 		}
 		last = r
 	}
-	return lo.Map(strings.Fields(result.String()), func(s string, _ int) string { return strings.TrimSpace(s) })
+	return strings.Fields(result.String())
 }
 
 // GetLogger returns a logger instance, optionally with the specified names.
@@ -287,7 +285,7 @@ func camelCaseWords(s string) []string {
 func GetLogger(names ...string) *SlogLogger {
 	parent, _ := namedLoggers.Load(rootName)
 	if len(names) == 0 {
-		return parent
+		return parent.(*SlogLogger)
 	}
 
 	path := ""
@@ -298,7 +296,7 @@ func GetLogger(names ...string) *SlogLogger {
 		}
 		path = path + strings.TrimSpace(name)
 		if v, ok := namedLoggers.Load(path); ok {
-			return v
+			return v.(*SlogLogger)
 		}
 		if i == 0 {
 			break
@@ -308,7 +306,7 @@ func GetLogger(names ...string) *SlogLogger {
 	if !loaded {
 		observeCreated(path)
 	}
-	return child
+  return child.(*SlogLogger)
 }
 
 type SlogLogger struct {
@@ -346,7 +344,7 @@ func (s SlogLogger) Secretf(format string, args ...interface{}) {
 }
 
 func (s SlogLogger) Prettyf(msg string, obj interface{}) {
-	pretty.Print(obj)
+	fmt.Println(Pretty(obj))
 }
 
 func (s SlogLogger) Errorf(format string, args ...interface{}) {
@@ -502,7 +500,7 @@ func (s SlogLogger) V(level any) Verbose {
 }
 
 func ParseLevel(logger Logger, level any) LogLevel {
-	if lo.IsEmpty(level) {
+	if level == nil {
 		return Info
 	}
 	switch v := level.(type) {

@@ -7,8 +7,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/spf13/pflag"
-
 	"github.com/flanksource/commons/properties"
 )
 
@@ -103,7 +101,11 @@ func Configure(flags Flags) {
 
 // BindFlags add flags to an existing flag set,
 // note that this is not an actual binding which occurs later during initialization
-func BindFlags(flags *pflag.FlagSet) {
+func BindFlags[F interface {
+	CountP(string, string, string) *int
+	String(string, string, string) *string
+	Bool(string, bool, string) *bool
+}](flags F) {
 	flags.CountP("loglevel", "v", "Increase logging level")
 	flags.String("log-level", "info", "Set the default log level")
 	flags.Bool("json-logs", false, "Print logs in json format to stderr")
@@ -114,7 +116,11 @@ func BindFlags(flags *pflag.FlagSet) {
 
 // UseCobraFlags initializes the logger using values from parsed cobra flags.
 // This should be called after cobra has parsed the command line arguments.
-func UseCobraFlags(flags *pflag.FlagSet) {
+func UseCobraFlags[F interface {
+	GetCount(string) (int, error)
+	GetString(string) (string, error)
+	GetBool(string) (bool, error)
+}](flags F) {
 	// Get the verbosity count from the parsed flags
 	if v, err := flags.GetCount("loglevel"); err == nil && v > 0 {
 		currentLogger.SetLogLevel(v)
