@@ -1,4 +1,4 @@
-package middlewares
+package tracing
 
 import (
 	"bytes"
@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	commonscontext "github.com/flanksource/commons/context"
+	"github.com/flanksource/commons/http/middlewares"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/properties"
 
@@ -39,7 +40,7 @@ var _ = Describe("JSON response body logging limits", func() {
 		request, err := http.NewRequestWithContext(requestContext, http.MethodGet, "https://example.com", nil)
 		Expect(err).ToNot(HaveOccurred())
 
-		response, err := jsonLogger(TraceConfig{Response: true, MaxBodyLength: 4096}, nil, RoundTripperFunc(func(*http.Request) (*http.Response, error) {
+		response, err := jsonLogger(TraceConfig{Response: true, MaxBodyLength: 4096}, nil, middlewares.RoundTripperFunc(func(*http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode:    http.StatusOK,
 				ContentLength: int64(len(body)),

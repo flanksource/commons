@@ -1,4 +1,4 @@
-package middlewares
+package tracing
 
 import (
 	"bytes"
@@ -6,6 +6,7 @@ import (
 	netHttp "net/http"
 	"strings"
 
+	"github.com/flanksource/commons/http/middlewares"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/properties"
 	"go.opentelemetry.io/otel"
@@ -234,7 +235,7 @@ func (t *traceTransport) TraceProvider(provider trace.TracerProvider) *traceTran
 }
 
 func (t *traceTransport) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundTripper {
-	return RoundTripperFunc(func(ogRequest *netHttp.Request) (*netHttp.Response, error) {
+	return middlewares.RoundTripperFunc(func(ogRequest *netHttp.Request) (*netHttp.Response, error) {
 		// According to RoundTripper spec, we shouldn't modify the origin request.
 		req := ogRequest.Clone(ogRequest.Context())
 

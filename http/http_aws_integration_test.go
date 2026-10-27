@@ -8,11 +8,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/service/sts"
 	commonhttp "github.com/flanksource/commons/http"
+	"github.com/flanksource/commons/http/middlewares/awssigv4"
 )
 
 type STSGetCallerIdentityResponse struct {
@@ -37,9 +34,9 @@ func TestAWSAuthIntegrationWithLocalStack(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("Static Credentials with STS GetCallerIdentity", func(t *testing.T) {
-		cfg := aws.Config{
+		cfg := awssigv4.Config{
 			Region:      "us-east-1",
-			Credentials: credentials.NewStaticCredentialsProvider("test", "test", ""),
+			Credentials: awssigv4.NewStaticCredentialsProvider(awssigv4.Credentials{AccessKeyID: "test", SecretAccessKey: "test", SessionToken: ""}),
 		}
 		client := commonhttp.NewClient().
 			AWSAuthSigV4(cfg).
@@ -76,10 +73,7 @@ func TestAWSAuthIntegrationWithLocalStack(t *testing.T) {
 		defer os.Unsetenv("AWS_SECRET_ACCESS_KEY")
 		defer os.Unsetenv("AWS_REGION")
 
-		cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion("us-east-1"))
-		if err != nil {
-			t.Fatalf("Failed to load AWS config: %v", err)
-		}
+		cfg := awssigv4.Config{Region: "us-east-1", Credentials: awssigv4.EnvironmentProvider{}}
 
 		client := commonhttp.NewClient().
 			AWSAuthSigV4(cfg).
@@ -98,9 +92,9 @@ func TestAWSAuthIntegrationWithLocalStack(t *testing.T) {
 	})
 
 	t.Run("Static Credentials Provider", func(t *testing.T) {
-		cfg := aws.Config{
+		cfg := awssigv4.Config{
 			Region:      "us-east-1",
-			Credentials: credentials.NewStaticCredentialsProvider("test", "test", ""),
+			Credentials: awssigv4.NewStaticCredentialsProvider(awssigv4.Credentials{AccessKeyID: "test", SecretAccessKey: "test", SessionToken: ""}),
 		}
 
 		client := commonhttp.NewClient().
@@ -121,9 +115,9 @@ func TestAWSAuthIntegrationWithLocalStack(t *testing.T) {
 	})
 
 	t.Run("Session Token via StaticCredentialsProvider", func(t *testing.T) {
-		cfg := aws.Config{
+		cfg := awssigv4.Config{
 			Region:      "us-east-1",
-			Credentials: credentials.NewStaticCredentialsProvider("test", "test", "test-session-token"),
+			Credentials: awssigv4.NewStaticCredentialsProvider(awssigv4.Credentials{AccessKeyID: "test", SecretAccessKey: "test", SessionToken: "test-session-token"}),
 		}
 		client := commonhttp.NewClient().
 			AWSAuthSigV4(cfg).
@@ -141,34 +135,13 @@ func TestAWSAuthIntegrationWithLocalStack(t *testing.T) {
 		}
 	})
 
-	t.Run("AWS SDK STS Client verification", func(t *testing.T) {
-		cfg, err := awsconfig.LoadDefaultConfig(ctx,
-			awsconfig.WithRegion("us-east-1"),
-			awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("test", "test", "")),
-		)
-		if err != nil {
-			t.Fatalf("Failed to load config: %v", err)
-		}
-
-		localstackEndpoint := "http://localhost:4566"
-		stsClient := sts.NewFromConfig(cfg, func(o *sts.Options) {
-			o.BaseEndpoint = &localstackEndpoint
-		})
-		result, err := stsClient.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
-		if err != nil {
-			t.Fatalf("AWS SDK STS failed: %v", err)
-		}
-		if result.UserId == nil {
-			t.Fatal("UserId should not be nil")
-		}
-	})
 }
 
 func TestAWSCredentialProvidersConfiguration(t *testing.T) {
 	t.Run("Static Credentials Provider", func(t *testing.T) {
-		cfg := aws.Config{
+		cfg := awssigv4.Config{
 			Region:      "us-east-1",
-			Credentials: credentials.NewStaticCredentialsProvider("AKID", "SECRET", ""),
+			Credentials: awssigv4.NewStaticCredentialsProvider(awssigv4.Credentials{AccessKeyID: "AKID", SecretAccessKey: "SECRET", SessionToken: ""}),
 		}
 		client := commonhttp.NewClient().AWSAuthSigV4(cfg).AWSService("s3")
 		if client == nil {
@@ -176,7 +149,7 @@ func TestAWSCredentialProvidersConfiguration(t *testing.T) {
 		}
 	})
 
-	t.Run("Default Credential Chain", func(t *testing.T) {
+	t.Run("Environment Credentials Provider", func(t *testing.T) {
 		os.Setenv("AWS_ACCESS_KEY_ID", "test-access-key")
 		os.Setenv("AWS_SECRET_ACCESS_KEY", "test-secret-key")
 		os.Setenv("AWS_REGION", "us-west-2")
@@ -184,9 +157,9 @@ func TestAWSCredentialProvidersConfiguration(t *testing.T) {
 		defer os.Unsetenv("AWS_SECRET_ACCESS_KEY")
 		defer os.Unsetenv("AWS_REGION")
 
-		cfg, err := awsconfig.LoadDefaultConfig(context.Background())
-		if err != nil {
-			t.Fatalf("Failed to load default config: %v", err)
+		cfg := awssigv4.Config{Region: os.Getenv("AWS_REGION"), Credentials: awssigv4.EnvironmentProvider{}}
+		if _, err := cfg.Credentials.Retrieve(context.Background()); err != nil {
+			t.Fatal(err)
 		}
 
 		client := commonhttp.NewClient().AWSAuthSigV4(cfg).AWSService("s3")

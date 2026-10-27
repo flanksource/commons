@@ -1,7 +1,7 @@
 // Package http provides an enhanced HTTP client with built-in support for
 // authentication, retries, tracing, and middleware.
 //
-// The client supports multiple authentication methods (Basic, Digest, NTLM, OAuth, AWS Sigv4),
+// The client supports multiple authentication methods (Basic, Digest, OAuth, AWS Sigv4),
 // automatic retries with exponential backoff, request/response tracing, and a
 // flexible middleware system.
 //
@@ -51,25 +51,24 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
-
 	"github.com/flanksource/commons/dns"
 	"github.com/flanksource/commons/har"
 	"github.com/flanksource/commons/http/middlewares"
+	"github.com/flanksource/commons/http/middlewares/awssigv4"
+	"github.com/flanksource/commons/http/middlewares/oauth"
+	"github.com/flanksource/commons/http/middlewares/timing"
+	"github.com/flanksource/commons/http/middlewares/tracing"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/properties"
-	httpntlm "github.com/vadimi/go-http-ntlm"
-	httpntlmv2 "github.com/vadimi/go-http-ntlm/v2"
 )
 
-type TraceConfig = middlewares.TraceConfig
+type TraceConfig = tracing.TraceConfig
 
-type OauthConfig = middlewares.OauthConfig
+type OauthConfig = oauth.OauthConfig
 
-var AuthStyleInHeader = middlewares.AuthStyleInHeader
-var AuthStyleInParams = middlewares.AuthStyleInParams
-var AuthStyleAutoDetect = middlewares.AuthStyleAutoDetect
+var AuthStyleInHeader = oauth.AuthStyleInHeader
+var AuthStyleInParams = oauth.AuthStyleInParams
+var AuthStyleAutoDetect = oauth.AuthStyleAutoDetect
 
 var TraceAll = TraceConfig{
 	MaxBodyLength:   4096,
@@ -108,14 +107,8 @@ type AuthConfig struct {
 	// Use digest access authentication
 	Digest bool
 
-	// Ntlm controls whether to use NTLM
-	Ntlm bool
-
-	// Ntlmv2 controls whether to use NTLMv2
-	Ntlmv2 bool
-
 	// AWS Sigv4 authentication
-	AWSCredentialsProvider aws.CredentialsProvider
+	AWSCredentialsProvider awssigv4.CredentialsProvider
 	AWSRegion              string
 	AWSService             string
 	AWSEndpoint            string
@@ -493,7 +486,7 @@ func (c *Client) setProxy(proxyURL *url.URL) {
 
 // Auth configures authentication credentials for the client.
 // By default, this sets up HTTP Basic Authentication.
-// Use Digest(), NTLM(), or NTLMV2() to switch authentication methods.
+// Use Digest() to switch to Digest authentication.
 //
 // Example:
 //
@@ -502,9 +495,6 @@ func (c *Client) setProxy(proxyURL *url.URL) {
 //
 //	// Digest auth
 //	client.Auth("username", "password").Digest(true)
-//
-//	// NTLM auth with domain
-//	client.Auth("DOMAIN\\username", "password").NTLM(true)
 func (c *Client) Auth(username, password string) *Client {
 	if c.authConfig == nil {
 		c.authConfig = &AuthConfig{}
@@ -516,33 +506,14 @@ func (c *Client) Auth(username, password string) *Client {
 }
 
 // AWSAuthSigV4 configures AWS Signature Version 4 authentication.
-// With no arguments, it loads the default AWS config (env vars, ~/.aws, IAM role, etc.).
-// Pass an aws.Config to use specific credentials/region.
-//
-// Example with defaults:
-//
-//	client.AWSAuthSigV4()
-//
-// Example with explicit config:
-//
-//	cfg, _ := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion("us-east-1"))
-//	client.AWSAuthSigV4(cfg)
-func (c *Client) AWSAuthSigV4(cfgs ...aws.Config) *Client {
+// Supply an explicit commons credentials provider and region.
+func (c *Client) AWSAuthSigV4(cfg awssigv4.Config) *Client {
 	if c.authConfig == nil {
 		c.authConfig = &AuthConfig{}
 	}
 
-	if len(cfgs) > 0 {
-		cfg := cfgs[0]
-		c.authConfig.AWSCredentialsProvider = cfg.Credentials
-		c.authConfig.AWSRegion = cfg.Region
-	} else {
-		cfg, err := awsconfig.LoadDefaultConfig(context.Background())
-		if err == nil {
-			c.authConfig.AWSCredentialsProvider = cfg.Credentials
-			c.authConfig.AWSRegion = cfg.Region
-		}
-	}
+	c.authConfig.AWSCredentialsProvider = awssigv4.NewCredentialsCache(cfg.Credentials)
+	c.authConfig.AWSRegion = cfg.Region
 	return c
 }
 
@@ -570,13 +541,13 @@ func (c *Client) AWSEndpoint(endpoint string) *Client {
 //
 // Example:
 //
-//	client.OAuth(middlewares.OauthConfig{
+//	client.OAuth(OauthConfig{
 //		ClientID:     "client-id",
 //		ClientSecret: "client-secret",
 //		TokenURL:     "https://auth.example.com/token",
 //		Scopes:       []string{"read", "write"},
 //	})
-func (c *Client) OAuth(config middlewares.OauthConfig) *Client {
+func (c *Client) OAuth(config oauth.OauthConfig) *Client {
 	if c.harCollector != nil {
 		existing := config.TokenTransport
 		harMiddleware := c.harCollector.Middleware()
@@ -590,7 +561,7 @@ func (c *Client) OAuth(config middlewares.OauthConfig) *Client {
 	}
 	// Installed outside the HAR middlewares (not via Use, which installs
 	// around the transport) so HAR captures the Authorization header.
-	c.authMiddlewares = append(c.authMiddlewares, middlewares.NewOauthTransport(config).RoundTripper)
+	c.authMiddlewares = append(c.authMiddlewares, oauth.NewOauthTransport(config).RoundTripper)
 	return c
 }
 
@@ -612,7 +583,7 @@ func (c *Client) OAuth(config middlewares.OauthConfig) *Client {
 //	})
 func (c *Client) Trace(config TraceConfig) *Client {
 	c.traceConfig = config
-	c.Use(middlewares.NewTracedTransport(config).RoundTripper)
+	c.Use(tracing.NewTracedTransport(config).RoundTripper)
 	return c
 }
 
@@ -638,7 +609,7 @@ func (c *Client) TraceToStdout(config TraceConfig, verbose ...logger.Verbose) *C
 	c.Use(func(rt http.RoundTripper) http.RoundTripper {
 		// Build the inner logger middleware lazily on each request so
 		// merges performed after this Use() call are observed.
-		return middlewares.NewLogger(*handle.cfg, v)(rt)
+		return tracing.NewLogger(*handle.cfg, v)(rt)
 	})
 	return c
 }
@@ -949,24 +920,6 @@ func (c *Client) RoundTripper() http.RoundTripper {
 	return c
 }
 
-func (c *Client) NTLM(val bool) *Client {
-	if c.authConfig == nil {
-		c.authConfig = &AuthConfig{}
-	}
-
-	c.authConfig.Ntlm = val
-	return c
-}
-
-func (c *Client) NTLMV2(val bool) *Client {
-	if c.authConfig == nil {
-		c.authConfig = &AuthConfig{}
-	}
-
-	c.authConfig.Ntlmv2 = val
-	return c
-}
-
 func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 	var host string
 	if r.client.connectTo != "" {
@@ -1073,7 +1026,7 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 
 	if c.authConfig != nil {
 		if c.authConfig.AWSCredentialsProvider != nil {
-			awsCfg := middlewares.AWSSigv4Config{
+			awsCfg := awssigv4.AWSSigv4Config{
 				Region:              c.authConfig.AWSRegion,
 				Service:             c.authConfig.AWSService,
 				Endpoint:            c.authConfig.AWSEndpoint,
@@ -1082,37 +1035,14 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 			if c.traceConfig.Auth {
 				awsCfg.Tracer = func(msg string) { logger.Tracef("%s", msg) }
 			}
-			transport = middlewares.NewAWSSigv4Transport(awsCfg, transport)
-		} else {
-			parts := strings.Split(c.authConfig.Username, "@")
-			domain := ""
-			if len(parts) > 1 {
-				domain = parts[1]
-			}
-
-			if c.authConfig.Ntlmv2 {
-				transport = &httpntlmv2.NtlmTransport{
-					Domain:       domain,
-					User:         parts[0],
-					Password:     c.authConfig.Password,
-					RoundTripper: transport,
-				}
-			} else if c.authConfig.Ntlm {
-				transport = &httpntlm.NtlmTransport{
-					Domain:   domain,
-					User:     parts[0],
-					Password: c.authConfig.Password,
-				}
-				// The legacy NTLM transport does not accept an underlying transport.
-				transport = applyMiddleware(transport, r.client.harMiddlewares...)
-			} else if c.authConfig.Digest {
-				transport = newDigestTransport(c.authConfig.Username, c.authConfig.Password, transport)
-			}
+			transport = awssigv4.NewAWSSigv4Transport(awsCfg, transport)
+		} else if c.authConfig.Digest {
+			transport = newDigestTransport(c.authConfig.Username, c.authConfig.Password, transport)
 		}
 	}
 
 	httpClient := *r.client.httpClient
-	httpClient.Transport = middlewares.ServerTiming(transport)
+	httpClient.Transport = timing.ServerTiming(transport)
 	httpClient.CheckRedirect = c.checkRedirectFunc()
 
 	roundTripper := applyMiddleware(middlewares.RoundTripperFunc(httpClient.Do), r.client.authMiddlewares...)

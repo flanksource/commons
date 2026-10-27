@@ -1,4 +1,4 @@
-package middlewares
+package timing
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"time"
 
 	rpchttp "github.com/flanksource/clicky/rpc/http"
+	"github.com/flanksource/commons/http/middlewares"
 )
 
 // ServerTiming records outgoing exchanges on the request's timing collector.
@@ -18,7 +19,7 @@ func ServerTiming(next http.RoundTripper) http.RoundTripper {
 	if next == nil {
 		panic("HTTP timing requires a transport")
 	}
-	return RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
+	return middlewares.RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
 		if _, ok := rpchttp.TimingsFromContext(req.Context()); !ok {
 			return next.RoundTrip(req)
 		}

@@ -3,17 +3,15 @@ package http_test
 import (
 	"testing"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/credentials"
 	commonhttp "github.com/flanksource/commons/http"
-	"github.com/flanksource/commons/http/middlewares"
+	"github.com/flanksource/commons/http/middlewares/awssigv4"
 )
 
 func TestAWSAuthSigV4(t *testing.T) {
 	t.Run("with explicit config", func(t *testing.T) {
-		cfg := aws.Config{
+		cfg := awssigv4.Config{
 			Region:      "us-east-1",
-			Credentials: credentials.NewStaticCredentialsProvider("AKID", "SECRET", ""),
+			Credentials: awssigv4.NewStaticCredentialsProvider(awssigv4.Credentials{AccessKeyID: "AKID", SecretAccessKey: "SECRET", SessionToken: ""}),
 		}
 		client := commonhttp.NewClient().AWSAuthSigV4(cfg).AWSService("s3")
 		if client == nil {
@@ -22,9 +20,9 @@ func TestAWSAuthSigV4(t *testing.T) {
 	})
 
 	t.Run("with service override", func(t *testing.T) {
-		cfg := aws.Config{
+		cfg := awssigv4.Config{
 			Region:      "us-west-2",
-			Credentials: credentials.NewStaticCredentialsProvider("AKID", "SECRET", ""),
+			Credentials: awssigv4.NewStaticCredentialsProvider(awssigv4.Credentials{AccessKeyID: "AKID", SecretAccessKey: "SECRET", SessionToken: ""}),
 		}
 		services := []string{"s3", "execute-api", "es", "lambda", "sts"}
 		for _, svc := range services {
@@ -38,9 +36,9 @@ func TestAWSAuthSigV4(t *testing.T) {
 	})
 
 	t.Run("with custom endpoint", func(t *testing.T) {
-		cfg := aws.Config{
+		cfg := awssigv4.Config{
 			Region:      "us-east-1",
-			Credentials: credentials.NewStaticCredentialsProvider("AKID", "SECRET", ""),
+			Credentials: awssigv4.NewStaticCredentialsProvider(awssigv4.Credentials{AccessKeyID: "AKID", SecretAccessKey: "SECRET", SessionToken: ""}),
 		}
 		client := commonhttp.NewClient().
 			AWSAuthSigV4(cfg).
@@ -52,9 +50,9 @@ func TestAWSAuthSigV4(t *testing.T) {
 	})
 
 	t.Run("chaining with other options", func(t *testing.T) {
-		cfg := aws.Config{
+		cfg := awssigv4.Config{
 			Region:      "us-east-1",
-			Credentials: credentials.NewStaticCredentialsProvider("AKID", "SECRET", ""),
+			Credentials: awssigv4.NewStaticCredentialsProvider(awssigv4.Credentials{AccessKeyID: "AKID", SecretAccessKey: "SECRET", SessionToken: ""}),
 		}
 		client := commonhttp.NewClient().
 			BaseURL("https://api.example.com").
@@ -71,7 +69,7 @@ func TestAWSAuthSigV4(t *testing.T) {
 func TestAuthConfigIsEmpty(t *testing.T) {
 	t.Run("with AWS credentials", func(t *testing.T) {
 		config := &commonhttp.AuthConfig{
-			AWSCredentialsProvider: credentials.NewStaticCredentialsProvider("AKID", "SECRET", ""),
+			AWSCredentialsProvider: awssigv4.NewStaticCredentialsProvider(awssigv4.Credentials{AccessKeyID: "AKID", SecretAccessKey: "SECRET", SessionToken: ""}),
 			AWSRegion:              "us-east-1",
 		}
 		if config.IsEmpty() {
@@ -112,7 +110,7 @@ func TestInferServiceFromHost(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.host, func(t *testing.T) {
-			got := middlewares.InferServiceFromHost(tt.host)
+			got := awssigv4.InferServiceFromHost(tt.host)
 			if got != tt.service {
 				t.Errorf("InferServiceFromHost(%q) = %q, want %q", tt.host, got, tt.service)
 			}
