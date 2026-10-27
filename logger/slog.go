@@ -304,7 +304,10 @@ func GetLogger(names ...string) *SlogLogger {
 			break
 		}
 	}
-	child, _ := namedLoggers.LoadOrStore(path, New(path))
+	child, loaded := namedLoggers.LoadOrStore(path, New(path))
+	if !loaded {
+		observeCreated(path)
+	}
 	return child
 }
 
@@ -370,6 +373,7 @@ func (s SlogLogger) handle(r slog.Record, format string, args ...interface{}) {
 }
 
 func (s SlogLogger) handleRaw(r slog.Record, msg string) {
+	observe(s.Prefix, msg, r)
 	if s.IsJSON() {
 		if s.Prefix != "" {
 			r.Add("logger", s.Prefix)
