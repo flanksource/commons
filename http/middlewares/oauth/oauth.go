@@ -1,22 +1,24 @@
-package middlewares
+package oauth
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	netHttp "net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/flanksource/clicky/api"
-	"github.com/flanksource/commons/hash"
+	"github.com/flanksource/commons/http/middlewares"
 	"github.com/flanksource/commons/logger"
-	"github.com/patrickmn/go-cache"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 )
 
 func NewOauthTransport(config OauthConfig) *oauthRoundTripper {
-	return &oauthRoundTripper{OauthConfig: config, cache: cache.New(time.Minute*15, time.Hour)}
+	return &oauthRoundTripper{OauthConfig: config}
 }
 
 type AuthStyle oauth2.AuthStyle
@@ -36,7 +38,7 @@ type OauthConfig struct {
 	// TokenTransport wraps the HTTP transport used for OAuth token requests.
 	// When set, the token fetch HTTP call is routed through this middleware,
 	// allowing HAR capture of the token request without a circular import.
-	TokenTransport Middleware
+	TokenTransport middlewares.Middleware
 }
 
 func (c OauthConfig) Pretty() api.Text {
@@ -65,7 +67,7 @@ func (c *OauthConfig) AuthStyleInParams() *OauthConfig {
 
 type oauthRoundTripper struct {
 	OauthConfig
-	cache *cache.Cache
+	cache sync.Map
 }
 
 func toUrlValues(m map[string]string) url.Values {
@@ -83,7 +85,7 @@ func (t *oauthRoundTripper) trace(format string, args ...any) {
 }
 
 func (t *oauthRoundTripper) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundTripper {
-	return RoundTripperFunc(func(ogRequest *netHttp.Request) (*netHttp.Response, error) {
+	return middlewares.RoundTripperFunc(func(ogRequest *netHttp.Request) (*netHttp.Response, error) {
 		config := clientcredentials.Config{
 			ClientID:       t.ClientID,
 			ClientSecret:   t.ClientSecret,
@@ -95,9 +97,14 @@ func (t *oauthRoundTripper) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundT
 
 		cacheKey := oauthCacheKey(t.ClientID, t.ClientSecret, t.TokenURL, t.Scopes)
 		var token *oauth2.Token
-		if val, ok := t.cache.Get(cacheKey); ok {
-			token, _ = val.(*oauth2.Token)
-			t.trace("oauth: using cached token (expires %s)", token.Expiry.Format(time.RFC3339))
+		if val, ok := t.cache.Load(cacheKey); ok {
+			token = val.(*oauth2.Token)
+			if token.Valid() {
+				t.trace("oauth: using cached token (expires %s)", token.Expiry.Format(time.RFC3339))
+			} else {
+				t.cache.Delete(cacheKey)
+				token = nil
+			}
 		}
 
 		var err error
@@ -117,7 +124,7 @@ func (t *oauthRoundTripper) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundT
 				return nil, fmt.Errorf("fetched invalid oauth token: type=%s expires in=%s", token.TokenType, time.Until(token.Expiry))
 			}
 			t.trace("oauth: token acquired (expires %s): access=%s, refresh=%s", token.Expiry.Format(time.RFC3339), logger.PrintableSecret(token.AccessToken), logger.PrintableSecret(token.RefreshToken))
-			t.cache.Set(cacheKey, token, time.Until(token.Expiry))
+			t.cache.Store(cacheKey, token)
 		}
 
 		request := ogRequest.Clone(ogRequest.Context())
@@ -128,5 +135,6 @@ func (t *oauthRoundTripper) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundT
 }
 
 func oauthCacheKey(ClientID, clientSecret, tokenURL string, scopes []string) string {
-	return hash.Sha256Hex(fmt.Sprintf("%s:%s:%s:%s", ClientID, clientSecret, tokenURL, scopes))
+	hash := sha256.Sum256([]byte(fmt.Sprintf("%s:%s:%s:%s", ClientID, clientSecret, tokenURL, scopes)))
+	return hex.EncodeToString(hash[:])
 }

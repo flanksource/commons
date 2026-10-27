@@ -1,4 +1,4 @@
-package middlewares
+package tracing
 
 import (
 	"bytes"
@@ -15,6 +15,7 @@ import (
 	"github.com/flanksource/clicky/api"
 	"github.com/flanksource/commons/console"
 	commonsCtx "github.com/flanksource/commons/context"
+	"github.com/flanksource/commons/http/middlewares"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/logger/httpretty"
 )
@@ -226,9 +227,9 @@ func hasDetailedTrace(config TraceConfig) bool {
 		config.Auth
 }
 
-func newContextLogger(config TraceConfig, verbose logger.Verbose) Middleware {
+func newContextLogger(config TraceConfig, verbose logger.Verbose) middlewares.Middleware {
 	return func(rt http.RoundTripper) http.RoundTripper {
-		return RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		return middlewares.RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
 			if logger.IsJsonLogs() {
 				return jsonLogger(config, verbose, rt, req)
 			}
@@ -482,7 +483,7 @@ func statusColor(code int) func(string, ...interface{}) string {
 	return console.Yellowf
 }
 
-func NewLogger(config TraceConfig, verbose ...logger.Verbose) Middleware {
+func NewLogger(config TraceConfig, verbose ...logger.Verbose) middlewares.Middleware {
 	var v logger.Verbose
 	if len(verbose) > 0 {
 		v = verbose[0]

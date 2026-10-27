@@ -1,4 +1,4 @@
-package middlewares
+package timing
 
 import (
 	"context"
@@ -10,11 +10,18 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"testing"
 
 	rpchttp "github.com/flanksource/clicky/rpc/http"
+	. "github.com/flanksource/commons/http/middlewares"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
+
+func TestTiming(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "HTTP Timing Suite")
+}
 
 var _ = Describe("Server timing", func() {
 	It("counts exchanges and connection reuse without consuming the body", func() {

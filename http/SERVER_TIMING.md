@@ -22,7 +22,7 @@ Import `rpchttp` from `github.com/flanksource/clicky/rpc/http` and `httpclient` 
 
 `http_dns`, `http_connect`, `http_tls`, `http_conn` and `http_ttfb` describe DNS, dial, TLS, connection acquisition and first-byte timing. `http_conn` counts new and reused connections. `http_wire` counts request writes observed by the transport, including transparent retries. These phases overlap; adding them does not produce request elapsed time.
 
-For a standard HTTP client, set `Transport: middlewares.ServerTiming(baseTransport)`. It requires a non-nil transport. For libraries that own their transport, pass `middlewares.WithClientTimings(ctx)` to their context-aware operation. This records connection phases without replacing their transport or TLS settings. Use the context helper only outside `ServerTiming`, which already installs it. Both helpers live in `github.com/flanksource/commons/http/middlewares` and preserve existing HTTP trace callbacks.
+For a standard HTTP client, set `Transport: timing.ServerTiming(baseTransport)`. It requires a non-nil transport. For libraries that own their transport, pass `timing.WithClientTimings(ctx)` to their context-aware operation. This records connection phases without replacing their transport or TLS settings. Use the context helper only outside `ServerTiming`, which already installs it. Both helpers live in `github.com/flanksource/commons/http/middlewares/timing` and preserve existing HTTP trace callbacks.
 
 Metric names are fixed and descriptions contain numeric counters. Request URLs, headers, credentials, bodies and connection addresses are not emitted.
 
