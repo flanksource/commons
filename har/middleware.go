@@ -83,16 +83,9 @@ func millis(d time.Duration) float64 {
 // replayed body hands that error to the transport, which fails the round trip
 // with it, so it reaches the entry through the RoundTrip error.
 func buildRequest(req *http.Request, cfg HARConfig) Request {
-	har := Request{
-		Method:      req.Method,
-		URL:         harURL(req.URL, cfg),
-		HTTPVersion: httpVersion(req.Proto),
-		Cookies:     []Cookie{},
-		Headers:     harHeaders(req.Header, cfg),
-		QueryString: harQueryString(req.URL.Query(), cfg),
-		HeadersSize: -1,
-		BodySize:    -1,
-	}
+	har := RedactRequest(req.URL, req.Header, cfg)
+	har.Method, har.HTTPVersion = req.Method, httpVersion(req.Proto)
+	har.Cookies, har.HeadersSize, har.BodySize = []Cookie{}, -1, -1
 
 	ct := req.Header.Get("Content-Type")
 	if req.Body != nil && shouldCapture(ct, cfg.CaptureContentTypes) {
@@ -106,6 +99,15 @@ func buildRequest(req *http.Request, cfg HARConfig) Request {
 	}
 
 	return har
+}
+
+// RedactRequest projects URL, query values and headers through the HAR redaction policy.
+func RedactRequest(address *url.URL, headers http.Header, cfg HARConfig) Request {
+	request := Request{URL: harURL(address, cfg), Headers: harHeaders(headers, cfg), QueryString: []QueryString{}}
+	if address != nil {
+		request.QueryString = harQueryString(address.Query(), cfg)
+	}
+	return request
 }
 
 // buildResponse captures the response and returns the error the body read hit,
@@ -347,6 +349,9 @@ func redactForm(text string, extraKeys []string) string {
 // logger.IsSensitiveKey heuristics or by a case-insensitive substring match
 // against any of extraKeys.
 func isRedactedKey(key string, extraKeys []string) bool {
+	if strings.EqualFold(strings.TrimSpace(key), "code") || strings.EqualFold(strings.TrimSpace(key), "sig") {
+		return true
+	}
 	if logger.IsSensitiveKey(key) {
 		return true
 	}
