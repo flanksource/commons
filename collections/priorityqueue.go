@@ -11,154 +11,14 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/emirpasic/gods/v2/queues"
-	"github.com/emirpasic/gods/v2/trees/binaryheap"
-	"github.com/emirpasic/gods/v2/utils"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/samber/lo"
 )
 
-var (
-	metricCache     = map[string]any{}
-	metricCacheLock sync.Mutex
-)
-
-// MetricsOpts contains options for queue metrics
-type MetricsOpts[T comparable] struct {
-	Labels          map[string]any
-	Labeller        map[string]func(i T) string
-	DurationBuckets []float64
-	Name            string
-	Disable         bool
-}
-
-type metrics[T comparable] struct {
-	enqueuedTotal *prometheus.CounterVec
-	dequeuedTotal *prometheus.CounterVec
-	dedupedTotal  *prometheus.CounterVec
-	queueSize     prometheus.Gauge
-	queueDuration *prometheus.HistogramVec
-	opts          MetricsOpts[T]
-}
-
-func (m *metrics[T]) labels(item T) map[string]string {
-	labels := prometheus.Labels{}
-	for k, v := range m.opts.Labels {
-		labels[k] = fmt.Sprintf("%v", v)
-	}
-	for k, v := range m.opts.Labeller {
-		o := v(item)
-		labels[k] = o
-	}
-	return labels
-}
-
-func (m *metrics[T]) enqueue(value T, currentSize int) {
-	if m.opts.Disable {
-		return
-	}
-	labels := m.labels(value)
-	m.enqueuedTotal.With(labels).Inc()
-	m.queueSize.Set(float64(currentSize))
-}
-
-func (m *metrics[T]) dedupe(value T, currentSize int) {
-	if m.opts.Disable {
-		return
-	}
-	labels := m.labels(value)
-	m.dedupedTotal.With(labels).Inc()
-	m.queueSize.Set(float64(currentSize))
-}
-
-func (m *metrics[T]) dequeue(item queueItem[T], currentSize int) {
-	if m.opts.Disable {
-		return
-	}
-	labels := m.labels(item.item)
-	m.dequeuedTotal.With(labels).Inc()
-	m.queueDuration.With(labels).Observe(float64(time.Since(item.inserted).Milliseconds()))
-	m.queueSize.Set(float64(currentSize))
-}
-
-func newMetrics[T comparable](opts MetricsOpts[T]) *metrics[T] {
-	keys := lo.Keys(opts.Labels)
-	labels := prometheus.Labels{}
-	for k, v := range opts.Labels {
-		labels[k] = fmt.Sprintf("%v", v)
-	}
-
-	for k := range opts.Labeller {
-		keys = append(keys, k)
-	}
-
-	if len(opts.DurationBuckets) == 0 {
-		opts.DurationBuckets = []float64{
-			1, 10, 50, 100, 500, 1000, 3 * 1000, 10 * 1000, 30 * 1000, 60 * 1000, 300 * 1000,
-		}
-	}
-
-	if opts.Name == "" {
-		opts.Name = "priority_queue"
-	}
-
-	metricCacheLock.Lock()
-	defer metricCacheLock.Unlock()
-
-	return &metrics[T]{
-		opts:          opts,
-		enqueuedTotal: getOrCreateCounterVec(opts.Name, "enqueued_total", "The total number of enqueued items", keys),
-		dedupedTotal:  getOrCreateCounterVec(opts.Name, "deduped_total", "The total number of deduped items", keys),
-		dequeuedTotal: getOrCreateCounterVec(opts.Name, "dequeued_total", "The total number of dequeued items", keys),
-		queueSize:     getOrCreateGauge(opts.Name, "size", "The current size of the queue", labels),
-		queueDuration: getOrCreateHistogramVec(opts.Name, "duration", "Time an object spent in the queue in milliseconds", keys, opts.DurationBuckets),
-	}
-}
-
-func getOrCreateCounterVec(prefix, suffix, help string, keys []string) *prometheus.CounterVec {
-	name := fmt.Sprintf("%s_%s", prefix, suffix)
-	if val, ok := metricCache[name]; ok {
-		return val.(*prometheus.CounterVec)
-	}
-
-	counter := promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: name,
-		Help: help,
-	}, keys)
-	metricCache[name] = counter
-	return counter
-}
-
-func getOrCreateGauge(prefix, suffix, help string, labels prometheus.Labels) prometheus.Gauge {
-	name := fmt.Sprintf("%s_%s", prefix, suffix)
-	if val, ok := metricCache[name]; ok {
-		return val.(prometheus.Gauge)
-	}
-
-	gauge := promauto.NewGauge(prometheus.GaugeOpts{
-		Name:        name,
-		Help:        help,
-		ConstLabels: labels,
-	})
-	metricCache[name] = gauge
-	return gauge
-}
-
-func getOrCreateHistogramVec(prefix, suffix, help string, keys []string, buckets []float64) *prometheus.HistogramVec {
-	name := fmt.Sprintf("%s_%s", prefix, suffix)
-	if val, ok := metricCache[name]; ok {
-		return val.(*prometheus.HistogramVec)
-	}
-
-	histogram := promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    name,
-		Help:    help,
-		Buckets: buckets,
-	}, keys)
-	metricCache[name] = histogram
-	return histogram
+// Metrics receives queue events. Nil disables metrics.
+type Metrics[T comparable] interface {
+	Enqueue(T, int)
+	Dequeue(T, time.Duration, int)
+	Dedupe(T, int)
+	SetSize(int)
 }
 
 type queueItem[T comparable] struct {
@@ -166,9 +26,6 @@ type queueItem[T comparable] struct {
 	inserted  time.Time
 	notBefore time.Time
 }
-
-// Assert Queue implementation
-var _ queues.Queue[int] = (*Queue[int])(nil)
 
 // Queue holds elements in an array-list
 // Queue is a thread-safe priority queue implementation.
@@ -186,20 +43,20 @@ var _ queues.Queue[int] = (*Queue[int])(nil)
 //	queue.Enqueue(1)
 //	item, _ := queue.Dequeue() // Returns 1
 type Queue[T comparable] struct {
-	heap       *binaryheap.Heap[queueItem[T]]
-	Comparator utils.Comparator[T]
+	heap       *queueHeap[queueItem[T]]
+	Comparator func(a, b T) int
 	Equals     func(a, b T) bool
-	metrics    *metrics[T]
+	metrics    Metrics[T]
 	mutex      sync.RWMutex
 	Dedupe     bool
 }
 
 // QueueOpts configures a priority queue.
 type QueueOpts[T comparable] struct {
-	Comparator utils.Comparator[T]
+	Comparator func(a, b T) int
 	Dedupe     bool
 	Equals     func(a, b T) bool
-	Metrics    MetricsOpts[T]
+	Metrics    Metrics[T]
 }
 
 // NewQueue creates a new priority queue with the specified options.
@@ -223,7 +80,7 @@ func NewQueue[T comparable](opts QueueOpts[T]) (*Queue[T], error) {
 	}
 
 	return &Queue[T]{
-		heap: binaryheap.NewWith(func(a, b queueItem[T]) int {
+		heap: newQueueHeap(func(a, b queueItem[T]) int {
 			nbc := notBeforeComparator(a, b)
 			if nbc != 0 {
 				return nbc
@@ -232,7 +89,7 @@ func NewQueue[T comparable](opts QueueOpts[T]) (*Queue[T], error) {
 		}),
 		Comparator: opts.Comparator,
 		Equals:     opts.Equals,
-		metrics:    newMetrics(opts.Metrics),
+		metrics:    opts.Metrics,
 		Dedupe:     opts.Dedupe,
 	}, nil
 }
@@ -256,7 +113,9 @@ func (queue *Queue[T]) Enqueue(value T) {
 		item:     value,
 		inserted: time.Now(),
 	})
-	queue.metrics.enqueue(value, queue.heap.Size())
+	if queue.metrics != nil {
+		queue.metrics.Enqueue(value, queue.heap.Size())
+	}
 	queue.mutex.Unlock()
 }
 
@@ -268,7 +127,9 @@ func (queue *Queue[T]) EnqueueWithDelay(value T, delay time.Duration) {
 		inserted:  time.Now(),
 		notBefore: time.Now().Add(delay),
 	})
-	queue.metrics.enqueue(value, queue.heap.Size())
+	if queue.metrics != nil {
+		queue.metrics.Enqueue(value, queue.heap.Size())
+	}
 	queue.mutex.Unlock()
 }
 
@@ -295,7 +156,9 @@ func (queue *Queue[T]) Dequeue() (T, bool) {
 		return zero, false
 	}
 
-	queue.metrics.dequeue(wrapper, queue.heap.Size())
+	if queue.metrics != nil {
+		queue.metrics.Dequeue(wrapper.item, time.Since(wrapper.inserted), queue.heap.Size())
+	}
 
 	if queue.Dedupe {
 		// Keep dequeuing while next item is the same as current
@@ -307,7 +170,9 @@ func (queue *Queue[T]) Dequeue() (T, bool) {
 
 			if queue.Equals(next.item, wrapper.item) {
 				queue.heap.Pop()
-				queue.metrics.dedupe(next.item, queue.heap.Size())
+				if queue.metrics != nil {
+					queue.metrics.Dedupe(next.item, queue.heap.Size())
+				}
 			} else {
 				break
 			}
@@ -346,7 +211,9 @@ func (queue *Queue[T]) Clear() {
 	queue.heap.Clear()
 	queue.mutex.Unlock()
 
-	queue.metrics.queueSize.Set(0)
+	if queue.metrics != nil {
+		queue.metrics.SetSize(0)
+	}
 }
 
 // Values returns all elements in the queue.
@@ -354,8 +221,8 @@ func (queue *Queue[T]) Values() []T {
 	queue.mutex.RLock()
 	defer queue.mutex.RUnlock()
 	values := make([]T, queue.heap.Size())
-	for it := queue.heap.Iterator(); it.Next(); {
-		values[it.Index()] = it.Value().item
+	for i, value := range queue.heap.items {
+		values[i] = value.item
 	}
 	return values
 }
