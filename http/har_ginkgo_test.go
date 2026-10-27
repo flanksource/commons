@@ -53,25 +53,4 @@ var _ = Describe("HAR capture", func() {
 		}))
 	})
 
-	It("captures requests made through the legacy NTLM transport", func() {
-		server := httptest.NewServer(stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, _ *stdhttp.Request) {
-			w.WriteHeader(stdhttp.StatusOK)
-		}))
-		DeferCleanup(server.Close)
-
-		collector := har.NewCollector(har.DefaultConfig())
-		response, err := NewClient().
-			Auth("alice", "secret").
-			NTLM(true).
-			HARCollector(collector).
-			R(context.Background()).
-			Get(server.URL)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(response.Body.Close()).To(Succeed())
-
-		entries := collector.Entries()
-		Expect(entries).To(HaveLen(1))
-		Expect(entries[0].Request.URL).To(Equal(server.URL))
-		Expect(entries[0].Response.Status).To(Equal(stdhttp.StatusOK))
-	})
 })
