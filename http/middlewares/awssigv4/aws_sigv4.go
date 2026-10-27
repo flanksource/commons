@@ -1,30 +1,26 @@
-package middlewares
+package awssigv4
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
-
-	"github.com/aws/aws-sdk-go-v2/aws"
-	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 )
 
 type AWSSigv4Config struct {
 	Region              string
 	Service             string
 	Endpoint            string
-	CredentialsProvider aws.CredentialsProvider
+	CredentialsProvider CredentialsProvider
 	Tracer              func(msg string)
+	// UnsignedPayload leaves streaming bodies unread; S3 accepts UNSIGNED-PAYLOAD.
+	UnsignedPayload bool
 }
 
 type awsSigv4RoundTripper struct {
 	config    AWSSigv4Config
-	signer    *v4.Signer
 	transport http.RoundTripper
 }
 
@@ -32,10 +28,12 @@ func NewAWSSigv4Transport(config AWSSigv4Config, transport http.RoundTripper) ht
 	if transport == nil {
 		transport = http.DefaultTransport
 	}
+	if _, cached := config.CredentialsProvider.(*CredentialsCache); !cached {
+		config.CredentialsProvider = NewCredentialsCache(config.CredentialsProvider)
+	}
 
 	return &awsSigv4RoundTripper{
 		config:    config,
-		signer:    v4.NewSigner(),
 		transport: transport,
 	}
 }
@@ -81,29 +79,18 @@ func (t *awsSigv4RoundTripper) RoundTrip(req *http.Request) (*http.Response, err
 		return nil, err
 	}
 
-	var payloadHash string
-	if req.Body != nil {
+	payloadHash := hashPayload(nil)
+	if t.config.UnsignedPayload {
+		payloadHash = "UNSIGNED-PAYLOAD"
+	} else if req.Body != nil {
 		bodyBytes, err := io.ReadAll(req.Body)
 		if err != nil {
 			return nil, err
 		}
 		req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-		hash := sha256.Sum256(bodyBytes)
-		payloadHash = hex.EncodeToString(hash[:])
-	} else {
-		hash := sha256.Sum256([]byte{})
-		payloadHash = hex.EncodeToString(hash[:])
+		payloadHash = hashPayload(bodyBytes)
 	}
-
-	err = t.signer.SignHTTP(
-		req.Context(),
-		credentials,
-		req,
-		payloadHash,
-		service,
-		t.config.Region,
-		time.Now(),
-	)
+	_, err = Sign(req, SignOptions{Credentials: credentials, Region: t.config.Region, Service: service, Time: time.Now(), PayloadHash: payloadHash})
 	if err != nil {
 		return nil, err
 	}
