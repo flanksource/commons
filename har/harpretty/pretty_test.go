@@ -1,10 +1,11 @@
-package har_test
+package harpretty_test
 
 import (
 	"strings"
 	"testing"
 
 	"github.com/flanksource/commons/har"
+	"github.com/flanksource/commons/har/harpretty"
 )
 
 func TestEntry_Pretty(t *testing.T) {
@@ -22,7 +23,7 @@ func TestEntry_Pretty(t *testing.T) {
 		},
 	}
 
-	output := entry.Pretty().String()
+	output := harpretty.Entry(entry).Pretty().String()
 	for _, want := range []string{"POST", "https://api.example.com/v1/users", "201", "Created"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("expected %q in output: %s", want, output)
@@ -44,7 +45,7 @@ func TestEntry_Row(t *testing.T) {
 		},
 	}
 
-	row := entry.Row()
+	row := harpretty.Entry(entry).Row()
 	if row["method"] != "GET" {
 		t.Errorf("expected method=GET, got %v", row["method"])
 	}
@@ -63,7 +64,7 @@ func TestEntry_Row(t *testing.T) {
 }
 
 func TestEntry_Columns(t *testing.T) {
-	cols := har.Entry{}.Columns()
+	cols := harpretty.Entry{}.Columns()
 	names := make([]string, len(cols))
 	for i, c := range cols {
 		names[i] = c.Name
@@ -102,7 +103,7 @@ func TestEntry_RowDetail_WithContent(t *testing.T) {
 		},
 	}
 
-	detail := entry.RowDetail()
+	detail := harpretty.Entry(entry).RowDetail()
 	if detail == nil {
 		t.Fatal("expected non-nil RowDetail")
 	}
@@ -133,11 +134,12 @@ func TestEntry_DetailFiltersSections(t *testing.T) {
 		},
 	}
 
-	headers := entry.Detail(har.DetailOptions{
+	headers := harpretty.Entry(entry).Detail(harpretty.DetailOptions{
 		RequestHeaders:  true,
 		QueryString:     true,
 		ResponseHeaders: true,
-	}).String()
+	}).
+		String()
 	for _, expected := range []string{"Request Headers", "Authorization", "Query Parameters", "namespace", "Response Headers"} {
 		if !strings.Contains(headers, expected) {
 			t.Fatalf("headers detail missing %q: %s", expected, headers)
@@ -147,7 +149,7 @@ func TestEntry_DetailFiltersSections(t *testing.T) {
 		t.Fatalf("headers detail included a body: %s", headers)
 	}
 
-	bodies := entry.Detail(har.DetailOptions{RequestBody: true, ResponseBody: true}).String()
+	bodies := harpretty.Entry(entry).Detail(harpretty.DetailOptions{RequestBody: true, ResponseBody: true}).String()
 	for _, expected := range []string{"Request Body", `"request": true`, "Response Body", `"response": true`} {
 		if !strings.Contains(bodies, expected) {
 			t.Fatalf("body detail missing %q: %s", expected, bodies)
@@ -164,7 +166,7 @@ func TestEntry_RowDetail_Truncated(t *testing.T) {
 		Response: har.Response{Status: 200, Content: har.Content{Text: "{}", Truncated: true}},
 	}
 
-	output := entry.RowDetail().String()
+	output := harpretty.Entry(entry).RowDetail().String()
 	if !strings.Contains(output, "truncated") {
 		t.Errorf("expected truncated label, got: %s", output)
 	}
@@ -176,7 +178,7 @@ func TestEntry_RowDetail_Empty(t *testing.T) {
 		Response: har.Response{Status: 200},
 	}
 
-	if detail := entry.RowDetail(); detail != nil {
+	if detail := harpretty.Entry(entry).RowDetail(); detail != nil {
 		t.Errorf("expected nil RowDetail for entry with no headers/bodies, got: %v", detail)
 	}
 }
@@ -198,7 +200,7 @@ func TestCollector_Table(t *testing.T) {
 		Response: har.Response{Status: 500, StatusText: "Internal Server Error"},
 	})
 
-	table := collector.Table()
+	table := (&harpretty.Collector{Collector: collector}).Table()
 
 	if len(table.Rows) != 2 {
 		t.Fatalf("expected 2 rows, got %d", len(table.Rows))
@@ -233,7 +235,7 @@ func TestCollector_Pretty(t *testing.T) {
 		Response: har.Response{Status: 500, StatusText: "Internal Server Error"},
 	})
 
-	output := collector.Pretty().String()
+	output := (&harpretty.Collector{Collector: collector}).Pretty().String()
 	if !strings.Contains(output, "GET") || !strings.Contains(output, "500") {
 		t.Errorf("expected both entries in output: %s", output)
 	}

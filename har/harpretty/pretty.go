@@ -1,4 +1,5 @@
-package har
+// Package harpretty adapts HAR data for Clicky rendering.
+package harpretty
 
 import (
 	"encoding/json"
@@ -7,7 +8,14 @@ import (
 	"time"
 
 	"github.com/flanksource/clicky/api"
+	"github.com/flanksource/commons/har"
 )
+
+type Entry har.Entry
+
+type Collector struct {
+	*har.Collector
+}
 
 func statusStyle(code int) string {
 	switch {
@@ -24,7 +32,7 @@ func statusStyle(code int) string {
 	}
 }
 
-func statusText(r Response) api.Text {
+func statusText(r har.Response) api.Text {
 	return api.Text{}.
 		AddText(fmt.Sprintf("%d", r.Status), statusStyle(r.Status)).
 		AddText(" "+r.StatusText, statusStyle(r.Status))
@@ -47,7 +55,7 @@ func formatBody(mimeType, text string) api.Code {
 	return api.CodeBlock(mimeType, text)
 }
 
-func headersToDescriptionList(headers []Header) api.DescriptionList {
+func headersToDescriptionList(headers []har.Header) api.DescriptionList {
 	items := make([]api.KeyValuePair, len(headers))
 	for i, h := range headers {
 		items[i] = api.KeyValuePair{Key: h.Name, Value: h.Value}
@@ -55,7 +63,7 @@ func headersToDescriptionList(headers []Header) api.DescriptionList {
 	return api.DescriptionList{Items: items}
 }
 
-func queryToDescriptionList(query []QueryString) api.DescriptionList {
+func queryToDescriptionList(query []har.QueryString) api.DescriptionList {
 	items := make([]api.KeyValuePair, len(query))
 	for i, parameter := range query {
 		items[i] = api.KeyValuePair{Key: parameter.Name, Value: parameter.Value}
@@ -185,7 +193,12 @@ func (e Entry) Pretty() api.Text {
 
 // Table returns a TextTable of all collected entries with row detail expansion.
 func (c *Collector) Table() api.TextTable {
-	return api.NewTableFrom(c.Entries())
+	entries := c.Entries()
+	rows := make([]Entry, len(entries))
+	for i, entry := range entries {
+		rows[i] = Entry(entry)
+	}
+	return api.NewTableFrom(rows)
 }
 
 // Pretty returns a compact summary of all collected entries.
@@ -196,7 +209,7 @@ func (c *Collector) Pretty() api.Text {
 		if i > 0 {
 			t = t.NewLine().AddText("───────────────────────────────────────", "text-muted").NewLine()
 		}
-		t = t.Add(e.Pretty())
+		t = t.Add(Entry(e).Pretty())
 	}
 	return t
 }
