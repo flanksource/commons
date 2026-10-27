@@ -3,8 +3,6 @@ package properties
 import (
 	"maps"
 	"sync"
-
-	"github.com/spf13/pflag"
 )
 
 // commandline holds the -P/--properties overrides of the most recently parsed flag set. Flag sets
@@ -33,19 +31,4 @@ func (c *commandlineStore) replace(values map[string]string) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.m = maps.Clone(values)
-}
-
-// commandlineFlag parses -P with pflag's string-to-string syntax into a map owned by its flag set
-// and publishes that map as the command-line overrides on every Set.
-type commandlineFlag struct {
-	pflag.Value
-	parsed *map[string]string
-}
-
-func (f *commandlineFlag) Set(value string) error {
-	if err := f.Value.Set(value); err != nil {
-		return err
-	}
-	commandline.replace(*f.parsed)
-	return nil
 }
