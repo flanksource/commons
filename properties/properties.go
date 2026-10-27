@@ -127,6 +127,13 @@ func (p *Properties) Set(key string, value any) {
 	p.m[key] = fmt.Sprintf("%v", value)
 }
 
+func (p *Properties) Unset(key string) {
+	p.lock.Lock()
+	delete(p.m, key)
+	p.lock.Unlock()
+	p.notify()
+}
+
 func (p *Properties) notify() {
 	for _, listener := range p.listeners {
 		listener(p)
@@ -220,6 +227,8 @@ func RegisterListener(fn func(*Properties)) {
 func Set(key string, value any) {
 	Global.Set(key, value)
 }
+
+func Unset(key string) { Global.Unset(key) }
 
 func Get(key string) string {
 	return Global.Get(key)
