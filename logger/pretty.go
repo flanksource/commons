@@ -4,74 +4,56 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-
-	"github.com/kr/text"
-	"sigs.k8s.io/yaml"
-
-	"github.com/fatih/color"
-	"github.com/goccy/go-yaml/lexer"
-	"github.com/goccy/go-yaml/printer"
+	"sync/atomic"
 )
 
-const escape = "\x1b"
+// YAMLFormatter installs optional YAML serialization and syntax highlighting.
+type YAMLFormatter struct {
+	Marshal   func(any) ([]byte, error)
+	Highlight func(string) string
+}
 
-func format(attr color.Attribute) string {
-	return fmt.Sprintf("%s[%dm", escape, attr)
+var yamlFormatter atomic.Pointer[YAMLFormatter]
+
+func RegisterYAMLFormatter(formatter YAMLFormatter) {
+	if formatter.Marshal == nil || formatter.Highlight == nil {
+		panic("YAML formatter requires Marshal and Highlight")
+	}
+	yamlFormatter.Store(&formatter)
 }
 
 func Pretty(v any) string {
 	if m, ok := v.(map[string]any); ok {
 		v = StripSecretsFromMap(m)
 	}
-
-	b, _ := json.MarshalIndent(v, "  ", "  ")
-	b, _ = yaml.JSONToYAML(b)
-	return text.Indent(PrettyYAML(strings.TrimSpace(string(b))), "  ")
-
+	var data []byte
+	var err error
+	if formatter := yamlFormatter.Load(); formatter != nil {
+		data, err = formatter.Marshal(v)
+	} else {
+		data, err = json.MarshalIndent(v, "", "  ")
+	}
+	if err != nil {
+		return fmt.Sprintf("<format error: %v> %#v", err, v)
+	}
+	return indent(PrettyYAML(strings.TrimSpace(string(data))), "  ")
 }
 
 func PrettyYAML(s string) string {
-	if !isTTY || !flags.color || IsJsonLogs() {
-		return s
-	}
-	tokens := lexer.Tokenize(s)
-	var p printer.Printer
-	p.LineNumber = false
-	p.Bool = func() *printer.Property {
-		return &printer.Property{
-			Prefix: format(color.FgHiMagenta),
-			Suffix: format(color.Reset),
+	if isTTY && flags.color && !IsJsonLogs() {
+		if formatter := yamlFormatter.Load(); formatter != nil {
+			return formatter.Highlight(s)
 		}
 	}
-	p.Number = func() *printer.Property {
-		return &printer.Property{
-			Prefix: format(color.FgHiMagenta),
-			Suffix: format(color.Reset),
+	return s
+}
+
+func indent(value, prefix string) string {
+	lines := strings.Split(value, "\n")
+	for i, line := range lines {
+		if line != "" {
+			lines[i] = prefix + line
 		}
 	}
-	p.MapKey = func() *printer.Property {
-		return &printer.Property{
-			Prefix: format(color.FgHiCyan),
-			Suffix: format(color.Reset),
-		}
-	}
-	p.Anchor = func() *printer.Property {
-		return &printer.Property{
-			Prefix: format(color.FgHiYellow),
-			Suffix: format(color.Reset),
-		}
-	}
-	p.Alias = func() *printer.Property {
-		return &printer.Property{
-			Prefix: format(color.FgHiYellow),
-			Suffix: format(color.Reset),
-		}
-	}
-	p.String = func() *printer.Property {
-		return &printer.Property{
-			Prefix: format(color.FgHiGreen),
-			Suffix: format(color.Reset),
-		}
-	}
-	return p.PrintTokens(tokens)
+	return strings.Join(lines, "\n")
 }

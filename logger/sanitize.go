@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/flanksource/commons/collections"
-	"github.com/samber/lo"
 )
 
 var CommonRedactedHeaders = []string{
@@ -174,8 +173,9 @@ func printableValue(s string) string {
 
 func StripSecretsFromMap[V comparable](m map[string]V) map[string]any {
 	clone := make(map[string]any)
+	var zero V
 	for k, v := range m {
-		if lo.IsEmpty(v) {
+		if v == zero {
 			continue
 		}
 		if nestedMap, ok := any(v).(map[string]any); ok {
