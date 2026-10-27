@@ -35,14 +35,12 @@ package context
 
 import (
 	gocontext "context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/flanksource/commons/logger"
-	"github.com/pkg/errors"
-	"github.com/samber/lo"
-	"github.com/samber/oops"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -189,10 +187,10 @@ func (c Context) String() string {
 	}
 
 	if c.isDebugFn != nil {
-		s = append(s, fmt.Sprintf("isDebugFn=%v", lo.FromPtr(c.isDebugFn(c))))
+		s = append(s, fmt.Sprintf("isDebugFn=%v", fromPtr(c.isDebugFn(c))))
 	}
 	if c.isTraceFn != nil {
-		s = append(s, fmt.Sprintf("isTraceFn=%v", lo.FromPtr(c.isTraceFn(c))))
+		s = append(s, fmt.Sprintf("isTraceFn=%v", fromPtr(c.isTraceFn(c))))
 	}
 
 	s = append(s, fmt.Sprintf("debug=%v, trace=%v", c.Value("debug"), c.Value("trace")))
@@ -272,7 +270,7 @@ func (c Context) IsDebug() bool {
 		return true
 	}
 
-	if debug := c.Value("debug"); !lo.IsEmpty(debug) {
+	if debug := c.Value("debug"); debug != nil {
 		return debug == "true"
 	}
 
@@ -286,7 +284,7 @@ func (c Context) IsDebug() bool {
 }
 
 func (c Context) IsTrace() bool {
-	if trace := c.Value("trace"); !lo.IsEmpty(trace) {
+	if trace := c.Value("trace"); trace != nil {
 		return trace == "true"
 	}
 	if c.isTraceFn != nil {
@@ -314,19 +312,28 @@ func (c Context) Tracef(format string, args ...interface{}) {
 
 func (c Context) Error(err error, msg ...any) {
 	if len(msg) == 1 {
-		err = errors.Wrap(err, fmt.Sprintf("%v", msg[0]))
+		err = fmt.Errorf("%v: %w", msg[0], err)
 	} else if len(msg) > 1 {
-		err = errors.Wrap(err, fmt.Sprintf(fmt.Sprintf("%v", msg[0]), lo.ToAnySlice(msg[1:])...))
+		err = fmt.Errorf("%s: %w", fmt.Sprintf(fmt.Sprint(msg[0]), msg[1:]...), err)
 	}
 
 	c.GetSpan().RecordError(err)
 	c.GetSpan().SetStatus(codes.Error, err.Error())
 
-	if o, ok := oops.AsOops(err); ok {
+	var o interface{ ToMap() map[string]any }
+	if errors.As(err, &o) {
 		c.Logger.WithSkipReportLevel(1).Errorf("%#v", o.ToMap())
 	} else {
 		c.Logger.WithSkipReportLevel(1).Errorf("%s", err.Error())
 	}
+}
+
+func fromPtr[T any](value *T) T {
+	if value != nil {
+		return *value
+	}
+	var zero T
+	return zero
 }
 
 func (c Context) Errorf(format string, args ...interface{}) {

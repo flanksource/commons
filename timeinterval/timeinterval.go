@@ -23,8 +23,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"gopkg.in/yaml.v3"
 )
 
 // Intervener determines whether a given time and active route time interval should mute outgoing notifications.
@@ -242,7 +240,7 @@ func (tz *Location) UnmarshalYAML(unmarshal func(any) error) error {
 // UnmarshalJSON implements the json.Unmarshaler interface for Location.
 // It delegates to the YAML unmarshaller as it can parse JSON and has validation logic.
 func (tz *Location) UnmarshalJSON(in []byte) error {
-	return yaml.Unmarshal(in, tz)
+	return tz.UnmarshalYAML(func(value any) error { return json.Unmarshal(in, value) })
 }
 
 // UnmarshalYAML implements the Unmarshaller interface for WeekdayRange.
@@ -269,7 +267,7 @@ func (r *WeekdayRange) UnmarshalYAML(unmarshal func(any) error) error {
 // UnmarshalJSON implements the json.Unmarshaler interface for WeekdayRange.
 // It delegates to the YAML unmarshaller as it can parse JSON and has validation logic.
 func (r *WeekdayRange) UnmarshalJSON(in []byte) error {
-	return yaml.Unmarshal(in, r)
+	return r.UnmarshalYAML(func(value any) error { return json.Unmarshal(in, value) })
 }
 
 // UnmarshalYAML implements the Unmarshaller interface for DayOfMonthRange.
@@ -312,7 +310,7 @@ func (r *DayOfMonthRange) UnmarshalYAML(unmarshal func(any) error) error {
 // UnmarshalJSON implements the json.Unmarshaler interface for DayOfMonthRange.
 // It delegates to the YAML unmarshaller as it can parse JSON and has validation logic.
 func (r *DayOfMonthRange) UnmarshalJSON(in []byte) error {
-	return yaml.Unmarshal(in, r)
+	return r.UnmarshalYAML(func(value any) error { return json.Unmarshal(in, value) })
 }
 
 // UnmarshalYAML implements the Unmarshaller interface for MonthRange.
@@ -335,7 +333,7 @@ func (r *MonthRange) UnmarshalYAML(unmarshal func(any) error) error {
 // UnmarshalJSON implements the json.Unmarshaler interface for MonthRange.
 // It delegates to the YAML unmarshaller as it can parse JSON and has validation logic.
 func (r *MonthRange) UnmarshalJSON(in []byte) error {
-	return yaml.Unmarshal(in, r)
+	return r.UnmarshalYAML(func(value any) error { return json.Unmarshal(in, value) })
 }
 
 // UnmarshalYAML implements the Unmarshaller interface for YearRange.
@@ -356,7 +354,7 @@ func (r *YearRange) UnmarshalYAML(unmarshal func(any) error) error {
 // UnmarshalJSON implements the json.Unmarshaler interface for YearRange.
 // It delegates to the YAML unmarshaller as it can parse JSON and has validation logic.
 func (r *YearRange) UnmarshalJSON(in []byte) error {
-	return yaml.Unmarshal(in, r)
+	return r.UnmarshalYAML(func(value any) error { return json.Unmarshal(in, value) })
 }
 
 // UnmarshalYAML implements the Unmarshaller interface for TimeRanges.
@@ -386,7 +384,7 @@ func (tr *TimeRange) UnmarshalYAML(unmarshal func(any) error) error {
 // UnmarshalJSON implements the json.Unmarshaler interface for Timerange.
 // It delegates to the YAML unmarshaller as it can parse JSON and has validation logic.
 func (tr *TimeRange) UnmarshalJSON(in []byte) error {
-	return yaml.Unmarshal(in, tr)
+	return tr.UnmarshalYAML(func(value any) error { return json.Unmarshal(in, value) })
 }
 
 // MarshalYAML implements the yaml.Marshaler interface for WeekdayRange.

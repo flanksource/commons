@@ -1,0 +1,24 @@
+Third-party material included in this distribution:
+
+1. github.com/lmittmann/tint v1.1.3
+   Copyright (c) 2023 lmittmann. MIT license.
+   Copied to logger/internal/tint (handler.go, buffer.go, handler_test.go).
+   The full license is in logger/internal/tint/LICENSE.
+   Adaptations remove error returns from infallible internal append methods and
+   explicitly discard the infallible in-memory io.Writer results. The upstream
+   handler contains attributed adaptations from the Go standard library;
+   its BSD license is included as logger/internal/tint/LICENSE-GO.
+
+2. github.com/spf13/pflag v1.0.10 string-to-string flag handling
+   Copyright (c) 2012 Alex Ogier.
+   Copyright (c) 2012 The Go Authors. BSD-3-Clause license.
+   Parsing and formatting portions adapted in properties/flags.go to keep
+   flag registration and pflag introspection without a runtime pflag import.
+   The full license is in properties/LICENSE-PFLAG.
+
+3. AWS Signature Version 4 test suite
+   Copyright Amazon.com, Inc. or its affiliates. Apache-2.0 license.
+   The fixtures in http/middlewares/awssigv4/testdata/aws-sig-v4-test-suite
+   were copied from boto/botocore tests/unit/auth/aws4_testsuite at revision
+   2cd57933cf3d0135d7bbfdebcbb8e575af35d1db.
+   The full license is in http/middlewares/awssigv4/testdata/LICENSE.

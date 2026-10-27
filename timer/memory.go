@@ -2,20 +2,17 @@ package timer
 
 import (
 	"fmt"
-	"os"
 	"runtime"
 	"time"
 
 	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/text"
-	"github.com/shirou/gopsutil/v3/process"
 )
 
 type MemoryTimer struct {
 	startTime time.Time
 	start     *runtime.MemStats
-	process   *process.Process
 	peakRss   int64
 }
 
@@ -36,7 +33,6 @@ func NewMemoryTimer() MemoryTimer {
 		s := runtime.MemStats{}
 		runtime.ReadMemStats(&s)
 		m.start = &s
-		m.process, _ = process.NewProcess(int32(os.Getpid()))
 	}
 	return m
 }
@@ -47,13 +43,12 @@ func (m *MemoryTimer) End() string {
 		return d
 	}
 
-	var rss int64
-	if m.process != nil {
-		mem, _ := m.process.MemoryInfo()
-		rss = int64(mem.RSS)
-		if rss > m.peakRss {
-			m.peakRss = rss
-		}
+	rss, err := peakResidentMemory()
+	if err != nil {
+		return fmt.Sprintf("%s (resident memory unavailable: %v)", d, err)
+	}
+	if rss > m.peakRss {
+		m.peakRss = rss
 	}
 
 	end := runtime.MemStats{}
