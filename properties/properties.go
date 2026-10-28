@@ -388,8 +388,26 @@ func (p *Properties) TimeIntervals(keys ...string) (timeinterval.TimeIntervals, 
 	return output, nil
 }
 
+// Watch polls the loaded file for changes. COMMONS_PROPERTIES_WATCH_DURATION
+// sets the polling interval using Go duration syntax; 0 disables polling.
+// Invalid or negative durations cause a panic.
 func (p *Properties) Watch() func() {
 	if p.close != nil {
+		return p.close
+	}
+	interval := WatchInterval
+	if value, ok := os.LookupEnv("COMMONS_PROPERTIES_WATCH_DURATION"); ok {
+		var err error
+		interval, err = time.ParseDuration(value)
+		if err != nil {
+			panic(fmt.Errorf("invalid COMMONS_PROPERTIES_WATCH_DURATION %q: %w", value, err))
+		}
+		if interval < 0 {
+			panic(fmt.Errorf("invalid COMMONS_PROPERTIES_WATCH_DURATION %q: duration must be non-negative", value))
+		}
+	}
+	if interval == 0 {
+		p.close = func() {}
 		return p.close
 	}
 	slog.Info(fmt.Sprintf("Watching %s for changes", p.filename))
@@ -402,7 +420,7 @@ func (p *Properties) Watch() func() {
 	var once sync.Once
 	p.close = func() { once.Do(func() { close(stopped) }) }
 	go func() {
-		ticker := time.NewTicker(WatchInterval)
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
 			select {
@@ -428,5 +446,5 @@ func (p *Properties) Watch() func() {
 	return p.close
 }
 
-// WatchInterval is the interval used to poll a loaded properties file's mtime.
-const WatchInterval = 100 * time.Millisecond
+// WatchInterval is the default interval used to poll a loaded properties file.
+const WatchInterval = 5 * time.Second
