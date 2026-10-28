@@ -65,17 +65,10 @@ GOWORK=off go test ./http/middlewares/awssigv4 -count=1 -v
 
 The separate `sdkcompat` module compares 288 requests with the real SDK signer and asserts identical headers, host, and canonical query. It covers GET/POST, repeated and empty query parameters, reserved query characters, Unicode and escaped paths, S3 and other services, session credentials, and empty/nonempty bodies. The SDK module is excluded from root-module dependency discovery.
 
-Create a test workspace once, from the repository root:
+The test module's `go.work` selects the root checkout, so the cross-check tests the current signer without adding SDK dependencies to the root module. From the repository root, run:
 
 ```sh
-mkdir -p .tmp/sdkcompat-work
-GOTOOLCHAIN=go1.26.1 GOWORK=off go -C .tmp/sdkcompat-work work init ../.. ../../http/middlewares/awssigv4/sdkcompat
-```
-
-Then run the cross-check:
-
-```sh
-GOWORK="$PWD/.tmp/sdkcompat-work/go.work" go test ./http/middlewares/awssigv4/sdkcompat -count=1 -v
+go -C http/middlewares/awssigv4/sdkcompat test ./... -count=1 -v
 ```
 
 The LocalStack tests retain their existing short-mode and availability skip conditions. No real AWS account is needed for the vectors or cross-check.
