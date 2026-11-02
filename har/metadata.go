@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/http/middlewares"
+	"github.com/flanksource/commons/logger"
 )
 
 // NewMetadataMiddleware captures method, URL, sanitized headers, query string,
@@ -56,6 +57,9 @@ func captureMetadata(req *http.Request, next http.RoundTripper, cfg HARConfig, r
 	}
 	if err != nil {
 		entry.Error = err.Error()
+		if !cfg.CaptureSensitive {
+			entry.Error = logger.RedactAuthorization(entry.Error, req.Header.Get("Authorization"))
+		}
 	}
 
 	complete(entry)
