@@ -301,14 +301,14 @@ func jsonLogger(config TraceConfig, verbose logger.Verbose, rt http.RoundTripper
 		kv = append(kv, "form", redactedValueMap(form))
 	}
 	if config.Body && reqBody != "" {
-		kv = append(kv, "body", redactBody(reqBody))
+		kv = append(kv, "body", redactBody(logger.RedactAuthorization(reqBody, req.Header.Get("Authorization"))))
 	}
 
 	if err != nil {
 		// Transport errors surface at INFO so a failed request is visible at -v=0.
 		// StripSecrets/Redacted keep any credentials embedded in the URL (e.g. a
 		// url.Error wrapping "https://user:pass@host") out of the logs.
-		kv = append(kv, "error", logger.StripSecrets(err.Error()))
+		kv = append(kv, "error", logger.RedactAuthorization(logger.StripSecrets(err.Error()), req.Header.Get("Authorization")))
 		jsonLogAt(verbose, req, 0, kv, "%s %s error %s", req.Method, req.URL.Redacted(), elapsed.Truncate(time.Millisecond))
 		return nil, err
 	}
@@ -322,7 +322,7 @@ func jsonLogger(config TraceConfig, verbose logger.Verbose, rt http.RoundTripper
 		respBody, restored, truncated, readErr := readBodyPrefix(resp.Body, logger.HTTPLogResponseBodyLength(config.MaxBodyLength))
 		resp.Body = restored
 		if respBody != "" {
-			kv = append(kv, "responseBody", redactBodyPrefix(respBody, truncated))
+			kv = append(kv, "responseBody", redactBodyPrefix(logger.RedactAuthorization(respBody, req.Header.Get("Authorization")), truncated))
 		}
 		if truncated {
 			kv = append(kv, "responseBodyTruncated", true)
@@ -337,7 +337,7 @@ func jsonLogger(config TraceConfig, verbose logger.Verbose, rt http.RoundTripper
 		// configured trace level wouldn't otherwise capture the response body.
 		if !config.Response {
 			if body := readErrorBody(resp, config.MaxBodyLength); body != "" {
-				kv = append(kv, "responseBody", redactBody(body))
+				kv = append(kv, "responseBody", redactBody(logger.RedactAuthorization(body, req.Header.Get("Authorization"))))
 			}
 		}
 		jsonLogAt(verbose, req, 0, kv, "%s %s %d %s", req.Method, req.URL.Redacted(), resp.StatusCode, elapsed.Truncate(time.Millisecond))
@@ -418,7 +418,7 @@ func prettyLogger(config TraceConfig, verbose logger.Verbose, rt http.RoundTripp
 			}
 			msg = strings.Join(lines, "\n")
 		}
-		logAt(verbose, req, verbosityLevel(config), "%s", strings.TrimSpace(msg))
+		logAt(verbose, req, verbosityLevel(config), "%s", logger.RedactAuthorization(strings.TrimSpace(msg), req.Header.Get("Authorization")))
 	}
 	return resp, err
 }
@@ -436,7 +436,7 @@ func logPrettyAccess(config TraceConfig, verbose logger.Verbose, req *http.Reque
 	// error-only mode at -v=0; the body captures the cause (e.g. an HTML 404/500
 	// page) without raising verbosity.
 	if err != nil {
-		logAt(verbose, req, 0, "%s %s %s %s", method, url, console.Redf("error: %s", logger.StripSecrets(err.Error())), dur)
+		logAt(verbose, req, 0, "%s %s %s %s", method, url, console.Redf("error: %s", logger.RedactAuthorization(logger.StripSecrets(err.Error()), req.Header.Get("Authorization"))), dur)
 		return
 	}
 	statusCode := 0
@@ -446,7 +446,7 @@ func logPrettyAccess(config TraceConfig, verbose logger.Verbose, req *http.Reque
 	if statusCode >= 400 {
 		logAt(verbose, req, 0, "%s %s %s %s", method, url, statusColor(statusCode)("%d", statusCode), dur)
 		if body := readErrorBody(resp, config.MaxBodyLength); body != "" {
-			logAt(verbose, req, 0, "%s", body)
+			logAt(verbose, req, 0, "%s", logger.RedactAuthorization(body, req.Header.Get("Authorization")))
 		}
 		return
 	}
