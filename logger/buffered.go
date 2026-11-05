@@ -1,15 +1,21 @@
 package logger
 
 import (
+	"cmp"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 )
 
-// BufferedLogEntry represents a single buffered log message
+// BufferedLogEntry represents a single buffered log message. Seq is its
+// position in the logger's whole history (1 for the first entry), so a reader
+// can tell new entries from ones it already holds even after per-level
+// eviction or a clear.
 type BufferedLogEntry struct {
+	Seq     uint64
 	Message string
 	Time    time.Time
 	Level   LogLevel
@@ -21,6 +27,8 @@ type BufferedLogger struct {
 	logsByLevel    map[LogLevel][]BufferedLogEntry
 	maxLogsByLevel map[LogLevel]int
 	logLevel       LogLevel
+	lastSeq        uint64
+	clearedThrough uint64
 }
 
 // NewBufferedLogger creates a new BufferedLogger with default retention strategy
@@ -80,7 +88,9 @@ func (b *BufferedLogger) appendLog(level LogLevel, format string, args ...interf
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
+	b.lastSeq++
 	entry := BufferedLogEntry{
+		Seq:     b.lastSeq,
 		Message: fmt.Sprintf(format, args...),
 		Time:    time.Now(),
 		Level:   level,
@@ -107,36 +117,38 @@ func (b *BufferedLogger) appendLog(level LogLevel, format string, args ...interf
 	}
 }
 
-// GetLogs returns a copy of all buffered log entries, sorted by timestamp
+// GetLogs returns a copy of all buffered log entries in the order they were
+// logged. Ordering is by Seq, not Time: two entries can share a timestamp.
 func (b *BufferedLogger) GetLogs() []BufferedLogEntry {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
-	// Collect all entries from all level buffers
 	var allEntries []BufferedLogEntry
 	for _, levelEntries := range b.logsByLevel {
 		allEntries = append(allEntries, levelEntries...)
 	}
-
-	// Sort by timestamp (oldest first)
-	for i := 0; i < len(allEntries)-1; i++ {
-		for j := i + 1; j < len(allEntries); j++ {
-			if allEntries[i].Time.After(allEntries[j].Time) {
-				allEntries[i], allEntries[j] = allEntries[j], allEntries[i]
-			}
-		}
-	}
-
+	slices.SortFunc(allEntries, func(a, c BufferedLogEntry) int { return cmp.Compare(a.Seq, c.Seq) })
 	return allEntries
 }
 
-// ClearLogs clears all buffered log entries
+// ClearLogs clears all buffered log entries. Sequence numbers keep counting,
+// and ClearedThrough reports where the clear happened.
 func (b *BufferedLogger) ClearLogs() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	for level := range b.logsByLevel {
 		b.logsByLevel[level] = b.logsByLevel[level][:0]
 	}
+	b.clearedThrough = b.lastSeq
+}
+
+// ClearedThrough is the Seq of the last entry logged before the most recent
+// ClearLogs, or 0 if the logger has never been cleared. A reader holding
+// entries at or below it holds entries that are gone.
+func (b *BufferedLogger) ClearedThrough() uint64 {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.clearedThrough
 }
 
 // GetLogsByLevel returns buffered log entries for a specific level
