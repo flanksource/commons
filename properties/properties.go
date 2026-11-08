@@ -156,6 +156,10 @@ func (p *Properties) LoadFile(filename string) error {
 	}
 	file, err := os.Open(filename)
 	if errors.Is(err, os.ErrNotExist) {
+		if p.close == nil {
+			p.filename = filename
+			p.Watch()
+		}
 		slog.Warn(fmt.Sprintf("%s does not exist", filename))
 		p.Update(commandline.snapshot())
 		return nil
@@ -163,9 +167,8 @@ func (p *Properties) LoadFile(filename string) error {
 		return err
 	}
 	defer file.Close()
-	p.filename = filename
-
 	if p.close == nil {
+		p.filename = filename
 		p.Watch()
 	}
 
@@ -412,7 +415,7 @@ func (p *Properties) Watch() func() {
 	}
 	slog.Info(fmt.Sprintf("Watching %s for changes", p.filename))
 	info, err := os.Stat(p.filename)
-	if err != nil {
+	if p.filename == "" || (err != nil && !errors.Is(err, os.ErrNotExist)) {
 		panic(fmt.Errorf("watch properties %s: %w", p.filename, err))
 	}
 	filename := p.filename
@@ -429,10 +432,14 @@ func (p *Properties) Watch() func() {
 			case <-ticker.C:
 				current, err := os.Stat(filename)
 				if err != nil {
+					if errors.Is(err, os.ErrNotExist) {
+						info = nil
+						continue
+					}
 					slog.Error("stat properties file", "file", filename, "error", err)
 					continue
 				}
-				if current.ModTime().Equal(info.ModTime()) && current.Size() == info.Size() && os.SameFile(info, current) {
+				if info != nil && current.ModTime().Equal(info.ModTime()) && current.Size() == info.Size() && os.SameFile(info, current) {
 					continue
 				}
 				if err := p.LoadFile(filename); err != nil {
