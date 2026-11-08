@@ -18,7 +18,8 @@ import (
 	"github.com/flanksource/commons/cmd/hx/parse"
 	"github.com/flanksource/commons/har"
 	commonshttp "github.com/flanksource/commons/http"
-	"github.com/flanksource/commons/http/middlewares"
+	"github.com/flanksource/commons/http/middlewares/awssigv4"
+	"github.com/flanksource/commons/http/middlewares/oauth"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -38,10 +39,10 @@ Examples:
   hx https://httpbin.org/post name=test count:=42
   hx PUT https://httpbin.org/put name=updated
   hx -u user:pass https://httpbin.org/basic-auth/user/pass`,
-	Args:         cobra.MinimumNArgs(1),
-	SilenceUsage: true,
+	Args:          cobra.MinimumNArgs(1),
+	SilenceUsage:  true,
 	SilenceErrors: true,
-	RunE:         run,
+	RunE:          run,
 }
 
 type httpStatusError struct {
@@ -55,40 +56,40 @@ func (e *httpStatusError) Error() string {
 
 // flags
 var (
-	flagMethod         string
-	flagData           string
-	flagForm           []string
-	flagHeaders        []string
-	flagUser           string
-	flagDigest         bool
-	flagNTLM           bool
-	flagToken          string
-	flagAWSSigV4       bool
-	flagAWSRegion      string
-	flagAWSService     string
-	flagAWSEndpoint    string
-	flagOAuthClientID  string
-	flagOAuthSecret    string
-	flagOAuthTokenURL  string
-	flagOAuthScopes    []string
-	flagInsecure       bool
-	flagCACert         string
-	flagCert           string
-	flagKey            string
-	flagProxy          string
-	flagConnectTo      string
-	flagTimeout        time.Duration
-	flagRetry          uint
-	flagRetryWait      time.Duration
-	flagRetryFactor    float64
-	flagMaxRedirects   int
-	flagNoFollow       bool
-	flagVerbose        int
-	flagHeadersOnly    bool
-	flagQuiet          bool
-	flagRaw            bool
-	flagUserAgent      string
-	flagHAROutput      string
+	flagMethod        string
+	flagData          string
+	flagForm          []string
+	flagHeaders       []string
+	flagUser          string
+	flagDigest        bool
+	flagNTLM          bool
+	flagToken         string
+	flagAWSSigV4      bool
+	flagAWSRegion     string
+	flagAWSService    string
+	flagAWSEndpoint   string
+	flagOAuthClientID string
+	flagOAuthSecret   string
+	flagOAuthTokenURL string
+	flagOAuthScopes   []string
+	flagInsecure      bool
+	flagCACert        string
+	flagCert          string
+	flagKey           string
+	flagProxy         string
+	flagConnectTo     string
+	flagTimeout       time.Duration
+	flagRetry         uint
+	flagRetryWait     time.Duration
+	flagRetryFactor   float64
+	flagMaxRedirects  int
+	flagNoFollow      bool
+	flagVerbose       int
+	flagHeadersOnly   bool
+	flagQuiet         bool
+	flagRaw           bool
+	flagUserAgent     string
+	flagHAROutput     string
 )
 
 func init() {
@@ -102,7 +103,7 @@ func init() {
 
 	f.StringVarP(&flagUser, "user", "u", "", "Basic auth (user:pass)")
 	f.BoolVar(&flagDigest, "digest", false, "Use Digest auth")
-	f.BoolVar(&flagNTLM, "ntlm", false, "Use NTLM auth")
+	f.BoolVar(&flagNTLM, "ntlm", false, "Unsupported: NTLM authentication has been removed")
 	f.StringVar(&flagToken, "token", "", "Bearer token")
 	f.BoolVar(&flagAWSSigV4, "aws-sigv4", false, "Enable AWS SigV4 signing (uses standard AWS credential chain)")
 	f.StringVar(&flagAWSRegion, "aws-region", "", "AWS region (default: from AWS config)")
@@ -135,6 +136,9 @@ func init() {
 }
 
 func run(cmd *cobra.Command, args []string) error {
+	if flagNTLM {
+		return fmt.Errorf("NTLM authentication is no longer supported")
+	}
 	parsed, err := parse.PositionalArgs(args)
 	if err != nil {
 		return err
@@ -157,7 +161,10 @@ func run(cmd *cobra.Command, args []string) error {
 	hasBody := body != nil
 	method := parsed.EffectiveMethod(hasBody, flagMethod)
 
-	client, collector := buildClient()
+	client, collector, err := buildClient()
+	if err != nil {
+		return err
+	}
 	req := client.R(context.Background())
 
 	for _, h := range flagHeaders {
@@ -177,7 +184,6 @@ func run(cmd *cobra.Command, args []string) error {
 	if flagToken != "" {
 		req = req.Header("Authorization", "Bearer "+flagToken)
 	}
-
 
 	opts := outputOpts()
 
@@ -278,7 +284,7 @@ func printRequestVerbose(method, rawURL string, req *commonshttp.Request, body [
 	output.PrintRequest(stdReq, body, opts)
 }
 
-func buildClient() (*commonshttp.Client, *har.Collector) {
+func buildClient() (*commonshttp.Client, *har.Collector, error) {
 	var tracer func(string)
 	if flagVerbose >= 1 {
 		useColor := term.IsTerminal(int(os.Stderr.Fd()))
@@ -307,9 +313,6 @@ func buildClient() (*commonshttp.Client, *har.Collector) {
 		if flagDigest {
 			client = client.Digest(true)
 		}
-		if flagNTLM {
-			client = client.NTLM(true)
-		}
 	}
 
 	if flagAWSSigV4 {
@@ -319,19 +322,19 @@ func buildClient() (*commonshttp.Client, *har.Collector) {
 		}
 		cfg, err := awsconfig.LoadDefaultConfig(context.Background(), opts...)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "error loading AWS config: %v\n", err)
-			os.Exit(1)
+			return nil, nil, fmt.Errorf("loading AWS config: %w", err)
 		}
 		creds, err := cfg.Credentials.Retrieve(context.Background())
-		if err != nil || !creds.HasKeys() {
-			fmt.Fprintf(os.Stderr, "no AWS credentials found — configure via environment, ~/.aws/credentials, or IAM role\n")
-			os.Exit(1)
+		if err != nil {
+			return nil, nil, fmt.Errorf("retrieving AWS credentials: %w", err)
+		}
+		if !creds.HasKeys() {
+			return nil, nil, fmt.Errorf("no AWS credentials found: configure environment, ~/.aws/credentials, or IAM role")
 		}
 		if cfg.Region == "" {
-			fmt.Fprintf(os.Stderr, "no AWS region found — set via --aws-region, AWS_REGION, or ~/.aws/config\n")
-			os.Exit(1)
+			return nil, nil, fmt.Errorf("no AWS region found: set --aws-region, AWS_REGION, or ~/.aws/config")
 		}
-		client = client.AWSAuthSigV4(cfg)
+		client = client.AWSAuthSigV4(awssigv4.Config{Region: cfg.Region, Credentials: sdkCredentialsProvider(cfg.Credentials)})
 		if flagAWSService != "" {
 			client = client.AWSService(flagAWSService)
 		}
@@ -341,7 +344,7 @@ func buildClient() (*commonshttp.Client, *har.Collector) {
 	}
 
 	if flagOAuthClientID != "" {
-		client = client.OAuth(middlewares.OauthConfig{
+		client = client.OAuth(oauth.OauthConfig{
 			ClientID:     flagOAuthClientID,
 			ClientSecret: flagOAuthSecret,
 			TokenURL:     flagOAuthTokenURL,
@@ -359,21 +362,18 @@ func buildClient() (*commonshttp.Client, *har.Collector) {
 		if flagCACert != "" {
 			ca, err := os.ReadFile(flagCACert)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "error reading CA cert: %v\n", err)
-				os.Exit(1)
+				return nil, nil, fmt.Errorf("reading CA cert: %w", err)
 			}
 			tlsCfg.CA = string(ca)
 		}
 		if flagCert != "" && flagKey != "" {
 			cert, err := os.ReadFile(flagCert)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "error reading cert: %v\n", err)
-				os.Exit(1)
+				return nil, nil, fmt.Errorf("reading cert: %w", err)
 			}
 			key, err := os.ReadFile(flagKey)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "error reading key: %v\n", err)
-				os.Exit(1)
+				return nil, nil, fmt.Errorf("reading key: %w", err)
 			}
 			tlsCfg.Cert = string(cert)
 			tlsCfg.Key = string(key)
@@ -381,8 +381,7 @@ func buildClient() (*commonshttp.Client, *har.Collector) {
 		var err error
 		client, err = client.TLSConfig(tlsCfg)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "TLS config error: %v\n", err)
-			os.Exit(1)
+			return nil, nil, fmt.Errorf("TLS config: %w", err)
 		}
 	}
 
@@ -410,7 +409,7 @@ func buildClient() (*commonshttp.Client, *har.Collector) {
 		client = client.TraceToStdout(commonshttp.TraceHeaders)
 	}
 
-	return client, collector
+	return client, collector, nil
 }
 
 func resolveBody(items *parse.ParsedItems) (io.Reader, string, error) {
