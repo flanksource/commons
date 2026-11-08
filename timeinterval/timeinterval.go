@@ -310,7 +310,7 @@ func (r *DayOfMonthRange) UnmarshalYAML(unmarshal func(any) error) error {
 // UnmarshalJSON implements the json.Unmarshaler interface for DayOfMonthRange.
 // It delegates to the YAML unmarshaller as it can parse JSON and has validation logic.
 func (r *DayOfMonthRange) UnmarshalJSON(in []byte) error {
-	return r.UnmarshalYAML(func(value any) error { return json.Unmarshal(in, value) })
+	return r.UnmarshalYAML(unmarshalRangeJSON(in))
 }
 
 // UnmarshalYAML implements the Unmarshaller interface for MonthRange.
@@ -333,7 +333,7 @@ func (r *MonthRange) UnmarshalYAML(unmarshal func(any) error) error {
 // UnmarshalJSON implements the json.Unmarshaler interface for MonthRange.
 // It delegates to the YAML unmarshaller as it can parse JSON and has validation logic.
 func (r *MonthRange) UnmarshalJSON(in []byte) error {
-	return r.UnmarshalYAML(func(value any) error { return json.Unmarshal(in, value) })
+	return r.UnmarshalYAML(unmarshalRangeJSON(in))
 }
 
 // UnmarshalYAML implements the Unmarshaller interface for YearRange.
@@ -354,7 +354,7 @@ func (r *YearRange) UnmarshalYAML(unmarshal func(any) error) error {
 // UnmarshalJSON implements the json.Unmarshaler interface for YearRange.
 // It delegates to the YAML unmarshaller as it can parse JSON and has validation logic.
 func (r *YearRange) UnmarshalJSON(in []byte) error {
-	return r.UnmarshalYAML(func(value any) error { return json.Unmarshal(in, value) })
+	return r.UnmarshalYAML(unmarshalRangeJSON(in))
 }
 
 // UnmarshalYAML implements the Unmarshaller interface for TimeRanges.
