@@ -18,8 +18,9 @@
 //
 // With AWS Sigv4 Authentication:
 //
-//	cfg, _ := awsconfig.LoadDefaultConfig(ctx)
-//	client := http.NewClient().AWSAuthSigV4(cfg).AWSService("s3")
+//	client := http.NewClient().AWSAuthSigV4(awssigv4.Config{
+//		Region: "us-east-1", Credentials: awssigv4.EnvironmentProvider{},
+//	}).AWSService("s3")
 //
 // With Retries and Timeout:
 //
@@ -362,26 +363,10 @@ func (c *Client) Timeout(d time.Duration) *Client {
 
 // DisableKeepAlives prevents reuse of TCP connections
 func (c *Client) DisableKeepAlive(val bool) *Client {
-	if c.httpClient.Transport == nil {
-		c.httpClient.Transport = http.DefaultTransport
-	}
-
-	customTransport := c.httpClient.Transport.(*http.Transport).Clone()
-	customTransport.DisableKeepAlives = val
-	c.setTransport(customTransport)
+	c.configureTransportOrFailRequests(func(transport *http.Transport) {
+		transport.DisableKeepAlives = val
+	})
 	return c
-}
-
-func (c *Client) initTLSConfig() {
-	if c.httpClient.Transport == nil {
-		c.httpClient.Transport = http.DefaultTransport
-	}
-
-	customTransport := c.httpClient.Transport.(*http.Transport).Clone()
-	if customTransport.TLSClientConfig == nil {
-		customTransport.TLSClientConfig = &tls.Config{}
-	}
-	c.setTransport(customTransport)
 }
 
 type TLSConfig struct {
@@ -411,16 +396,11 @@ type TLSConfig struct {
 //		HandshakeTimeout:   10 * time.Second,
 //	})
 func (c *Client) TLSConfig(conf TLSConfig) (*Client, error) {
-	c.initTLSConfig()
-
 	if conf.HandshakeTimeout == 0 {
 		conf.HandshakeTimeout = time.Second * 10
 	}
 
-	transport := c.httpClient.Transport.(*http.Transport).Clone()
-	transport.TLSClientConfig.InsecureSkipVerify = conf.InsecureSkipVerify
-	transport.TLSHandshakeTimeout = conf.HandshakeTimeout
-
+	var rootCAs *x509.CertPool
 	if conf.CA != "" {
 		certPool, err := x509.SystemCertPool()
 		if err != nil {
@@ -430,19 +410,32 @@ func (c *Client) TLSConfig(conf TLSConfig) (*Client, error) {
 		if !certPool.AppendCertsFromPEM([]byte(conf.CA)) {
 			return nil, fmt.Errorf("failed to append ca certificate")
 		}
-		transport.TLSClientConfig.RootCAs = certPool
+		rootCAs = certPool
 	}
 
+	var certificates []tls.Certificate
 	if conf.Cert != "" && conf.Key != "" {
 		cert, err := tls.X509KeyPair([]byte(conf.Cert), []byte(conf.Key))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create client certificate: %v", err)
 		}
-		transport.TLSClientConfig.Certificates = []tls.Certificate{cert}
+		certificates = []tls.Certificate{cert}
 	}
 
-	c.tlsConfig = transport.TLSClientConfig
-	c.httpClient.Transport = transport
+	err := c.configureTransport(func(transport *http.Transport) {
+		tlsConfig := ensureTLSClientConfig(transport)
+		tlsConfig.InsecureSkipVerify = conf.InsecureSkipVerify
+		transport.TLSHandshakeTimeout = conf.HandshakeTimeout
+		if rootCAs != nil {
+			tlsConfig.RootCAs = rootCAs
+		}
+		if certificates != nil {
+			tlsConfig.Certificates = certificates
+		}
+	})
+	if err != nil {
+		return nil, fmt.Errorf("configure TLS: %w", err)
+	}
 	return c, nil
 }
 
@@ -455,12 +448,9 @@ func (c *Client) TLSConfig(conf TLSConfig) (*Client, error) {
 //	// Accept any certificate (dangerous!)
 //	client.InsecureSkipVerify(true)
 func (c *Client) InsecureSkipVerify(val bool) *Client {
-	c.initTLSConfig()
-
-	customTransport := c.httpClient.Transport.(*http.Transport).Clone()
-	customTransport.TLSClientConfig.InsecureSkipVerify = val
-	c.tlsConfig = customTransport.TLSClientConfig
-	c.setTransport(customTransport)
+	c.configureTransportOrFailRequests(func(transport *http.Transport) {
+		ensureTLSClientConfig(transport).InsecureSkipVerify = val
+	})
 	return c
 }
 
@@ -474,14 +464,13 @@ func (c *Client) Proxy(url string) *Client {
 	return c
 }
 
-func (c *Client) setProxy(proxyURL *url.URL) {
-	if c.httpClient.Transport == nil {
-		c.httpClient.Transport = http.DefaultTransport
+func (c *Client) setProxy(proxyURL *url.URL) error {
+	if err := c.configureTransport(func(transport *http.Transport) {
+		transport.Proxy = http.ProxyURL(proxyURL)
+	}); err != nil {
+		return fmt.Errorf("configure proxy %s: %w", proxyURL.Redacted(), err)
 	}
-
-	customTransport := c.httpClient.Transport.(*http.Transport).Clone()
-	customTransport.Proxy = http.ProxyURL(proxyURL)
-	c.setTransport(customTransport)
+	return nil
 }
 
 // Auth configures authentication credentials for the client.
@@ -995,7 +984,9 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 			return nil, err
 		}
 
-		c.setProxy(proxyURL)
+		if err := c.setProxy(proxyURL); err != nil {
+			return nil, err
+		}
 	}
 
 	transport := r.client.httpClient.Transport
@@ -1007,17 +998,17 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 		if c.baseTransport != nil {
 			base = c.baseTransport
 		}
-		raw, ok := base.(*http.Transport)
-		if !ok {
-			return nil, fmt.Errorf("HTTP Host override requires a configurable TLS transport")
+		isolated, rewrap, err := configurableTransport(base)
+		if err != nil {
+			return nil, fmt.Errorf("HTTP Host override requires a configurable TLS transport: %w", err)
 		}
-		isolated := raw.Clone()
-		isolated.TLSClientConfig.ServerName = req.Host
+		tlsConfig := ensureTLSClientConfig(isolated)
+		tlsConfig.ServerName = req.Host
 		if hostname, _, err := net.SplitHostPort(req.Host); err == nil {
-			isolated.TLSClientConfig.ServerName = hostname
+			tlsConfig.ServerName = hostname
 		}
 		defer isolated.CloseIdleConnections()
-		transport = applyMiddleware(isolated, c.transportMiddlewares...)
+		transport = applyMiddleware(rewrap(isolated), c.transportMiddlewares...)
 	}
 	if c.curlLog {
 		transport = &curlLogTransport{base: transport}
