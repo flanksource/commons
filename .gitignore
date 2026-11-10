@@ -24,3 +24,4 @@ cmd/hx/fixtures/hx
 .gavel/
 .tmp/
 hack/
+/cmd/hx/go.work

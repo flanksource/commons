@@ -2,4 +2,4 @@ hx
 
 testdata/
 *.har
-
+go.work*
