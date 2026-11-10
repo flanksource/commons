@@ -34,8 +34,10 @@ type TransportPool struct {
 }
 
 type transportEntry struct {
-	key       [32]byte
-	transport *stdhttp.Transport
+	key [32]byte
+	// transport serves requests and may be a TransportWrapper chain around inner.
+	transport stdhttp.RoundTripper
+	inner     *stdhttp.Transport
 }
 
 func NewTransportPool(options TransportPoolOptions) (*TransportPool, error) {
@@ -61,47 +63,55 @@ func (p *TransportPool) Client(options TransportOptions) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("encode transport settings: %w", err)
 	}
-	transport, err := p.transport(sha256.Sum256(encoded), options)
+	entry, err := p.transport(sha256.Sum256(encoded), options)
 	if err != nil {
 		return nil, err
 	}
 	client := NewClient()
-	client.httpClient.Transport = transport
-	client.tlsConfig = transport.TLSClientConfig
+	client.httpClient.Transport = entry.transport
+	client.tlsConfig = entry.inner.TLSClientConfig
 	return client, nil
 }
 
-func (p *TransportPool) transport(key [32]byte, options TransportOptions) (*stdhttp.Transport, error) {
+func (p *TransportPool) transport(key [32]byte, options TransportOptions) (transportEntry, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.closed {
-		return nil, errors.New("transport pool is closed")
+		return transportEntry{}, errors.New("transport pool is closed")
 	}
 	if entry := p.entries[key]; entry != nil {
 		p.order.MoveToFront(entry)
-		return entry.Value.(transportEntry).transport, nil
+		return entry.Value.(transportEntry), nil
 	}
 	client, err := NewClient().TLSConfig(options.TLS)
 	if err != nil {
-		return nil, err
+		return transportEntry{}, err
 	}
-	transport := client.httpClient.Transport.(*stdhttp.Transport)
 	if options.Proxy != "" {
 		proxy, err := url.Parse(options.Proxy)
 		if err != nil || proxy.Scheme == "" || proxy.Host == "" {
-			return nil, errors.New("transport pool proxy must be an absolute URL")
+			return transportEntry{}, errors.New("transport pool proxy must be an absolute URL")
 		}
-		transport.Proxy = stdhttp.ProxyURL(proxy)
+		if err := client.configureTransport(func(transport *stdhttp.Transport) {
+			transport.Proxy = stdhttp.ProxyURL(proxy)
+		}); err != nil {
+			return transportEntry{}, fmt.Errorf("configure transport pool proxy: %w", err)
+		}
 	}
-	p.entries[key] = p.order.PushFront(transportEntry{key: key, transport: transport})
+	inner, _, err := unwrapTransport(client.httpClient.Transport)
+	if err != nil {
+		return transportEntry{}, err
+	}
+	entry := transportEntry{key: key, transport: client.httpClient.Transport, inner: inner}
+	p.entries[key] = p.order.PushFront(entry)
 	if p.order.Len() > p.capacity {
 		old := p.order.Back()
-		entry := old.Value.(transportEntry)
-		delete(p.entries, entry.key)
+		evicted := old.Value.(transportEntry)
+		delete(p.entries, evicted.key)
 		p.order.Remove(old)
-		entry.transport.CloseIdleConnections()
+		evicted.inner.CloseIdleConnections()
 	}
-	return transport, nil
+	return entry, nil
 }
 
 func (p *TransportPool) Close() error {
@@ -109,7 +119,7 @@ func (p *TransportPool) Close() error {
 	defer p.mu.Unlock()
 	p.closed = true
 	for _, element := range p.entries {
-		element.Value.(transportEntry).transport.CloseIdleConnections()
+		element.Value.(transportEntry).inner.CloseIdleConnections()
 	}
 	clear(p.entries)
 	p.order.Init()

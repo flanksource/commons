@@ -81,4 +81,51 @@ var _ = Describe("Decimal extensions", func() {
 		_, err = small.Cmp(decimal.Money{})
 		Expect(err).To(HaveOccurred())
 	})
+
+	newMoney := map[string]func(amount, currency string, places int) (fmt.Stringer, error){
+		"decimal": func(amount, currency string, places int) (fmt.Stringer, error) {
+			return decimal.NewMoney(decimal.MoneyOptions{Amount: amount, Currency: currency, DecimalPlaces: places})
+		},
+		"bigdecimal": func(amount, currency string, places int) (fmt.Stringer, error) {
+			return bigdecimal.NewMoney(bigdecimal.MoneyOptions{Amount: amount, Currency: currency, DecimalPlaces: places})
+		},
+	}
+	DescribeTable("rejects invalid Money options", func(amount, currency string, places int, message string) {
+		for backend, construct := range newMoney {
+			_, err := construct(amount, currency, places)
+			Expect(err).To(MatchError(ContainSubstring(message)), backend)
+		}
+	},
+		Entry("lowercase currency", "1.00", "usd", 2, "three-letter uppercase"),
+		Entry("two-letter currency", "1.00", "US", 2, "three-letter uppercase"),
+		Entry("four-letter currency", "1.00", "USDX", 2, "three-letter uppercase"),
+		Entry("negative decimal places", "1.00", "USD", -1, "between 0 and 31"),
+		Entry("decimal places above 31", "1.00", "USD", 32, "between 0 and 31"),
+		Entry("exponent amount", "1e3", "USD", 2, "finite decimal"),
+		Entry("NaN amount", "NaN", "USD", 2, "finite decimal"),
+		Entry("Inf amount", "Inf", "USD", 2, "finite decimal"),
+	)
+	DescribeTable("orders same-currency Money", func(left, right string, expected int) {
+		smallLeft, err := decimal.NewMoney(decimal.MoneyOptions{Amount: left, Currency: "USD"})
+		Expect(err).NotTo(HaveOccurred())
+		smallRight, err := decimal.NewMoney(decimal.MoneyOptions{Amount: right, Currency: "USD"})
+		Expect(err).NotTo(HaveOccurred())
+		largeLeft, err := bigdecimal.NewMoney(bigdecimal.MoneyOptions{Amount: left, Currency: "USD"})
+		Expect(err).NotTo(HaveOccurred())
+		largeRight, err := bigdecimal.NewMoney(bigdecimal.MoneyOptions{Amount: right, Currency: "USD"})
+		Expect(err).NotTo(HaveOccurred())
+		smallOrder, err := smallLeft.Cmp(smallRight)
+		Expect(err).NotTo(HaveOccurred())
+		largeOrder, err := largeLeft.Cmp(largeRight)
+		Expect(err).NotTo(HaveOccurred())
+		Expect([]int{smallOrder, largeOrder}).To(Equal([]int{expected, expected}))
+	},
+		Entry("less", "1.99", "2.00", -1),
+		Entry("equal with different scale", "2.0", "2.00", 0),
+		Entry("greater", "-1.00", "-1.01", 1),
+	)
+	It("panics when formatting zero-value Money", func() {
+		Expect(func() { _ = decimal.Money{}.String() }).To(PanicWith(MatchError(ContainSubstring("uninitialized Money"))))
+		Expect(func() { _ = bigdecimal.Money{}.String() }).To(PanicWith(MatchError(ContainSubstring("uninitialized Money"))))
+	})
 })

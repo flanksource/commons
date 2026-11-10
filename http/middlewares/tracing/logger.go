@@ -227,6 +227,10 @@ func hasDetailedTrace(config TraceConfig) bool {
 		config.Auth
 }
 
+// newContextLogger logs requests and responses. Credentials from the request's
+// Authorization header are always redacted from logged bodies and errors
+// (logger.RedactAuthorization): unlike HAR capture, which keeps them when
+// CaptureSensitive is set, logs have no opt-in for sensitive values.
 func newContextLogger(config TraceConfig, verbose logger.Verbose) middlewares.Middleware {
 	return func(rt http.RoundTripper) http.RoundTripper {
 		return middlewares.RoundTripperFunc(func(req *http.Request) (*http.Response, error) {

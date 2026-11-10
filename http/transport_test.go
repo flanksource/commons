@@ -2,11 +2,14 @@ package http
 
 import (
 	"context"
+	"errors"
 	"io"
+	"net"
 	stdhttp "net/http"
 	"net/http/httptest"
 	"net/url"
 	"sync/atomic"
+	"time"
 
 	"github.com/flanksource/commons/http/middlewares"
 	. "github.com/onsi/ginkgo/v2"
@@ -81,6 +84,82 @@ var _ = Describe("Wrapped transports", func() {
 			ContainSubstring("*http.Transport"),
 		)))
 		Expect(calls.Load()).To(BeZero())
+	})
+
+	It("applies a connect timeout through a wrapped DefaultTransport", func() {
+		var calls atomic.Int32
+		dialed := make(chan struct{}, 1)
+		raw := &stdhttp.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			dialed <- struct{}{}
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}}
+		stdhttp.DefaultTransport = &countingWrapper{next: raw, calls: &calls}
+
+		client, err := NewClient().ConnectTimeout(25 * time.Millisecond)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = client.httpClient.Get("http://upstream.example/data")
+		Expect(errors.Is(err, context.DeadlineExceeded)).To(BeTrue(), "error: %v", err)
+		Expect(dialed).To(Receive())
+		Expect(calls.Load()).To(Equal(int32(1)))
+		Expect(client.httpClient.Transport).To(BeAssignableToTypeOf(&countingWrapper{}))
+	})
+
+	It("pools the inner transport of a wrapped DefaultTransport", func() {
+		var calls atomic.Int32
+		stdhttp.DefaultTransport = &countingWrapper{next: original.(*stdhttp.Transport).Clone(), calls: &calls}
+		server := httptest.NewServer(stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, _ *stdhttp.Request) {
+			_, _ = io.WriteString(w, proxiedBody)
+		}))
+		defer server.Close()
+
+		pool, err := NewTransportPool(TransportPoolOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { Expect(pool.Close()).To(Succeed()) }()
+		client, err := pool.Client(TransportOptions{Endpoint: server.URL, Proxy: server.URL})
+		Expect(err).NotTo(HaveOccurred())
+		again, err := pool.Client(TransportOptions{Endpoint: server.URL, Proxy: server.URL})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(again.httpClient.Transport).To(BeIdenticalTo(client.httpClient.Transport))
+
+		response, err := client.R(context.Background()).Get(server.URL)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(response.AsString()).To(Equal(proxiedBody))
+		Expect(calls.Load()).To(Equal(int32(1)))
+	})
+})
+
+var _ = Describe("Transport configuration after Use", func() {
+	opaque := func(next stdhttp.RoundTripper) stdhttp.RoundTripper {
+		return middlewares.RoundTripperFunc(next.RoundTrip)
+	}
+	baseOf := func(client *Client) *stdhttp.Transport {
+		transport, ok := client.baseTransport.(*stdhttp.Transport)
+		Expect(ok).To(BeTrue(), "base transport is %T", client.baseTransport)
+		return transport
+	}
+
+	It("configures the base transport beneath opaque middleware", func() {
+		server := httptest.NewServer(stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, _ *stdhttp.Request) {
+			_, _ = io.WriteString(w, "ok")
+		}))
+		defer server.Close()
+
+		client := NewClient().Use(opaque).DisableKeepAlive(true).Proxy(server.URL)
+		_, err := client.TLSConfig(TLSConfig{InsecureSkipVerify: true})
+		Expect(err).NotTo(HaveOccurred())
+
+		response, err := client.R(context.Background()).Get("http://upstream.example/data")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(response.AsString()).To(Equal("ok"))
+		Expect(baseOf(client).DisableKeepAlives).To(BeTrue())
+		Expect(baseOf(client).TLSClientConfig.InsecureSkipVerify).To(BeTrue())
+	})
+
+	It("keeps certificate verification re-enabled across a later Use", func() {
+		client := NewClient().InsecureSkipVerify(true).Use(opaque).InsecureSkipVerify(false).Use(opaque)
+		Expect(baseOf(client).TLSClientConfig.InsecureSkipVerify).To(BeFalse())
+		Expect(client.transportMiddlewares).To(HaveLen(2))
 	})
 })
 

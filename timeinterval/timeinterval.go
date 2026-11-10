@@ -322,6 +322,11 @@ func (r *MonthRange) UnmarshalYAML(unmarshal func(any) error) error {
 	if err := stringableRangeFromString(str, r); err != nil {
 		return err
 	}
+	for _, month := range []int{r.Begin, r.End} {
+		if month < 1 || month > 12 {
+			return fmt.Errorf("%d is not a valid month: out of range", month)
+		}
+	}
 	if r.Begin > r.End {
 		begin := monthsInv[r.Begin]
 		end := monthsInv[r.End]

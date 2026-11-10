@@ -22,6 +22,10 @@ func (d Decimal) String() string {
 	}
 	return upstream.Format(d.Decimal, 'f', -1)
 }
+
+// Compare returns -1, 0 or 1 as d is less than, equal to or greater than
+// other. It panics when either operand is NaN, which has no order; check
+// IsNaN first, or use the package-level Compare for upstream NaN ordering.
 func (d Decimal) Compare(other Decimal) int {
 	r := d.Decimal.Cmp(other.Decimal)
 	if r.Less() {
