@@ -46,10 +46,20 @@ var _ = Describe("JSON time intervals", func() {
 		Entry("boolean month", `true`, &MonthRange{}),
 		Entry("numeric zero day", `0`, &DayOfMonthRange{}),
 		Entry("numeric day out of range", `32`, &DayOfMonthRange{}),
+		Entry("numeric month zero", `0`, &MonthRange{}),
+		Entry("numeric month thirteen", `13`, &MonthRange{}),
+		Entry("quoted month thirteen", `"13"`, &MonthRange{}),
+		Entry("month range ending out of range", `"january:13"`, &MonthRange{}),
 		Entry("integer overflow", `99999999999999999999999999`, &YearRange{}),
 		Entry("array", `[]`, &YearRange{}),
 		Entry("object", `{}`, &YearRange{}),
 	)
+	It("rejects out-of-range months in the interval months list", func() {
+		for _, input := range []string{`[{"months":[0]}]`, `[{"months":[13]}]`} {
+			var intervals TimeIntervals
+			Expect(json.Unmarshal([]byte(input), &intervals)).To(MatchError(ContainSubstring("not a valid month")), input)
+		}
+	})
 	It("decodes complete intervals with numeric and string components identically", func() {
 		var numeric, quoted TimeIntervals
 		Expect(json.Unmarshal([]byte(`[{"years":[2026],"months":[11],"days_of_month":[2]}]`), &numeric)).To(Succeed())

@@ -15,15 +15,16 @@ type TransportWrapper interface {
 	Rewrap(stdhttp.RoundTripper) stdhttp.RoundTripper
 }
 
-// configurableTransport walks rt through TransportWrapper layers to the
-// innermost *http.Transport and returns a clone of it, plus a rewrap func that
-// re-applies the layers around a replacement, outermost layer outermost.
-func configurableTransport(rt stdhttp.RoundTripper) (*stdhttp.Transport, func(stdhttp.RoundTripper) stdhttp.RoundTripper, error) {
+// unwrapTransport walks rt through TransportWrapper layers to the innermost
+// *http.Transport and returns it, plus a rewrap func that re-applies the layers
+// around a replacement, outermost layer outermost. Callers that modify the
+// returned transport must Clone it first.
+func unwrapTransport(rt stdhttp.RoundTripper) (*stdhttp.Transport, func(stdhttp.RoundTripper) stdhttp.RoundTripper, error) {
 	var wrappers []TransportWrapper
 	for {
 		switch current := rt.(type) {
 		case *stdhttp.Transport:
-			return current.Clone(), func(inner stdhttp.RoundTripper) stdhttp.RoundTripper {
+			return current, func(inner stdhttp.RoundTripper) stdhttp.RoundTripper {
 				for i := len(wrappers) - 1; i >= 0; i-- {
 					inner = wrappers[i].Rewrap(inner)
 				}

@@ -89,6 +89,12 @@ var _ = Describe("properties file polling", func() {
 		closeWatch()
 	})
 
+	It("refuses to watch before a file has been loaded", func() {
+		GinkgoT().Setenv("COMMONS_PROPERTIES_WATCH_DURATION", "20ms")
+		store := &Properties{m: make(map[string]string)}
+		Expect(func() { store.Watch() }).To(PanicWith(MatchError("watch properties: no properties file has been loaded")))
+	})
+
 	DescribeTable("rejects invalid polling intervals", func(value string) {
 		GinkgoT().Setenv("COMMONS_PROPERTIES_WATCH_DURATION", value)
 		filename := filepath.Join(GinkgoT().TempDir(), "app.properties")

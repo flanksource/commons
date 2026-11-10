@@ -14,29 +14,23 @@ func (c *Client) ConnectTimeout(timeout time.Duration) (*Client, error) {
 		return nil, fmt.Errorf("connect timeout must be greater than zero, got %s", timeout)
 	}
 
-	base := c.httpClient.Transport
-	if base == nil {
-		base = stdhttp.DefaultTransport
-	}
-	transport, ok := base.(*stdhttp.Transport)
-	if !ok {
-		return nil, fmt.Errorf("configure connect timeout: transport %T is not an *http.Transport", base)
-	}
-
-	configured := transport.Clone()
-	dialContext := c.connectDialContext
-	if dialContext == nil {
-		dialContext = configured.DialContext
+	err := c.configureTransport(func(transport *stdhttp.Transport) {
+		dialContext := c.connectDialContext
 		if dialContext == nil {
-			dialContext = (&net.Dialer{}).DialContext
+			dialContext = transport.DialContext
+			if dialContext == nil {
+				dialContext = (&net.Dialer{}).DialContext
+			}
+			c.connectDialContext = dialContext
 		}
-		c.connectDialContext = dialContext
+		transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+			connectCtx, cancel := context.WithTimeout(ctx, timeout)
+			defer cancel()
+			return dialContext(connectCtx, network, address)
+		}
+	})
+	if err != nil {
+		return nil, fmt.Errorf("configure connect timeout: %w", err)
 	}
-	configured.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
-		connectCtx, cancel := context.WithTimeout(ctx, timeout)
-		defer cancel()
-		return dialContext(connectCtx, network, address)
-	}
-	c.httpClient.Transport = configured
 	return c, nil
 }

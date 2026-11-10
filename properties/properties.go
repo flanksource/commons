@@ -91,6 +91,7 @@ type Properties struct {
 	listeners []func(*Properties) // Change listeners
 	lock      sync.RWMutex        // Protects concurrent access
 	close     func()              // Cleanup function for file watcher
+	watchLock sync.Mutex          // Protects filename and close
 	Reload    func()              // Function to manually trigger reload
 }
 
@@ -156,10 +157,7 @@ func (p *Properties) LoadFile(filename string) error {
 	}
 	file, err := os.Open(filename)
 	if errors.Is(err, os.ErrNotExist) {
-		if p.close == nil {
-			p.filename = filename
-			p.Watch()
-		}
+		p.watchFile(filename)
 		slog.Warn(fmt.Sprintf("%s does not exist", filename))
 		p.Update(commandline.snapshot())
 		return nil
@@ -167,10 +165,7 @@ func (p *Properties) LoadFile(filename string) error {
 		return err
 	}
 	defer file.Close()
-	if p.close == nil {
-		p.filename = filename
-		p.Watch()
-	}
+	p.watchFile(filename)
 
 	slog.Info(fmt.Sprintf("Loading properties from %s", filename))
 	var props = make(map[string]string)
@@ -395,6 +390,23 @@ func (p *Properties) TimeIntervals(keys ...string) (timeinterval.TimeIntervals, 
 // sets the polling interval using Go duration syntax; 0 disables polling.
 // Invalid or negative durations cause a panic.
 func (p *Properties) Watch() func() {
+	p.watchLock.Lock()
+	defer p.watchLock.Unlock()
+	return p.watch()
+}
+
+// watchFile starts watching filename unless a watcher is already running.
+func (p *Properties) watchFile(filename string) {
+	p.watchLock.Lock()
+	defer p.watchLock.Unlock()
+	if p.close == nil {
+		p.filename = filename
+		p.watch()
+	}
+}
+
+// watch implements Watch; the caller must hold watchLock.
+func (p *Properties) watch() func() {
 	if p.close != nil {
 		return p.close
 	}
@@ -413,9 +425,12 @@ func (p *Properties) Watch() func() {
 		p.close = func() {}
 		return p.close
 	}
+	if p.filename == "" {
+		panic(errors.New("watch properties: no properties file has been loaded"))
+	}
 	slog.Info(fmt.Sprintf("Watching %s for changes", p.filename))
 	info, err := os.Stat(p.filename)
-	if p.filename == "" || (err != nil && !errors.Is(err, os.ErrNotExist)) {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		panic(fmt.Errorf("watch properties %s: %w", p.filename, err))
 	}
 	filename := p.filename

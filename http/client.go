@@ -994,14 +994,11 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 		transport = http.DefaultTransport
 	}
 	if c.tlsConfig != nil && req.Host != req.URL.Host {
-		base := c.httpClient.Transport
-		if c.baseTransport != nil {
-			base = c.baseTransport
-		}
-		isolated, rewrap, err := configurableTransport(base)
+		inner, rewrap, err := unwrapTransport(c.transportBase())
 		if err != nil {
 			return nil, fmt.Errorf("HTTP Host override requires a configurable TLS transport: %w", err)
 		}
+		isolated := inner.Clone()
 		tlsConfig := ensureTLSClientConfig(isolated)
 		tlsConfig.ServerName = req.Host
 		if hostname, _, err := net.SplitHostPort(req.Host); err == nil {
