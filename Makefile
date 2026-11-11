@@ -15,7 +15,7 @@ test:
 .PHONY: lint
 lint:
 	mkdir -p bin
-	GOBIN=$(shell realpath bin) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.10.1
+	GOBIN=$(shell realpath bin) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 	./bin/golangci-lint run
 
 .PHONY: tidy
