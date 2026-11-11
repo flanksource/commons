@@ -1004,8 +1004,21 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 		if hostname, _, err := net.SplitHostPort(req.Host); err == nil {
 			tlsConfig.ServerName = hostname
 		}
-		defer isolated.CloseIdleConnections()
-		transport = applyMiddleware(rewrap(isolated), c.transportMiddlewares...)
+		// Middleware such as Defensive clones the transport it wraps, so every
+		// per-request layer that owns connections is closed, not only isolated.
+		closers := []interface{ CloseIdleConnections() }{isolated}
+		transport = rewrap(isolated)
+		for i := len(c.transportMiddlewares) - 1; i >= 0; i-- {
+			transport = c.transportMiddlewares[i](transport)
+			if closer, ok := transport.(interface{ CloseIdleConnections() }); ok {
+				closers = append(closers, closer)
+			}
+		}
+		defer func() {
+			for _, closer := range closers {
+				closer.CloseIdleConnections()
+			}
+		}()
 	}
 	if c.curlLog {
 		transport = &curlLogTransport{base: transport}

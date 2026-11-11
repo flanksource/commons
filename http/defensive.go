@@ -105,6 +105,12 @@ func (t *defensiveRoundTripper) RoundTrip(request *stdhttp.Request) (*stdhttp.Re
 	return t.transport.RoundTrip(request)
 }
 
+// CloseIdleConnections closes the idle connections of the transport clone
+// that Defensive owns, which callers cannot reach otherwise.
+func (t *defensiveRoundTripper) CloseIdleConnections() {
+	t.transport.CloseIdleConnections()
+}
+
 func defensiveProxy(selector func(*stdhttp.Request) (*url.URL, error)) func(*stdhttp.Request) (*url.URL, error) {
 	return func(request *stdhttp.Request) (*url.URL, error) {
 		proxyURL, err := selector(request)
