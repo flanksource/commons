@@ -66,8 +66,11 @@ func (m Value[T]) Combine(other Value[T], op func(T, T) T) (Value[T], error) {
 		return Value[T]{}, err
 	}
 	result, err := m.WithAmount(op(m.amount, other.amount))
+	if err != nil {
+		return Value[T]{}, err
+	}
 	result.places = max(m.places, other.places)
-	return result, err
+	return result, nil
 }
 
 func sameCurrency[T Amount[T]](verb string, m, other Value[T]) error {
@@ -91,9 +94,11 @@ func (m Value[T]) Validate() error {
 	}
 	return nil
 }
+// String formats an uninitialized value as a visible marker instead of
+// panicking; MarshalJSON and Validate still reject it.
 func (m Value[T]) String() string {
-	if err := m.Validate(); err != nil {
-		panic(err)
+	if m.Validate() != nil {
+		return "<uninitialized Money>"
 	}
 	text := m.amount.String()
 	_, fraction, _ := strings.Cut(text, ".")
