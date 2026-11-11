@@ -124,8 +124,10 @@ var _ = Describe("Decimal extensions", func() {
 		Entry("equal with different scale", "2.0", "2.00", 0),
 		Entry("greater", "-1.00", "-1.01", 1),
 	)
-	It("panics when formatting zero-value Money", func() {
-		Expect(func() { _ = decimal.Money{}.String() }).To(PanicWith(MatchError(ContainSubstring("uninitialized Money"))))
-		Expect(func() { _ = bigdecimal.Money{}.String() }).To(PanicWith(MatchError(ContainSubstring("uninitialized Money"))))
+	It("formats zero-value Money as a visible uninitialized marker without panicking", func() {
+		const marker = "<uninitialized Money>"
+		Expect([]string{decimal.Money{}.String(), bigdecimal.Money{}.String()}).To(Equal([]string{marker, marker}))
+		_, err := decimal.Money{}.MarshalJSON()
+		Expect(err).To(MatchError(ContainSubstring("uninitialized Money")))
 	})
 })
