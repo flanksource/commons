@@ -45,6 +45,15 @@ var _ = Describe("properties file polling", func() {
 		store.close()
 		store.close()
 	})
+	It("loads a file created between the failed open and the start of watching", func() {
+		GinkgoT().Setenv("COMMONS_PROPERTIES_WATCH_DURATION", "20ms")
+		filename := filepath.Join(GinkgoT().TempDir(), "late.properties")
+		Expect(os.WriteFile(filename, []byte("server.port=9090\n"), 0600)).To(Succeed())
+		store := &Properties{m: make(map[string]string)}
+		store.watchFile(filename, nil)
+		DeferCleanup(func() { store.close() })
+		Eventually(func() string { return store.Get("server.port") }, time.Second).Should(Equal("9090"))
+	})
 	It("starts watching when the configured file has disappeared", func() {
 		GinkgoT().Setenv("COMMONS_PROPERTIES_WATCH_DURATION", "20ms")
 		filename := filepath.Join(GinkgoT().TempDir(), "removed.properties")
