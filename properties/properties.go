@@ -157,7 +157,7 @@ func (p *Properties) LoadFile(filename string) error {
 	}
 	file, err := os.Open(filename)
 	if errors.Is(err, os.ErrNotExist) {
-		p.watchFile(filename)
+		p.watchFile(filename, nil)
 		slog.Warn(fmt.Sprintf("%s does not exist", filename))
 		p.Update(commandline.snapshot())
 		return nil
@@ -165,7 +165,11 @@ func (p *Properties) LoadFile(filename string) error {
 		return err
 	}
 	defer file.Close()
-	p.watchFile(filename)
+	loaded, err := file.Stat()
+	if err != nil {
+		return fmt.Errorf("stat properties %s: %w", filename, err)
+	}
+	p.watchFile(filename, loaded)
 
 	slog.Info(fmt.Sprintf("Loading properties from %s", filename))
 	var props = make(map[string]string)
@@ -392,21 +396,27 @@ func (p *Properties) TimeIntervals(keys ...string) (timeinterval.TimeIntervals, 
 func (p *Properties) Watch() func() {
 	p.watchLock.Lock()
 	defer p.watchLock.Unlock()
-	return p.watch()
+	current, err := os.Stat(p.filename)
+	if p.filename != "" && err != nil && !errors.Is(err, os.ErrNotExist) {
+		panic(fmt.Errorf("watch properties %s: %w", p.filename, err))
+	}
+	return p.watch(current)
 }
 
 // watchFile starts watching filename unless a watcher is already running.
-func (p *Properties) watchFile(filename string) {
+// loaded describes the file contents already read, or is nil when nothing was
+// read, so the first poll loads any file that exists by then.
+func (p *Properties) watchFile(filename string, loaded os.FileInfo) {
 	p.watchLock.Lock()
 	defer p.watchLock.Unlock()
 	if p.close == nil {
 		p.filename = filename
-		p.watch()
+		p.watch(loaded)
 	}
 }
 
-// watch implements Watch; the caller must hold watchLock.
-func (p *Properties) watch() func() {
+// watch implements Watch from the baseline info; the caller must hold watchLock.
+func (p *Properties) watch(info os.FileInfo) func() {
 	if p.close != nil {
 		return p.close
 	}
@@ -429,10 +439,6 @@ func (p *Properties) watch() func() {
 		panic(errors.New("watch properties: no properties file has been loaded"))
 	}
 	slog.Info(fmt.Sprintf("Watching %s for changes", p.filename))
-	info, err := os.Stat(p.filename)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		panic(fmt.Errorf("watch properties %s: %w", p.filename, err))
-	}
 	filename := p.filename
 	stopped := make(chan struct{})
 	var once sync.Once
