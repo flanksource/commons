@@ -8,7 +8,7 @@ Use `Parse(string)` for runtime input and `MustParse(string)` for constants. Ari
 
 Both packages expose `NewMoney(MoneyOptions)`. `Amount` is a finite plain-decimal string parsed with the selected backend's rounding semantics. `Currency` must contain three uppercase letters; no currency registry or exchange-rate lookup is performed. `DecimalPlaces` is the minimum display scale from 0 to 31, not an amount rounding instruction. Money strings and JSON include the currency, such as `USD 125.00`.
 
-Money exposes `Amount()`, `Currency()`, `DecimalPlaces()`, and `Cmp(other)`. Comparisons require initialized values and the same currency. Money arithmetic and implicit precision/currency conversion are not provided. Construct Money with `NewMoney`; uninitialized values fail validation and serialization, and String formats them as `<uninitialized Money>`.
+Money exposes `Amount()`, `Currency()`, `DecimalPlaces()`, and `Cmp(other)`. Comparisons require initialized values and the same currency. Money arithmetic and implicit precision/currency conversion are not provided. Construct Money with `NewMoney`; uninitialized values fail validation and serialization, and String formats them as an empty string.
 
 Run the examples and regression suite from the Commons root:
 
