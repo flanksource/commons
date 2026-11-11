@@ -94,11 +94,11 @@ func (m Value[T]) Validate() error {
 	}
 	return nil
 }
-// String formats an uninitialized value as a visible marker instead of
-// panicking; MarshalJSON and Validate still reject it.
+// String formats an uninitialized value as an empty string; MarshalJSON and
+// Validate still reject it.
 func (m Value[T]) String() string {
 	if m.Validate() != nil {
-		return "<uninitialized Money>"
+		return ""
 	}
 	text := m.amount.String()
 	_, fraction, _ := strings.Cut(text, ".")
