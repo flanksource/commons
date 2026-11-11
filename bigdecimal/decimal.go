@@ -24,20 +24,10 @@ func (d Decimal) String() string {
 }
 
 // Compare returns -1, 0 or 1 as d is less than, equal to or greater than
-// other. It panics when either operand is NaN, which has no order; check
-// IsNaN first, or use the package-level Compare for upstream NaN ordering.
+// other, using the upstream total order: NaN is less than every other value
+// and equal to NaN.
 func (d Decimal) Compare(other Decimal) int {
-	r := d.Decimal.Cmp(other.Decimal)
-	if r.Less() {
-		return -1
-	}
-	if r.Greater() {
-		return 1
-	}
-	if r.Equal() {
-		return 0
-	}
-	panic("cannot compare NaN")
+	return upstream.Compare(d.Decimal, other.Decimal)
 }
 func (d Decimal) Format(state fmt.State, verb rune) {
 	decimalformat.Presentation{Text: d.String(), Fixed: func(p int) string { return decimalformat.Fixed(d.Decimal, p) }}.Format(state, verb)
