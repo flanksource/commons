@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net"
@@ -9,6 +10,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"sync"
+	"time"
 
 	"github.com/flanksource/commons/http/middlewares"
 	. "github.com/onsi/ginkgo/v2"
@@ -285,6 +287,32 @@ var _ = Describe("Defensive HTTP client", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(body).To(Equal("alice"))
 		})
+	})
+
+	It("closes the defensive per-request connection after a Host-override request", func() {
+		closed := make(chan struct{}, 1)
+		server := httptest.NewUnstartedServer(stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+			_, _ = w.Write([]byte(r.Host))
+		}))
+		server.Config.ConnState = func(_ net.Conn, state stdhttp.ConnState) {
+			if state == stdhttp.StateClosed {
+				closed <- struct{}{}
+			}
+		}
+		server.StartTLS()
+		DeferCleanup(server.Close)
+		const overriddenHost = "example.com"
+		client, err := NewClient().TLSConfig(TLSConfig{
+			CA: string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})),
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		response, err := client.Use(Defensive(DefensiveOptions{Localhost: true})).BufferBody(1 << 20).
+			R(context.Background()).Header("Host", overriddenHost).Get(server.URL)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(response.AsString()).To(Equal(overriddenHost))
+		Eventually(closed, time.Second).Should(Receive())
 	})
 
 	It("revalidates an enabled redirect before following it", func() {

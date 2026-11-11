@@ -304,6 +304,8 @@ func jsonLogger(config TraceConfig, verbose logger.Verbose, rt http.RoundTripper
 	if len(form) > 0 {
 		kv = append(kv, "form", redactedValueMap(form))
 	}
+	// Unlike HAR capture, trace logs have no sensitive-capture mode: every body,
+	// error and message logged below always has echoed credentials redacted.
 	if config.Body && reqBody != "" {
 		kv = append(kv, "body", redactBody(logger.RedactAuthorization(reqBody, req.Header.Get("Authorization"))))
 	}
