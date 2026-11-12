@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -33,12 +34,89 @@ func RedactAuthorization(text, authorization string) string {
 			}
 		}
 	}
+	if json.Valid([]byte(text)) {
+		return redactJSONCredentials(text, credentials)
+	}
 	for _, credential := range credentials {
 		for _, form := range serializedCredentialForms(credential) {
 			text = redactCredential(text, form)
 		}
 	}
 	return text
+}
+
+// redactJSONCredentials redacts credentials inside decoded string values and
+// bare tokens without touching delimiters, so the result stays valid JSON and
+// structured secret scrubbing still applies to it.
+func redactJSONCredentials(text string, credentials []string) string {
+	var out strings.Builder
+	for i := 0; i < len(text); {
+		if text[i] == '"' {
+			end := jsonStringEnd(text, i)
+			out.WriteString(redactJSONString(text[i:end], credentials))
+			i = end
+			continue
+		}
+		start := i
+		for i < len(text) && text[i] != '"' && !isJSONSeparator(text[i]) {
+			i++
+		}
+		if start == i {
+			out.WriteByte(text[i])
+			i++
+			continue
+		}
+		token := text[start:i]
+		if redactAll(token, credentials) != token {
+			out.WriteString(strconv.Quote(redactedCredential))
+		} else {
+			out.WriteString(token)
+		}
+	}
+	return out.String()
+}
+
+// jsonStringEnd returns the index just past the closing quote of the string
+// literal starting at text[start]; text must be valid JSON.
+func jsonStringEnd(text string, start int) int {
+	for i := start + 1; i < len(text); i++ {
+		switch text[i] {
+		case '\\':
+			i++
+		case '"':
+			return i + 1
+		}
+	}
+	panic(fmt.Errorf("unterminated JSON string at offset %d", start))
+}
+
+func redactJSONString(literal string, credentials []string) string {
+	var decoded string
+	if err := json.Unmarshal([]byte(literal), &decoded); err != nil {
+		panic(fmt.Errorf("decode JSON string %s: %w", literal, err))
+	}
+	redacted := redactAll(decoded, credentials)
+	if redacted == decoded {
+		return literal
+	}
+	var encoded bytes.Buffer
+	encoder := json.NewEncoder(&encoded)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(redacted); err != nil {
+		panic(fmt.Errorf("JSON-encode redacted string: %w", err))
+	}
+	return strings.TrimSuffix(encoded.String(), "\n")
+}
+
+func redactAll(text string, credentials []string) string {
+	for _, credential := range credentials {
+		text = redactCredential(text, credential)
+	}
+	return text
+}
+
+func isJSONSeparator(b byte) bool {
+	return strings.IndexByte("{}[]:, \t\r\n", b) >= 0
 }
 
 // serializedCredentialForms returns the credential as it can appear in text:
