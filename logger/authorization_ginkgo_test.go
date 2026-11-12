@@ -2,6 +2,7 @@ package logger
 
 import (
 	"encoding/base64"
+	"encoding/json"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -28,4 +29,15 @@ var _ = DescribeTable("redacting echoed authorization credentials", func(authori
 	Entry("JSON-escaped quote in basic password", basicAuthorization(`api:abc"def`), `{"error":"bad password abc\"def"}`, `{"error":"bad password [REDACTED]"}`),
 	Entry("JSON-escaped backslash in bearer token", `Bearer to\ken-value`, `{"token":"to\\ken-value"}`, `{"token":"[REDACTED]"}`),
 	Entry("JSON HTML-escaped basic password", basicAuthorization("api:p<ss>word"), `{"error":"bad password p<ss>word"}`, `{"error":"bad password [REDACTED]"}`),
+	Entry("JSON delimiter as the whole basic password", basicAuthorization(`api:"`), `{"echo":"\"","password":"other-secret"}`, `{"echo":"[REDACTED]","password":"other-secret"}`),
+	Entry("JSON delimiter inside a longer basic password", basicAuthorization(`api:ab"cd`), `{"echo":"ab\"cd","other":"x"}`, `{"echo":"[REDACTED]","other":"x"}`),
+	Entry("JSON backslash as the whole bearer token", `Bearer \`, `{"a":"\\","b":"c"}`, `{"a":"[REDACTED]","b":"c"}`),
+	Entry("JSON numeric credential", "Bearer 12345678", `{"pin": 12345678, "ok": 1}`, `{"pin": "[REDACTED]", "ok": 1}`),
+	Entry("JSON credential used as an object key", "Bearer example-private-token", `{"example-private-token":true}`, `{"[REDACTED]":true}`),
+	Entry("JSON whitespace and nesting preserved", "Bearer example-private-token", "{\n  \"a\": [\"example-private-token\", {\"b\": null}]\n}", "{\n  \"a\": [\"[REDACTED]\", {\"b\": null}]\n}"),
 )
+
+var _ = It("keeps redacted JSON parseable", func() {
+	redacted := RedactAuthorization(`{"echo":"\"","password":"other-secret"}`, basicAuthorization(`api:"`))
+	Expect(json.Valid([]byte(redacted))).To(BeTrue())
+})

@@ -169,7 +169,9 @@ func (p *Properties) LoadFile(filename string) error {
 	if err != nil {
 		return fmt.Errorf("stat properties %s: %w", filename, err)
 	}
-	p.watchFile(filename, loaded)
+	// Start polling only after the initial load is applied, so a replacement
+	// detected against the pre-read stat can never be overwritten by older contents.
+	defer p.watchFile(filename, loaded)
 
 	slog.Info(fmt.Sprintf("Loading properties from %s", filename))
 	var props = make(map[string]string)
@@ -396,6 +398,9 @@ func (p *Properties) TimeIntervals(keys ...string) (timeinterval.TimeIntervals, 
 func (p *Properties) Watch() func() {
 	p.watchLock.Lock()
 	defer p.watchLock.Unlock()
+	if p.close != nil {
+		return p.close
+	}
 	current, err := os.Stat(p.filename)
 	if p.filename != "" && err != nil && !errors.Is(err, os.ErrNotExist) {
 		panic(fmt.Errorf("watch properties %s: %w", p.filename, err))

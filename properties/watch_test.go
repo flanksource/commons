@@ -54,6 +54,32 @@ var _ = Describe("properties file polling", func() {
 		DeferCleanup(func() { store.close() })
 		Eventually(func() string { return store.Get("server.port") }, time.Second).Should(Equal("9090"))
 	})
+	It("applies the initial load before the watcher can start", func() {
+		GinkgoT().Setenv("COMMONS_PROPERTIES_WATCH_DURATION", "20ms")
+		filename := filepath.Join(GinkgoT().TempDir(), "app.properties")
+		Expect(os.WriteFile(filename, []byte("server.port=8080\n"), 0600)).To(Succeed())
+		store := &Properties{m: make(map[string]string)}
+		watchingDuringApply := false
+		store.RegisterListener(func(*Properties) { watchingDuringApply = store.close != nil })
+		Expect(store.LoadFile(filename)).To(Succeed())
+		DeferCleanup(func() { store.close() })
+		Expect(watchingDuringApply).To(BeFalse())
+		Expect(store.close).NotTo(BeNil())
+	})
+	It("returns the running watcher without statting a file that became inaccessible", func() {
+		GinkgoT().Setenv("COMMONS_PROPERTIES_WATCH_DURATION", "20ms")
+		dir := GinkgoT().TempDir()
+		filename := filepath.Join(dir, "app.properties")
+		Expect(os.WriteFile(filename, []byte("server.port=8080\n"), 0600)).To(Succeed())
+		store := &Properties{m: make(map[string]string)}
+		Expect(store.LoadFile(filename)).To(Succeed())
+		stop := store.Watch()
+		DeferCleanup(stop)
+		store.watchLock.Lock()
+		store.filename = filepath.Join(filename, "child")
+		store.watchLock.Unlock()
+		Expect(func() { store.Watch() }).NotTo(Panic())
+	})
 	It("starts watching when the configured file has disappeared", func() {
 		GinkgoT().Setenv("COMMONS_PROPERTIES_WATCH_DURATION", "20ms")
 		filename := filepath.Join(GinkgoT().TempDir(), "removed.properties")

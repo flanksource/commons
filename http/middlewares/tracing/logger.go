@@ -334,7 +334,7 @@ func jsonLogger(config TraceConfig, verbose logger.Verbose, rt http.RoundTripper
 			kv = append(kv, "responseBodyTruncated", true)
 		}
 		if readErr != nil {
-			kv = append(kv, "responseBodyReadError", readErr.Error())
+			kv = append(kv, "responseBodyReadError", logger.RedactAuthorization(logger.StripSecrets(readErr.Error()), req.Header.Get("Authorization")))
 		}
 	}
 
