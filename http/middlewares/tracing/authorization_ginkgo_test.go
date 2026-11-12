@@ -3,6 +3,7 @@ package tracing
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net/http"
 
@@ -42,3 +43,23 @@ var _ = DescribeTable("HTTP logging of echoed credentials", func(structured, res
 	Entry("JSON response bodies", true, true, "Bearer example-private-token"),
 	Entry("basic errors", false, false, "Basic YXBpOmV4YW1wbGUtcHJpdmF0ZS10b2tlbg=="),
 )
+
+type failingReader struct{ err error }
+
+func (r failingReader) Read([]byte) (int, error) { return 0, r.err }
+
+var _ = It("redacts credentials echoed by response body read errors in JSON logs", func() {
+	var output bytes.Buffer
+	log := logger.NewWithWriter(&output)
+	ctx := commonscontext.NewContext(context.Background(), commonscontext.WithLogger(log))
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://example.test", nil)
+	Expect(err).NotTo(HaveOccurred())
+	request.Header.Set("Authorization", "Bearer example-private-token")
+	transport := middlewares.RoundTripperFunc(func(*http.Request) (*http.Response, error) {
+		readErr := errors.New("stream reset while sending example-private-token")
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: io.NopCloser(failingReader{err: readErr})}, nil
+	})
+	_, err = jsonLogger(TraceConfig{AccessLog: true, Response: true}, nil, transport, request)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(output.String()).To(SatisfyAll(ContainSubstring("stream reset"), Not(ContainSubstring("example-private-token"))))
+})
