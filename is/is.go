@@ -13,7 +13,10 @@ func Slice(arg interface{}) bool {
 
 // TTY returns true if running inside an interactive terminal
 func TTY() bool {
-	fi, _ := os.Stdout.Stat()
+	fi, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
 	return (fi.Mode() & os.ModeCharDevice) != 0
 }
 
