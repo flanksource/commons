@@ -33,13 +33,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
 
-      - uses: flanksource/gavel@43a9189b99e71ed928f418e01cd34aa797c2c0e0 # main
+      - uses: flanksource/gavel@e3f0a97bcb61ec1d0f7b511d4b400578f4c635d9 # main
         with:
           args: test
           version: latest
           json-file: gavel-results.json
           html-file: gavel-results.html
-          summary-file: gavel-summary.md
           artifact-name: gavel-results
           comment: "true"
           comment-header: gavel
