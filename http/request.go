@@ -367,6 +367,7 @@ func (r *Request) doWithStrategy() (*Response, error) {
 			return response, nil
 		}
 
+		discardResponseBody(response)
 		if delay > 0 {
 			select {
 			case <-r.ctx.Done():
@@ -378,6 +379,20 @@ func (r *Request) doWithStrategy() (*Response, error) {
 			return nil, err
 		}
 	}
+}
+
+// maxDiscardedBodyBytes bounds how much of a retried response is drained so the
+// connection can be reused; anything larger is abandoned with the connection.
+const maxDiscardedBodyBytes = 64 << 10
+
+// discardResponseBody drains (bounded) and closes the body of a response that
+// is being replaced by a retry, so the attempt does not leak its connection.
+func discardResponseBody(response *Response) {
+	if response == nil || response.Response == nil || response.Body == nil {
+		return
+	}
+	_, _ = io.CopyN(io.Discard, response.Body, maxDiscardedBodyBytes)
+	_ = response.Body.Close()
 }
 
 func (r *Request) HeaderMap() map[string]string {
