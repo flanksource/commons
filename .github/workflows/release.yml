@@ -43,7 +43,7 @@ jobs:
         uses: buildjet/setup-go@555ce355a95ff01018ffcf8fbbd9c44654db8374 # v5.0.2
         with:
           go-version: v1.25.x
-      - uses: buildjet/cache@2bbce90d3097805dadebea12a89c47be69eb1b64 # v4.0.0
+      - uses: buildjet/cache@3e70d19e31d6a8030aeddf6ed8dbe601f94d09f4 # v4.0.2
         with:
           path: |
             ~/go/pkg/mod
