@@ -32,6 +32,38 @@ The transport configuration is `AWSSigv4Config`:
 
 The default transport buffers and rewinds request bodies, including bodies without `GetBody`, before forwarding them. Body-read errors are returned. Streaming callers can set `UnsignedPayload`; this is an explicit signing policy, never a fallback after a read failure. S3 receives `X-Amz-Content-Sha256`. Other services retain their existing header behavior.
 
+## SDK-free credential providers
+
+Each provider implements `CredentialsProvider`, returns an error rather than empty credentials, and composes with `NewCredentialsCache` for expiry-aware refresh. All take an options struct and use the standard library `net/http` (the commons HTTP client imports this package, so it cannot be used here); pass `HTTPClient` to customise transport, proxies or timeouts.
+
+- `NewAssumeRoleProvider(AssumeRoleOptions)` calls STS `AssumeRole` through the Query API (`POST https://sts.<region>.amazonaws.com/`, `Version=2011-06-15`), signed with SigV4 for service `sts` using the `Base` provider. `Region`, `Base`, `RoleARN` and `SessionName` are required; `ExternalID` and `Duration` (sent as `DurationSeconds`) are optional. `Endpoint` overrides the STS URL, for example a LocalStack address.
+- `NewWebIdentityProvider(WebIdentityOptions)` calls the unsigned `AssumeRoleWithWebIdentity`. `TokenFile`, `RoleARN` and `SessionName` default to `AWS_WEB_IDENTITY_TOKEN_FILE`, `AWS_ROLE_ARN` and `AWS_ROLE_SESSION_NAME`. The token file is re-read on every retrieval because projected tokens rotate. When no session name is configured a unique `commons-awssigv4-<nanoseconds>` name is generated.
+- `NewIMDSProvider(IMDSOptions)` reads EC2 instance-role credentials with IMDSv2 only: `PUT /latest/api/token`, then `GET /latest/meta-data/iam/security-credentials/` and `/<role>`. There is no IMDSv1 fallback. `Endpoint` defaults to `AWS_EC2_METADATA_SERVICE_ENDPOINT`, then `http://169.254.169.254`; `AWS_EC2_METADATA_DISABLED=true` makes it fail. The default client has a one second connect timeout.
+- `Chain(providers...)` returns the first success. When every provider fails, the error is an `errors.Join` of all failures, each labelled with its position and type, so `errors.Is` and `errors.As` still see the individual causes.
+- `DefaultChain(region, opts...)` is a cached `Chain` of `EnvironmentProvider`, `WebIdentityProvider` (only when both `AWS_WEB_IDENTITY_TOKEN_FILE` and `AWS_ROLE_ARN` are set) and `IMDSProvider`. Options are `WithHTTPClient`, `WithSTSEndpoint` and `WithIMDSEndpoint`.
+
+STS failures are returned as `*STSError` carrying `StatusCode`, `Code`, `Message` and `RequestID`.
+
+```go
+base := awssigv4.DefaultChain("us-east-1")
+assumed := awssigv4.NewAssumeRoleProvider(awssigv4.AssumeRoleOptions{
+    Region:      "us-east-1",
+    Base:        base,
+    RoleARN:     "arn:aws:iam::123456789012:role/example",
+    SessionName: "example-session",
+    Duration:    time.Hour,
+})
+client := commonshttp.NewClient().AWSAuthSigV4(awssigv4.Config{
+    Region:      "us-east-1",
+    Credentials: awssigv4.NewCredentialsCache(assumed),
+}).AWSService("s3")
+
+var stsErr *awssigv4.STSError
+if _, err := assumed.Retrieve(ctx); errors.As(err, &stsErr) {
+    log.Printf("STS rejected the request: %s: %s", stsErr.Code, stsErr.Message)
+}
+```
+
 ## Adapt an AWS SDK provider
 
 Applications can keep their SDK credential chain and adapt its result at the boundary. Given `sdkProvider aws.CredentialsProvider`:
@@ -64,6 +96,8 @@ GOWORK=off go test ./http/middlewares/awssigv4 -count=1 -v
 ```
 
 The separate `sdkcompat` module compares 288 requests with the real SDK signer and asserts identical headers, host, and canonical query. It covers GET/POST, repeated and empty query parameters, reserved query characters, Unicode and escaped paths, S3 and other services, session credentials, and empty/nonempty bodies. The SDK module is excluded from root-module dependency discovery.
+
+The same module cross-checks `AssumeRoleProvider` and `WebIdentityProvider` against the SDK's `sts` client, pointed at a recording server. The form-encoded request bodies (`Action`, `Version`, `RoleArn`, `RoleSessionName`, `ExternalId`, `DurationSeconds`, `WebIdentityToken`) and content type must be identical, the AssumeRole request must be signed with an `sts` credential scope, the web-identity request must be unsigned, and both must parse to the same credentials as the SDK. Signatures themselves are not compared for these calls because the SDK adds its own signed headers.
 
 The test module's `go.work` selects the root checkout, so the cross-check tests the current signer without adding SDK dependencies to the root module. From the repository root, run:
 

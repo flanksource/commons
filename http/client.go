@@ -56,6 +56,7 @@ import (
 	"github.com/flanksource/commons/har"
 	"github.com/flanksource/commons/http/middlewares"
 	"github.com/flanksource/commons/http/middlewares/awssigv4"
+	"github.com/flanksource/commons/http/middlewares/bearer"
 	"github.com/flanksource/commons/http/middlewares/oauth"
 	"github.com/flanksource/commons/http/middlewares/timing"
 	"github.com/flanksource/commons/http/middlewares/tracing"
@@ -551,6 +552,16 @@ func (c *Client) OAuth(config oauth.OauthConfig) *Client {
 	// Installed outside the HAR middlewares (not via Use, which installs
 	// around the transport) so HAR captures the Authorization header.
 	c.authMiddlewares = append(c.authMiddlewares, oauth.NewOauthTransport(config).RoundTripper)
+	return c
+}
+
+// BearerToken authenticates every request with "Authorization: Bearer <token>"
+// from src (e.g. an azuread credential or golang.org/x/oauth2/google
+// credentials). A request that already has an Authorization header fails.
+func (c *Client) BearerToken(src bearer.TokenSource) *Client {
+	// Installed outside the HAR middlewares, like OAuth, so HAR captures
+	// (and redacts) the Authorization header.
+	c.authMiddlewares = append(c.authMiddlewares, bearer.New(src))
 	return c
 }
 
