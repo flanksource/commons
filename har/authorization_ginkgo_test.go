@@ -1,4 +1,4 @@
-package har
+package har_test
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 
+	"github.com/flanksource/commons/har"
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -19,9 +20,9 @@ var _ = ginkgo.DescribeTable("HAR capture of echoed credentials", func(sensitive
 		_, _ = io.WriteString(w, body)
 	}))
 	ginkgo.DeferCleanup(server.Close)
-	config := DefaultConfig()
+	config := har.DefaultConfig()
 	config.CaptureSensitive = sensitive
-	collector := NewCollector(config)
+	collector := har.NewCollector(config)
 	client := &http.Client{Transport: collector.Middleware()(http.DefaultTransport)}
 	request, err := http.NewRequestWithContext(context.Background(), http.MethodPost, server.URL, strings.NewReader(body))
 	Expect(err).NotTo(HaveOccurred())
