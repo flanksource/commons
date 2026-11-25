@@ -56,7 +56,8 @@ func WithIMDSEndpoint(endpoint string) DefaultChainOption {
 }
 
 // DefaultChain resolves credentials from the environment, then web identity (only when AWS_WEB_IDENTITY_TOKEN_FILE
-// and AWS_ROLE_ARN are set), then IMDS. The result is expiry-aware.
+// and AWS_ROLE_ARN are set), then container credentials (only when AWS_CONTAINER_CREDENTIALS_RELATIVE_URI or
+// AWS_CONTAINER_CREDENTIALS_FULL_URI is set), then IMDS. The result is expiry-aware.
 func DefaultChain(region string, opts ...DefaultChainOption) *CredentialsCache {
 	var o DefaultChainOptions
 	for _, opt := range opts {
@@ -65,6 +66,9 @@ func DefaultChain(region string, opts ...DefaultChainOption) *CredentialsCache {
 	providers := []CredentialsProvider{EnvironmentProvider{}}
 	if webIdentityConfigured() {
 		providers = append(providers, NewWebIdentityProvider(WebIdentityOptions{Region: region, Endpoint: o.STSEndpoint, HTTPClient: o.HTTPClient}))
+	}
+	if containerConfigured() {
+		providers = append(providers, NewContainerProvider(ContainerOptions{HTTPClient: o.HTTPClient}))
 	}
 	providers = append(providers, NewIMDSProvider(IMDSOptions{Endpoint: o.IMDSEndpoint, HTTPClient: o.HTTPClient}))
 	return NewCredentialsCache(Chain(providers...))
