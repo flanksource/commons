@@ -920,6 +920,18 @@ func (c *Client) RoundTripper() http.RoundTripper {
 	return c
 }
 
+// joinHost rebuilds a URL host from a hostname and optional port, bracketing
+// IPv6 literals and never leaving a dangling ":" when the port is empty.
+func joinHost(host, port string) string {
+	if port != "" {
+		return net.JoinHostPort(host, port)
+	}
+	if strings.Contains(host, ":") {
+		return "[" + host + "]"
+	}
+	return host
+}
+
 func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 	var host string
 	if r.client.connectTo != "" {
@@ -944,7 +956,7 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 	}
 
 	uri := *r.url
-	uri.Host = fmt.Sprintf("%s:%s", host, uri.Port())
+	uri.Host = joinHost(host, uri.Port())
 	req, err := http.NewRequestWithContext(r.ctx, r.method, uri.String(), r.body)
 	if err != nil {
 		return nil, err
