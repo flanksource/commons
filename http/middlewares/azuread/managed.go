@@ -35,6 +35,12 @@ type ManagedIdentity struct {
 	HTTPClient *http.Client
 }
 
+// defaultManagedClient bypasses environment proxies: Azure requires IMDS requests to skip them.
+var defaultManagedClient = &http.Client{
+	Timeout:   managedTimeout,
+	Transport: &http.Transport{Proxy: nil, IdleConnTimeout: 30 * time.Second},
+}
+
 func (m ManagedIdentity) Token(ctx context.Context, scope string) (*oauth2.Token, error) {
 	resource := strings.TrimSuffix(scope, "/.default")
 	if resource == "" {
@@ -46,7 +52,7 @@ func (m ManagedIdentity) Token(ctx context.Context, scope string) (*oauth2.Token
 	}
 	client := m.HTTPClient
 	if client == nil {
-		client = &http.Client{Timeout: managedTimeout}
+		client = defaultManagedClient
 	}
 	return doTokenRequest(client, req)
 }

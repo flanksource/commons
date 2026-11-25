@@ -60,7 +60,11 @@ func (c stsCall) url() (string, error) {
 	if c.Endpoint != "" {
 		return c.Endpoint, nil
 	}
-	return "https://sts." + c.Region + ".amazonaws.com/", nil
+	suffix := "amazonaws.com"
+	if strings.HasPrefix(c.Region, "cn-") {
+		suffix = "amazonaws.com.cn"
+	}
+	return "https://sts." + c.Region + "." + suffix + "/", nil
 }
 
 func (c stsCall) do(ctx context.Context) (Credentials, error) {

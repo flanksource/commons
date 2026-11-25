@@ -14,7 +14,10 @@ jobs:
   # was blocked by GitHub for a ToS violation on 2026-06-25, which failed every
   # release from then on while resolving actions ("Repository access blocked").
   create-release:
-    permissions: {}
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
     uses: flanksource/action-workflows/.github/workflows/create-release.yml@6dc0bcd1c064bb3aaadd05bf6a4ac5b6cd40125a # main
     secrets:
       token: ${{ secrets.FLANKBOT }}

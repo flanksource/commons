@@ -30,6 +30,8 @@ var _ = Describe("Chain", func() {
 	})
 
 	It("joins every provider error naming each provider when all fail", func() {
+		GinkgoT().Setenv("AWS_ACCESS_KEY_ID", "")
+		GinkgoT().Setenv("AWS_SECRET_ACCESS_KEY", "")
 		errA, errB := errors.New("env missing"), errors.New("imds unreachable")
 		_, err := Chain(failing(errA), EnvironmentProvider{}, failing(errB)).Retrieve(context.Background())
 		Expect(err).To(HaveOccurred())

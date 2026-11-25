@@ -44,6 +44,7 @@ func (p *IMDSProvider) Retrieve(ctx context.Context) (Credentials, error) {
 	client := p.options.HTTPClient
 	if client == nil {
 		client = defaultIMDSClient()
+		defer client.CloseIdleConnections()
 	}
 	token, err := imdsRequest(ctx, client, http.MethodPut, endpoint+"/latest/api/token", map[string]string{"X-aws-ec2-metadata-token-ttl-seconds": imdsTokenTTL})
 	if err != nil {
