@@ -28,7 +28,7 @@ type TokenSource interface {
 func New(src TokenSource) middlewares.Middleware {
 	var cached oauth2.TokenSource
 	if src != nil {
-		cached = oauth2.ReuseTokenSource(nil, src)
+		cached = oauth2.ReuseTokenSource(nil, validatedSource{src})
 	}
 	return func(next http.RoundTripper) http.RoundTripper {
 		return middlewares.RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
@@ -44,6 +44,20 @@ func New(src TokenSource) middlewares.Middleware {
 			return next.RoundTrip(clone)
 		})
 	}
+}
+
+// validatedSource rejects nil tokens before ReuseTokenSource can dereference them.
+type validatedSource struct{ TokenSource }
+
+func (v validatedSource) Token() (*oauth2.Token, error) {
+	token, err := v.TokenSource.Token()
+	if err != nil {
+		return nil, err
+	}
+	if token == nil {
+		return nil, errors.New("token source returned a nil token")
+	}
+	return token, nil
 }
 
 func authorization(src oauth2.TokenSource, req *http.Request) (string, error) {

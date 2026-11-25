@@ -1,6 +1,7 @@
 package help
 
 import (
+	"html"
 	"strings"
 
 	"github.com/flanksource/clicky/api"
@@ -58,6 +59,8 @@ var _ = Describe("Topics", func() {
 var _ = Describe("Help", func() {
 	It("documents every knob in every rendering", func() {
 		for format, out := range renderings(Help()) {
+			// Markdown backslash-escapes <, > and _, and HTML entity-escapes them; compare the unescaped text.
+			out = html.UnescapeString(strings.ReplaceAll(out, `\`, ""))
 			for _, key := range documentedKeys {
 				Expect(out).To(ContainSubstring(key), "%s missing from %s output", key, format)
 			}

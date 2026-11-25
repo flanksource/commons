@@ -74,8 +74,12 @@ func (p *ContainerProvider) Retrieve(ctx context.Context) (Credentials, error) {
 	client := p.options.HTTPClient
 	if client == nil {
 		client = defaultIMDSClient()
+		defer client.CloseIdleConnections()
 	}
-	response, err := client.Do(request)
+	// Copy so the caller-owned client is not mutated; a redirect could downgrade to http and leak the token.
+	noRedirect := *client
+	noRedirect.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	response, err := noRedirect.Do(request)
 	if err != nil {
 		return Credentials{}, fmt.Errorf("container credentials request: %w", err)
 	}
@@ -92,6 +96,9 @@ func (p *ContainerProvider) Retrieve(ctx context.Context) (Credentials, error) {
 
 func (p *ContainerProvider) targetURL() (string, error) {
 	if relative := os.Getenv(envContainerRelativeURI); relative != "" {
+		if !strings.HasPrefix(relative, "/") || strings.HasPrefix(relative, "//") || strings.ContainsAny(relative, "@\\") {
+			return "", fmt.Errorf("%s: must be an absolute path without scheme or authority, got %q", envContainerRelativeURI, relative)
+		}
 		return strings.TrimRight(firstNonEmpty(p.options.Endpoint, defaultContainerEndpoint), "/") + relative, nil
 	}
 	full := os.Getenv(envContainerFullURI)

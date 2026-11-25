@@ -1123,6 +1123,9 @@ func (c *Client) checkRedirectFunc() func(req *http.Request, via []*http.Request
 		if len(via) >= c.maxRedirects {
 			return fmt.Errorf("stopped after %d redirects", c.maxRedirects)
 		}
+		if req.URL.Scheme == "http" && req.Header.Get("Authorization") != "" && !isLoopbackHost(req.URL.Hostname()) {
+			return fmt.Errorf("refusing to follow redirect to %s: it would send credentials over cleartext HTTP", req.URL.Redacted())
+		}
 
 		return nil
 	}

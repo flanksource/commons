@@ -391,9 +391,25 @@ func discardResponseBody(response *Response) {
 	if response == nil || response.Response == nil || response.Body == nil {
 		return
 	}
-	_, _ = io.CopyN(io.Discard, response.Body, maxDiscardedBodyBytes)
-	_ = response.Body.Close()
+	body := response.Body
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = io.CopyN(io.Discard, body, maxDiscardedBodyBytes)
+	}()
+	timer := time.NewTimer(discardBodyTimeout)
+	defer timer.Stop()
+	select {
+	case <-done:
+	case <-timer.C:
+		// A stalled body: closing unblocks the pending read.
+	}
+	_ = body.Close()
+	<-done
 }
+
+// discardBodyTimeout bounds how long a retry waits for a stalled body to drain.
+const discardBodyTimeout = 250 * time.Millisecond
 
 func (r *Request) HeaderMap() map[string]string {
 	headers := make(map[string]string)

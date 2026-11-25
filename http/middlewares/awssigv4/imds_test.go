@@ -14,6 +14,10 @@ import (
 var _ = Describe("IMDSProvider", func() {
 	const token = "imds-session-token"
 
+	BeforeEach(func() {
+		GinkgoT().Setenv("AWS_EC2_METADATA_DISABLED", "")
+	})
+
 	newIMDS := func(expires time.Time, tokenStatus int, credsStatus int) (*httptest.Server, *[]string) {
 		var seen []string
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
