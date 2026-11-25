@@ -152,6 +152,10 @@ type Client struct {
 	// HAR middlewares, so headers they add are captured in HAR entries.
 	authMiddlewares []middlewares.Middleware
 
+	// bearerConfigured records that BearerToken was called; it cannot be
+	// combined with AWS SigV4, which would replace the Authorization header.
+	bearerConfigured bool
+
 	// retryConfig specifies the configuration for retries.
 	retryConfig RetryConfig
 
@@ -562,6 +566,7 @@ func (c *Client) BearerToken(src bearer.TokenSource) *Client {
 	// Installed outside the HAR middlewares, like OAuth, so HAR captures
 	// (and redacts) the Authorization header.
 	c.authMiddlewares = append(c.authMiddlewares, bearer.New(src))
+	c.bearerConfigured = true
 	return c
 }
 
@@ -948,6 +953,10 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 				r = r.Header("Host", r.url.Hostname())
 			}
 		}
+	}
+
+	if c.bearerConfigured && c.authConfig != nil && c.authConfig.AWSCredentialsProvider != nil {
+		return nil, fmt.Errorf("BearerToken cannot be combined with AWSAuthSigV4: SigV4 signing would replace the Authorization header")
 	}
 
 	if r.url.Scheme == "https" && c.tlsConfig == nil {
