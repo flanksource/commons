@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/flanksource/clicky/api"
+	"github.com/flanksource/commons/http/internal/httppolicy"
 	"github.com/flanksource/commons/http/middlewares"
 	"github.com/flanksource/commons/logger"
 	"golang.org/x/oauth2"
@@ -86,6 +87,9 @@ func (t *oauthRoundTripper) trace(format string, args ...any) {
 
 func (t *oauthRoundTripper) RoundTripper(rt netHttp.RoundTripper) netHttp.RoundTripper {
 	return middlewares.RoundTripperFunc(func(ogRequest *netHttp.Request) (*netHttp.Response, error) {
+		if !httppolicy.AllowsCredentials(ogRequest.URL) {
+			return nil, fmt.Errorf("oauth: sending credentials requires HTTPS except on loopback HTTP endpoints (refusing %s)", ogRequest.URL.Redacted())
+		}
 		config := clientcredentials.Config{
 			ClientID:       t.ClientID,
 			ClientSecret:   t.ClientSecret,

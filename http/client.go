@@ -523,6 +523,8 @@ func (c *Client) AWSService(service string) *Client {
 }
 
 // AWSEndpoint sets a custom AWS endpoint (e.g., for LocalStack testing).
+// Requests are sent to it over HTTP, so signed requests are refused unless it
+// is a loopback host.
 func (c *Client) AWSEndpoint(endpoint string) *Client {
 	if c.authConfig == nil {
 		c.authConfig = &AuthConfig{}

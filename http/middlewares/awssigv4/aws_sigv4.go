@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/flanksource/commons/http/internal/httppolicy"
 )
 
 type AWSSigv4Config struct {
@@ -72,6 +74,9 @@ func (t *awsSigv4RoundTripper) RoundTrip(req *http.Request) (*http.Response, err
 	if t.config.Endpoint != "" {
 		req.URL.Scheme = "http"
 		req.URL.Host = t.config.Endpoint
+	}
+	if !httppolicy.AllowsCredentials(req.URL) {
+		return nil, fmt.Errorf("awssigv4: sending credentials requires HTTPS except on loopback HTTP endpoints (refusing %s)", req.URL.Redacted())
 	}
 
 	credentials, err := t.config.CredentialsProvider.Retrieve(req.Context())
