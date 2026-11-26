@@ -45,6 +45,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -54,6 +55,7 @@ import (
 
 	"github.com/flanksource/commons/dns"
 	"github.com/flanksource/commons/har"
+	"github.com/flanksource/commons/http/internal/httppolicy"
 	"github.com/flanksource/commons/http/middlewares"
 	"github.com/flanksource/commons/http/middlewares/awssigv4"
 	"github.com/flanksource/commons/http/middlewares/bearer"
@@ -152,9 +154,8 @@ type Client struct {
 	// HAR middlewares, so headers they add are captured in HAR entries.
 	authMiddlewares []middlewares.Middleware
 
-	// bearerConfigured records that BearerToken was called; it cannot be
-	// combined with AWS SigV4, which would replace the Authorization header.
 	bearerConfigured bool
+	oauthConfigured  bool
 
 	// retryConfig specifies the configuration for retries.
 	retryConfig RetryConfig
@@ -556,12 +557,14 @@ func (c *Client) OAuth(config oauth.OauthConfig) *Client {
 	// Installed outside the HAR middlewares (not via Use, which installs
 	// around the transport) so HAR captures the Authorization header.
 	c.authMiddlewares = append(c.authMiddlewares, oauth.NewOauthTransport(config).RoundTripper)
+	c.oauthConfigured = true
 	return c
 }
 
 // BearerToken authenticates every request with "Authorization: Bearer <token>"
 // from src (e.g. an azuread credential or golang.org/x/oauth2/google
-// credentials). A request that already has an Authorization header fails.
+// credentials). Requests with an existing Authorization header or with OAuth
+// or AWS SigV4 authentication configured fail before fetching a bearer token.
 func (c *Client) BearerToken(src bearer.TokenSource) *Client {
 	// Installed outside the HAR middlewares, like OAuth, so HAR captures
 	// (and redacts) the Authorization header.
@@ -938,9 +941,29 @@ func joinHost(host, port string) string {
 }
 
 func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
+	signsAWS := c.authConfig != nil && c.authConfig.AWSCredentialsProvider != nil
+	if c.bearerConfigured {
+		var conflictingMethod string
+		switch {
+		case c.oauthConfigured:
+			conflictingMethod = "OAuth"
+		case signsAWS:
+			conflictingMethod = "AWSAuthSigV4"
+		}
+		if conflictingMethod != "" {
+			if body, ok := r.body.(io.Closer); ok {
+				_ = body.Close()
+			}
+			return nil, fmt.Errorf("BearerToken cannot be combined with %s: both set the Authorization header", conflictingMethod)
+		}
+	}
+
 	var host string
 	if r.client.connectTo != "" {
 		host = r.client.connectTo
+		if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
+			host = host[1 : len(host)-1]
+		}
 	} else {
 		host = r.url.Hostname()
 	}
@@ -953,10 +976,6 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 				r = r.Header("Host", r.url.Hostname())
 			}
 		}
-	}
-
-	if c.bearerConfigured && c.authConfig != nil && c.authConfig.AWSCredentialsProvider != nil {
-		return nil, fmt.Errorf("BearerToken cannot be combined with AWSAuthSigV4: SigV4 signing would replace the Authorization header")
 	}
 
 	if r.url.Scheme == "https" && c.tlsConfig == nil {
@@ -1006,7 +1025,7 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 		req.URL.RawQuery = raw
 	}
 	// Set basic auth only if not using AWS Sigv4
-	if r.client.authConfig != nil && !r.client.authConfig.IsEmpty() && r.client.authConfig.AWSCredentialsProvider == nil {
+	if r.client.authConfig != nil && !r.client.authConfig.IsEmpty() && !signsAWS {
 		req.SetBasicAuth(r.client.authConfig.Username, r.client.authConfig.Password)
 	}
 
@@ -1058,7 +1077,7 @@ func (c *Client) roundTrip(r *Request) (resp *Response, err error) {
 	transport = applyMiddleware(transport, r.client.harMiddlewares...)
 
 	if c.authConfig != nil {
-		if c.authConfig.AWSCredentialsProvider != nil {
+		if signsAWS {
 			awsCfg := awssigv4.AWSSigv4Config{
 				Region:              c.authConfig.AWSRegion,
 				Service:             c.authConfig.AWSService,
@@ -1132,8 +1151,14 @@ func (c *Client) checkRedirectFunc() func(req *http.Request, via []*http.Request
 		if len(via) >= c.maxRedirects {
 			return fmt.Errorf("stopped after %d redirects", c.maxRedirects)
 		}
-		if req.URL.Scheme == "http" && req.Header.Get("Authorization") != "" && !isLoopbackHost(req.URL.Hostname()) {
-			return fmt.Errorf("refusing to follow redirect to %s: it would send credentials over cleartext HTTP", req.URL.Redacted())
+		destination := req.URL
+		signsAWS := c.authConfig != nil && c.authConfig.AWSCredentialsProvider != nil
+		if signsAWS && c.authConfig.AWSEndpoint != "" {
+			// The signer applies AWSEndpoint to every hop, including redirects.
+			destination = &url.URL{Scheme: "http", Host: c.authConfig.AWSEndpoint}
+		}
+		if destination.Scheme == "http" && (signsAWS || req.Header.Get("Authorization") != "") && !httppolicy.IsLoopbackHost(destination.Hostname()) {
+			return fmt.Errorf("refusing to follow redirect to %s: it would send credentials over cleartext HTTP", destination.Redacted())
 		}
 
 		return nil

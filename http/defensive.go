@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/flanksource/commons/http/internal/httppolicy"
 	"github.com/flanksource/commons/http/middlewares"
 )
 
@@ -140,7 +141,7 @@ func validateDefensiveCredentials(request *stdhttp.Request) error {
 	if request.URL == nil || request.URL.Scheme == "https" {
 		return nil
 	}
-	if isLoopbackHost(request.URL.Hostname()) {
+	if httppolicy.IsLoopbackHost(request.URL.Hostname()) {
 		return nil
 	}
 	for _, header := range []string{"Authorization", "Proxy-Authorization"} {
@@ -149,14 +150,6 @@ func validateDefensiveCredentials(request *stdhttp.Request) error {
 		}
 	}
 	return nil
-}
-
-func isLoopbackHost(host string) bool {
-	if strings.EqualFold(strings.TrimSuffix(host, "."), "localhost") {
-		return true
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
 }
 
 func defensiveTLSDialContext(dialContext func(context.Context, string, string) (net.Conn, error), config *tls.Config) func(context.Context, string, string) (net.Conn, error) {

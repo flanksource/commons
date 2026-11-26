@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/flanksource/commons/http/internal/httppolicy"
 	"github.com/flanksource/commons/http/middlewares"
 	"golang.org/x/oauth2"
 )
@@ -25,6 +26,7 @@ type TokenSource interface {
 // The middleware fails fast: if the token source errors or returns an empty
 // token the request is not sent, and if the request already carries an
 // Authorization header it is rejected rather than silently overwritten.
+// Bearer tokens require HTTPS except on loopback HTTP endpoints.
 func New(src TokenSource) middlewares.Middleware {
 	var cached oauth2.TokenSource
 	if src != nil {
@@ -66,6 +68,9 @@ func authorization(src oauth2.TokenSource, req *http.Request) (string, error) {
 	}
 	if existing := req.Header.Get("Authorization"); existing != "" {
 		return "", errors.New("bearer: request already has an Authorization header; refusing to overwrite it")
+	}
+	if !httppolicy.AllowsCredentials(req.URL) {
+		return "", errors.New("bearer: sending credentials requires HTTPS except on loopback HTTP endpoints")
 	}
 	token, err := src.Token()
 	if err != nil {

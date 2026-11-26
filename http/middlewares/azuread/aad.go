@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/flanksource/commons/http/internal/httppolicy"
 	"golang.org/x/oauth2"
 )
 
@@ -101,7 +102,20 @@ func (w WorkloadIdentity) Token(ctx context.Context, scope string) (*oauth2.Toke
 }
 
 func postForm(ctx context.Context, client *http.Client, authority, tenant string, form url.Values) (*oauth2.Token, error) {
-	endpoint := fmt.Sprintf("%s/%s/oauth2/v2.0/token", authorityOrDefault(authority), url.PathEscape(tenant))
+	if authority == "" {
+		authority = DefaultAuthority
+	}
+	base, err := url.Parse(authority)
+	if err != nil {
+		return nil, errors.New("azuread: invalid authority URL")
+	}
+	if base.Hostname() == "" || base.User != nil || base.RawQuery != "" || base.ForceQuery || base.Fragment != "" {
+		return nil, errors.New("azuread: authority must have a host and cannot contain user information, a query or a fragment")
+	}
+	if !httppolicy.AllowsCredentials(base) {
+		return nil, errors.New("azuread: authority requires HTTPS except on loopback HTTP endpoints")
+	}
+	endpoint := strings.TrimRight(base.String(), "/") + "/" + url.PathEscape(tenant) + "/oauth2/v2.0/token"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, err

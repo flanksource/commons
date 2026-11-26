@@ -47,6 +47,35 @@ func do(mw middlewares.Middleware, base http.RoundTripper, header http.Header) (
 }
 
 var _ = Describe("bearer.New", func() {
+	DescribeTable("only sends bearer authentication to HTTPS or HTTP loopback",
+		func(target string, allowed bool) {
+			src := &fakeSource{token: func(int32) (*oauth2.Token, error) {
+				return &oauth2.Token{AccessToken: "example-token"}, nil
+			}}
+			base := &recordingTransport{}
+			req := httptest.NewRequest(http.MethodGet, target, nil)
+			resp, err := bearer.New(src)(base).RoundTrip(req)
+
+			if allowed {
+				Expect(err).NotTo(HaveOccurred())
+				Expect(resp.Body.Close()).To(Succeed())
+				Expect(base.requests).To(HaveLen(1))
+				Expect(src.calls.Load()).To(Equal(int32(1)))
+			} else {
+				Expect(err).To(MatchError(ContainSubstring("requires HTTPS")))
+				Expect(base.requests).To(BeEmpty())
+				Expect(src.calls.Load()).To(BeZero())
+			}
+		},
+		Entry("HTTPS", "https://example.com/", true),
+		Entry("loopback IPv4", "http://127.0.0.1/", true),
+		Entry("loopback IPv6", "http://[::1]/", true),
+		Entry("localhost name", "http://LOCALHOST.:8080/", true),
+		Entry("remote HTTP", "http://example.com/", false),
+		Entry("remote host with localhost prefix", "http://localhost.example.com/", false),
+		Entry("unsupported scheme", "ftp://localhost/", false),
+	)
+
 	It("sets the Authorization header and does not mutate the caller's request", func() {
 		src := &fakeSource{token: func(int32) (*oauth2.Token, error) {
 			return &oauth2.Token{AccessToken: "tok-1", Expiry: time.Now().Add(time.Hour)}, nil

@@ -50,7 +50,11 @@ var _ = Describe("Chain", func() {
 
 var _ = Describe("DefaultChain", func() {
 	clearEnv := func() {
-		for _, name := range []string{"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_WEB_IDENTITY_TOKEN_FILE", "AWS_ROLE_ARN", "AWS_ROLE_SESSION_NAME"} {
+		for _, name := range []string{
+			"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
+			"AWS_WEB_IDENTITY_TOKEN_FILE", "AWS_ROLE_ARN", "AWS_ROLE_SESSION_NAME",
+			envContainerRelativeURI, envContainerFullURI, envContainerToken, envContainerTokenFile,
+		} {
 			GinkgoT().Setenv(name, "")
 		}
 	}
@@ -88,5 +92,6 @@ var _ = Describe("DefaultChain", func() {
 		Expect(err.Error()).To(ContainSubstring("EnvironmentProvider"))
 		Expect(err.Error()).To(ContainSubstring("IMDSProvider"))
 		Expect(err.Error()).NotTo(ContainSubstring("WebIdentityProvider"))
+		Expect(err.Error()).NotTo(ContainSubstring("ContainerProvider"))
 	})
 })

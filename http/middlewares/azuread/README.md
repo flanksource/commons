@@ -13,6 +13,8 @@ Every credential implements `Credential` (`Token(ctx, scope)`) and takes a scope
 
 Failures never produce an empty token: HTTP errors include the AAD `error` and `error_description`, and a response without `access_token` or an expiry is rejected. `expires_in` and `expires_on` are accepted as numbers or quoted numbers.
 
+Azure AD authorities require HTTPS, with HTTP allowed for loopback endpoints. Token requests reject redirects, including managed identity requests.
+
 ## Example
 
 ```go
