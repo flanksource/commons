@@ -40,6 +40,27 @@ var _ = Describe("durable HAR lifecycle", func() {
 		Expect(collector.Entries()).To(BeEmpty())
 	})
 
+	It("hands the request body to the durable start callback", func() {
+		const body = `{"policy":"P-1"}`
+		var started *har.Entry
+		collector := har.NewCollectorWithLifecycle(fullCaptureConfig(), func(entry *har.Entry) error {
+			started = entry
+			return nil
+		}, func(*har.Entry) error { return nil })
+		roundTrip := collector.Middleware()(middlewares.RoundTripperFunc(func(*http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: http.StatusNoContent, Body: http.NoBody}, nil
+		}))
+		request, err := http.NewRequest(http.MethodPost, "https://example.test/trace", strings.NewReader(body))
+		Expect(err).NotTo(HaveOccurred())
+		request.Header.Set("Content-Type", "application/json")
+		response, err := roundTrip.RoundTrip(request)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(response.Body.Close()).To(Succeed())
+		Expect(started).NotTo(BeNil())
+		Expect(started.Request.PostData).NotTo(BeNil())
+		Expect(started.Request.PostData.Text).To(Equal(body))
+	})
+
 	It("retains lifecycle write errors for the owner without changing the HTTP response", func() {
 		writeError := errors.New("capture store unavailable")
 		collector := har.NewCollectorWithLifecycle(fullCaptureConfig(), func(*har.Entry) error { return writeError }, func(*har.Entry) error { return nil })
