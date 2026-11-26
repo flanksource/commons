@@ -9,9 +9,10 @@ import (
 // this package replaces: integral numbers decode to int64, everything else to
 // float64, at any depth.
 func TestUnmarshalPreservesInts(t *testing.T) {
-	input := []byte(`{"int":9223372036854775807,"float":1.5,"exp":1e3,"nested":[{"n":-2}]}`)
+	input := []byte(`{"int":9223372036854775807,"uint":18446744073709551615,"float":1.5,"exp":1e3,"nested":[{"n":-2}]}`)
 	want := map[string]interface{}{
 		"int":    int64(9223372036854775807),
+		"uint":   uint64(18446744073709551615),
 		"float":  1.5,
 		"exp":    float64(1000),
 		"nested": []interface{}{map[string]interface{}{"n": int64(-2)}},
