@@ -64,6 +64,24 @@ var _ = DescribeTable("JSON logging of secret fields whose keys contain a short 
 	Entry("traced response bodies", true),
 )
 
+var _ = It("redacts numeric credentials beyond float64 precision and keeps other numbers exact in JSON logs", func() {
+	const credential = "9007199254740993"
+	const rounded = "9007199254740992"
+	const exact = "12345678901234567890"
+	var output bytes.Buffer
+	log := logger.NewWithWriter(&output)
+	ctx := commonscontext.NewContext(context.Background(), commonscontext.WithLogger(log))
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://example.test", bytes.NewBufferString(`{"echo":`+credential+`,"count":`+exact+`}`))
+	Expect(err).NotTo(HaveOccurred())
+	request.Header.Set("Authorization", "Bearer "+credential)
+	transport := middlewares.RoundTripperFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: io.NopCloser(bytes.NewBufferString(""))}, nil
+	})
+	_, err = jsonLogger(TraceConfig{AccessLog: true, Body: true}, nil, transport, request)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(output.String()).To(SatisfyAll(ContainSubstring(exact), Not(ContainSubstring(credential)), Not(ContainSubstring(rounded))))
+})
+
 type failingReader struct{ err error }
 
 func (r failingReader) Read([]byte) (int, error) { return 0, r.err }

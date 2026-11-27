@@ -129,14 +129,13 @@ func readBodyPrefix(body io.ReadCloser, maxLength int64) (string, io.ReadCloser,
 // clear-text-logging analysis. Key-based scrubbing runs before credentials
 // from authorization are redacted, so it still sees the original key names.
 func redactBody(body, authorization string) any {
-	var m map[string]any
-	if err := json.Unmarshal([]byte(body), &m); err == nil {
+	if m, err := decodeJSONObject(body); err == nil {
 		scrubbed, err := json.Marshal(logger.StripSecretsFromMap(m))
 		if err != nil {
 			panic(fmt.Errorf("JSON-encode scrubbed body: %w", err))
 		}
-		var redacted map[string]any
-		if err := json.Unmarshal([]byte(logger.RedactAuthorization(string(scrubbed), authorization)), &redacted); err != nil {
+		redacted, err := decodeJSONObject(logger.RedactAuthorization(string(scrubbed), authorization))
+		if err != nil {
 			panic(fmt.Errorf("decode redacted body: %w", err))
 		}
 		return redacted
@@ -153,6 +152,21 @@ func redactBody(body, authorization string) any {
 		return sanitized
 	}
 	return logger.RedactAuthorization(body, authorization)
+}
+
+// decodeJSONObject decodes a single JSON object, keeping numbers as their
+// original text so numeric credentials are matched digit for digit.
+func decodeJSONObject(text string) (map[string]any, error) {
+	decoder := json.NewDecoder(strings.NewReader(text))
+	decoder.UseNumber()
+	var m map[string]any
+	if err := decoder.Decode(&m); err != nil {
+		return nil, err
+	}
+	if _, err := decoder.Token(); err != io.EOF {
+		return nil, fmt.Errorf("unexpected data after JSON object at offset %d", decoder.InputOffset())
+	}
+	return m, nil
 }
 
 func redactBodyPrefix(body, authorization string, truncated bool) any {
