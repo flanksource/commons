@@ -44,6 +44,26 @@ var _ = DescribeTable("HTTP logging of echoed credentials", func(structured, res
 	Entry("basic errors", false, false, "Basic YXBpOmV4YW1wbGUtcHJpdmF0ZS10b2tlbg=="),
 )
 
+var _ = DescribeTable("JSON logging of secret fields whose keys contain a short credential", func(responseBody bool) {
+	const secret = "different-secret"
+	body := `{"api_key":"` + secret + `","message":"denied key"}`
+	var output bytes.Buffer
+	log := logger.NewWithWriter(&output)
+	ctx := commonscontext.NewContext(context.Background(), commonscontext.WithLogger(log))
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://example.test", nil)
+	Expect(err).NotTo(HaveOccurred())
+	request.Header.Set("Authorization", "Bearer key")
+	transport := middlewares.RoundTripperFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusForbidden, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(bytes.NewBufferString(body))}, nil
+	})
+	_, err = jsonLogger(TraceConfig{AccessLog: true, Response: responseBody}, nil, transport, request)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(output.String()).To(SatisfyAll(ContainSubstring("denied [REDACTED]"), Not(ContainSubstring(secret))))
+},
+	Entry("error response bodies", false),
+	Entry("traced response bodies", true),
+)
+
 type failingReader struct{ err error }
 
 func (r failingReader) Read([]byte) (int, error) { return 0, r.err }

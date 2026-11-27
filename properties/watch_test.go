@@ -3,6 +3,7 @@ package properties
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -65,6 +66,25 @@ var _ = Describe("properties file polling", func() {
 		DeferCleanup(func() { store.close() })
 		Expect(watchingDuringApply).To(BeFalse())
 		Expect(store.close).NotTo(BeNil())
+	})
+	It("lets a listener start watching during the initial load from the pre-read file", func() {
+		GinkgoT().Setenv("COMMONS_PROPERTIES_WATCH_DURATION", "20ms")
+		filename := filepath.Join(GinkgoT().TempDir(), "app.properties")
+		Expect(os.WriteFile(filename, []byte("server.port=8080\n"), 0600)).To(Succeed())
+		store := &Properties{m: make(map[string]string)}
+		var stop func()
+		var once sync.Once
+		store.RegisterListener(func(*Properties) {
+			once.Do(func() {
+				replacement := filename + ".new"
+				Expect(os.WriteFile(replacement, []byte("server.port=9090\nreplaced=true\n"), 0600)).To(Succeed())
+				Expect(os.Rename(replacement, filename)).To(Succeed())
+				stop = store.Watch()
+			})
+		})
+		Expect(store.LoadFile(filename)).To(Succeed())
+		DeferCleanup(func() { stop() })
+		Eventually(func() string { return store.Get("server.port") }, time.Second).Should(Equal("9090"))
 	})
 	It("returns the running watcher without statting a file that became inaccessible", func() {
 		GinkgoT().Setenv("COMMONS_PROPERTIES_WATCH_DURATION", "20ms")

@@ -91,7 +91,9 @@ type Properties struct {
 	listeners []func(*Properties) // Change listeners
 	lock      sync.RWMutex        // Protects concurrent access
 	close     func()              // Cleanup function for file watcher
-	watchLock sync.Mutex          // Protects filename and close
+	staged    bool                // A load is applying filename before its watcher starts
+	baseline  os.FileInfo         // Pre-read stat of the staged load, nil when nothing was read
+	watchLock sync.Mutex          // Protects filename, close, staged and baseline
 	Reload    func()              // Function to manually trigger reload
 }
 
@@ -171,6 +173,8 @@ func (p *Properties) LoadFile(filename string) error {
 	}
 	// Start polling only after the initial load is applied, so a replacement
 	// detected against the pre-read stat can never be overwritten by older contents.
+	// Listeners that call Watch during the load start from the same pre-read stat.
+	p.stageWatch(filename, loaded)
 	defer p.watchFile(filename, loaded)
 
 	slog.Info(fmt.Sprintf("Loading properties from %s", filename))
@@ -401,11 +405,24 @@ func (p *Properties) Watch() func() {
 	if p.close != nil {
 		return p.close
 	}
+	if p.staged {
+		return p.watch(p.baseline)
+	}
 	current, err := os.Stat(p.filename)
 	if p.filename != "" && err != nil && !errors.Is(err, os.ErrNotExist) {
 		panic(fmt.Errorf("watch properties %s: %w", p.filename, err))
 	}
 	return p.watch(current)
+}
+
+// stageWatch records filename and its pre-read stat before a load notifies
+// listeners, so a Watch call made from a listener uses that same baseline.
+func (p *Properties) stageWatch(filename string, loaded os.FileInfo) {
+	p.watchLock.Lock()
+	defer p.watchLock.Unlock()
+	if p.close == nil {
+		p.filename, p.baseline, p.staged = filename, loaded, true
+	}
 }
 
 // watchFile starts watching filename unless a watcher is already running.
@@ -414,6 +431,7 @@ func (p *Properties) Watch() func() {
 func (p *Properties) watchFile(filename string, loaded os.FileInfo) {
 	p.watchLock.Lock()
 	defer p.watchLock.Unlock()
+	p.baseline, p.staged = nil, false
 	if p.close == nil {
 		p.filename = filename
 		p.watch(loaded)
