@@ -126,32 +126,40 @@ func readBodyPrefix(body io.ReadCloser, maxLength int64) (string, io.ReadCloser,
 
 // redactBody strips secrets from a request/response body before logging. The
 // "redact" name marks its result as an obfuscator barrier for CodeQL's
-// clear-text-logging analysis.
-func redactBody(body string) any {
+// clear-text-logging analysis. Key-based scrubbing runs before credentials
+// from authorization are redacted, so it still sees the original key names.
+func redactBody(body, authorization string) any {
 	var m map[string]any
 	if err := json.Unmarshal([]byte(body), &m); err == nil {
-		return logger.StripSecretsFromMap(m)
+		scrubbed, err := json.Marshal(logger.StripSecretsFromMap(m))
+		if err != nil {
+			panic(fmt.Errorf("JSON-encode scrubbed body: %w", err))
+		}
+		var redacted map[string]any
+		if err := json.Unmarshal([]byte(logger.RedactAuthorization(string(scrubbed), authorization)), &redacted); err != nil {
+			panic(fmt.Errorf("decode redacted body: %w", err))
+		}
+		return redacted
 	}
 	if values, err := url.ParseQuery(body); err == nil && len(values) > 0 {
 		sanitized := make(map[string]string, len(values))
 		for k := range values {
 			v := values.Get(k)
 			if logger.IsSensitiveKey(k) {
-				sanitized[k] = logger.PrintableSecret(v)
-			} else {
-				sanitized[k] = v
+				v = logger.PrintableSecret(v)
 			}
+			sanitized[logger.RedactAuthorization(k, authorization)] = logger.RedactAuthorization(v, authorization)
 		}
 		return sanitized
 	}
-	return body
+	return logger.RedactAuthorization(body, authorization)
 }
 
-func redactBodyPrefix(body string, truncated bool) any {
+func redactBodyPrefix(body, authorization string, truncated bool) any {
 	if truncated {
-		return logger.StripSecrets(body)
+		return logger.RedactAuthorization(logger.StripSecrets(body), authorization)
 	}
-	return redactBody(body)
+	return redactBody(body, authorization)
 }
 
 func formParams(req *http.Request) (url.Values, bool) {
@@ -307,7 +315,7 @@ func jsonLogger(config TraceConfig, verbose logger.Verbose, rt http.RoundTripper
 	// Unlike HAR capture, trace logs have no sensitive-capture mode: every body,
 	// error and message logged below always has echoed credentials redacted.
 	if config.Body && reqBody != "" {
-		kv = append(kv, "body", redactBody(logger.RedactAuthorization(reqBody, req.Header.Get("Authorization"))))
+		kv = append(kv, "body", redactBody(reqBody, req.Header.Get("Authorization")))
 	}
 
 	if err != nil {
@@ -328,7 +336,7 @@ func jsonLogger(config TraceConfig, verbose logger.Verbose, rt http.RoundTripper
 		respBody, restored, truncated, readErr := readBodyPrefix(resp.Body, logger.HTTPLogResponseBodyLength(config.MaxBodyLength))
 		resp.Body = restored
 		if respBody != "" {
-			kv = append(kv, "responseBody", redactBodyPrefix(logger.RedactAuthorization(respBody, req.Header.Get("Authorization")), truncated))
+			kv = append(kv, "responseBody", redactBodyPrefix(respBody, req.Header.Get("Authorization"), truncated))
 		}
 		if truncated {
 			kv = append(kv, "responseBodyTruncated", true)
@@ -343,7 +351,7 @@ func jsonLogger(config TraceConfig, verbose logger.Verbose, rt http.RoundTripper
 		// configured trace level wouldn't otherwise capture the response body.
 		if !config.Response {
 			if body := readErrorBody(resp, config.MaxBodyLength); body != "" {
-				kv = append(kv, "responseBody", redactBody(logger.RedactAuthorization(body, req.Header.Get("Authorization"))))
+				kv = append(kv, "responseBody", redactBody(body, req.Header.Get("Authorization")))
 			}
 		}
 		jsonLogAt(verbose, req, 0, kv, "%s %s %d %s", req.Method, req.URL.Redacted(), resp.StatusCode, elapsed.Truncate(time.Millisecond))
