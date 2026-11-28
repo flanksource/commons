@@ -8,7 +8,8 @@ Behaviour:
 
 - Tokens are cached and refreshed shortly before expiry (`oauth2.ReuseTokenSource` semantics, safe for concurrent use). A source that returns a token without an expiry is cached forever.
 - If the source returns an error, or an empty access token, the request fails and is never sent unauthenticated.
-- If the request already has an `Authorization` header the request fails instead of silently overwriting it, so this middleware cannot be combined with `Client.Auth` or `Client.OAuth` on the same client.
+- Bearer tokens require HTTPS, with HTTP allowed for loopback endpoints.
+- Requests with an existing `Authorization` header fail. `Client.BearerToken` also rejects clients configured with `Client.OAuth` or `Client.AWSAuthSigV4` before fetching a token.
 - `Client.BearerToken` installs the middleware outside the HAR middlewares, so HAR captures the header (redacted by the HAR redaction policy) and trace redaction of `Authorization` keeps working.
 
 ## Example

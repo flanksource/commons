@@ -11,6 +11,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/flanksource/commons/http/internal/httppolicy"
 )
 
 const (
@@ -76,9 +78,7 @@ func (p *ContainerProvider) Retrieve(ctx context.Context) (Credentials, error) {
 		client = defaultIMDSClient()
 		defer client.CloseIdleConnections()
 	}
-	// Copy so the caller-owned client is not mutated; a redirect could downgrade to http and leak the token.
-	noRedirect := *client
-	noRedirect.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	noRedirect := httppolicy.WithoutRedirects(client)
 	response, err := noRedirect.Do(request)
 	if err != nil {
 		return Credentials{}, fmt.Errorf("container credentials request: %w", err)

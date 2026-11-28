@@ -10,6 +10,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/flanksource/commons/http/internal/httppolicy"
 )
 
 const (
@@ -46,12 +48,13 @@ func (p *IMDSProvider) Retrieve(ctx context.Context) (Credentials, error) {
 		client = defaultIMDSClient()
 		defer client.CloseIdleConnections()
 	}
-	token, err := imdsRequest(ctx, client, http.MethodPut, endpoint+"/latest/api/token", map[string]string{"X-aws-ec2-metadata-token-ttl-seconds": imdsTokenTTL})
+	noRedirect := httppolicy.WithoutRedirects(client)
+	token, err := imdsRequest(ctx, &noRedirect, http.MethodPut, endpoint+"/latest/api/token", map[string]string{"X-aws-ec2-metadata-token-ttl-seconds": imdsTokenTTL})
 	if err != nil {
 		return Credentials{}, fmt.Errorf("IMDS token: %w", err)
 	}
 	headers := map[string]string{"X-aws-ec2-metadata-token": token}
-	roles, err := imdsRequest(ctx, client, http.MethodGet, endpoint+imdsRolesPath, headers)
+	roles, err := imdsRequest(ctx, &noRedirect, http.MethodGet, endpoint+imdsRolesPath, headers)
 	if err != nil {
 		return Credentials{}, fmt.Errorf("IMDS role name: %w", err)
 	}
@@ -59,7 +62,7 @@ func (p *IMDSProvider) Retrieve(ctx context.Context) (Credentials, error) {
 	if role == "" {
 		return Credentials{}, fmt.Errorf("IMDS reports no instance role")
 	}
-	document, err := imdsRequest(ctx, client, http.MethodGet, endpoint+imdsRolesPath+strings.TrimSpace(role), headers)
+	document, err := imdsRequest(ctx, &noRedirect, http.MethodGet, endpoint+imdsRolesPath+strings.TrimSpace(role), headers)
 	if err != nil {
 		return Credentials{}, fmt.Errorf("IMDS credentials for role %q: %w", role, err)
 	}

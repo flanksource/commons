@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flanksource/commons/http/internal/httppolicy"
 	"github.com/flanksource/commons/http/middlewares/bearer"
 	"golang.org/x/oauth2"
 )
@@ -102,7 +103,8 @@ func (f *flexText) UnmarshalJSON(b []byte) error {
 // doTokenRequest sends req and converts the response into a token, surfacing
 // the AAD error and error_description for non-2xx responses.
 func doTokenRequest(client *http.Client, req *http.Request) (*oauth2.Token, error) {
-	resp, err := httpClientOrDefault(client).Do(req)
+	noRedirect := httppolicy.WithoutRedirects(httpClientOrDefault(client))
+	resp, err := noRedirect.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("token request to %s failed: %w", req.URL.Host, err)
 	}
@@ -153,11 +155,4 @@ func (r tokenResponse) toToken() (*oauth2.Token, error) {
 		return nil, errors.New("token response has neither expires_in nor expires_on")
 	}
 	return &oauth2.Token{AccessToken: r.AccessToken, TokenType: r.TokenType, Expiry: expiry}, nil
-}
-
-func authorityOrDefault(authority string) string {
-	if authority == "" {
-		return DefaultAuthority
-	}
-	return strings.TrimRight(authority, "/")
 }

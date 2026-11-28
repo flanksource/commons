@@ -36,4 +36,18 @@ var _ = Describe("request URL host", func() {
 		Entry("IPv6 literal without a port", "http://[::1]/path", "[::1]"),
 		Entry("IPv6 literal with a port", "http://[::1]:9000/path", "[::1]:9000"),
 	)
+
+	DescribeTable("normalizes ConnectTo host overrides",
+		func(override, rawURL, expectedHost string) {
+			var hosts []string
+			resp, err := capturingClient(&hosts).ConnectTo(override).R(context.Background()).Get(rawURL)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resp.Body.Close()).To(Succeed())
+			Expect(hosts).To(Equal([]string{expectedHost}))
+		},
+		Entry("bracketed IPv6 with a port on the URL", "[::1]", "http://example.com:9000/", "[::1]:9000"),
+		Entry("bracketed IPv6 without a port on the URL", "[::1]", "http://example.com/", "[::1]"),
+		Entry("raw IPv6", "::1", "http://example.com:9000/", "[::1]:9000"),
+		Entry("hostname", "localhost", "http://example.com:9000/", "localhost:9000"),
+	)
 })

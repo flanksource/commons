@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/flanksource/commons/http/internal/httppolicy"
 )
 
 const (
@@ -107,7 +109,8 @@ func (c stsCall) send(request *http.Request) (Credentials, error) {
 	if client == nil {
 		client = http.DefaultClient
 	}
-	response, err := client.Do(request)
+	noRedirect := httppolicy.WithoutRedirects(client)
+	response, err := noRedirect.Do(request)
 	if err != nil {
 		return Credentials{}, fmt.Errorf("STS %s request: %w", c.Action, err)
 	}
