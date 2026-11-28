@@ -68,10 +68,12 @@ var _ = It("redacts numeric credentials beyond float64 precision and keeps other
 	const credential = "9007199254740993"
 	const rounded = "9007199254740992"
 	const exact = "12345678901234567890"
+	const sensitive = "87654321098765432101"
+	body := `{"echo":` + credential + `,"count":` + exact + `,"api_key":` + sensitive + `}`
 	var output bytes.Buffer
 	log := logger.NewWithWriter(&output)
 	ctx := commonscontext.NewContext(context.Background(), commonscontext.WithLogger(log))
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://example.test", bytes.NewBufferString(`{"echo":`+credential+`,"count":`+exact+`}`))
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://example.test", bytes.NewBufferString(body))
 	Expect(err).NotTo(HaveOccurred())
 	request.Header.Set("Authorization", "Bearer "+credential)
 	transport := middlewares.RoundTripperFunc(func(*http.Request) (*http.Response, error) {
@@ -79,7 +81,14 @@ var _ = It("redacts numeric credentials beyond float64 precision and keeps other
 	})
 	_, err = jsonLogger(TraceConfig{AccessLog: true, Body: true}, nil, transport, request)
 	Expect(err).NotTo(HaveOccurred())
-	Expect(output.String()).To(SatisfyAll(ContainSubstring(exact), Not(ContainSubstring(credential)), Not(ContainSubstring(rounded))))
+	Expect(output.String()).To(SatisfyAll(
+		ContainSubstring("[REDACTED]"),
+		ContainSubstring(exact),
+		ContainSubstring("8****01"),
+		Not(ContainSubstring(credential)),
+		Not(ContainSubstring(rounded)),
+		Not(ContainSubstring(sensitive)),
+	))
 })
 
 type failingReader struct{ err error }
